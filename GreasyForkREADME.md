@@ -1,21 +1,17 @@
-# WTR Lab Term Inconsistency Finder v5.3.2
+# WTR Lab Term Inconsistency Finder
 
 A powerful userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini AI. Perfect for translators, proofreaders, and anyone who wants to maintain consistency in WTR Lab novels.
-
-## 🆕 What's New in v5.3.2
-
-- **Fixed Quote False Positives**: No more false alarms from quote style differences (straight quotes vs smart quotes vs curly quotes)
-- **Fixed Auto-Restore Bug**: Configuration settings now properly save when changed
-- **Smarter AI Analysis**: Enhanced detection to focus on real inconsistencies only
 
 ## 🚀 Quick Install
 
 1. **Install a userscript handler** (if you haven't already):
+
    - [Tampermonkey](https://www.tampermonkey.net/) (most popular)
    - [Violentmonkey](https://violentmonkey.github.io/)
    - [Greasemonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/) (Firefox)
 
 2. **Install the script**:
+
    - Click "Install" on this Greasy Fork page
    - Your userscript handler will prompt for installation
 
@@ -82,21 +78,25 @@ A powerful userscript that finds translation inconsistencies in WTR Lab chapters
 ## 🆘 Troubleshooting
 
 **No analysis button?**
+
 - Check the script is enabled in your userscript handler
 - Refresh the page after installation
 - Ensure you're on a WTR Lab chapter page
 
 **Getting API errors?**
+
 - Verify your API key is correct
 - Check your [Google AI Studio quota](https://makersuite.google.com/)
 - Try adding another API key for rotation
 
 **No results found?**
+
 - Try analyzing more chapters (minimum 2-3 recommended)
 - Check if chapters have significant text content
 - Enable debug mode in settings for more details
 
 **Script not responding?**
+
 - Refresh the page
 - Check browser console for error messages
 - Try disabling other conflicting extensions
@@ -132,4 +132,4 @@ A powerful userscript that finds translation inconsistencies in WTR Lab chapters
 
 **Made with ❤️ for the WTR Lab translation community**
 
-*For detailed development information and advanced usage, see the [main README on GitHub](https://github.com/MasuRii/wtr-term-inconsistency-finder).*
+_For detailed development information and advanced usage, see the [main README on GitHub](https://github.com/MasuRii/wtr-term-inconsistency-finder)._

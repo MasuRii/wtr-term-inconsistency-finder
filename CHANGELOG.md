@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.3.2] - 2025-11-06
 
 ### Fixed
-- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes ", single quotes ', or smart quotes “ ” ‘ ’). This resolves false positives caused by different chapters being processed by different quote conversion scripts.
+- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes ", single quotes ', or smart quotes " " ' '). This resolves false positives caused by different chapters being processed by different quote conversion scripts.
 - **Auto-Restore Configuration Bug**: Fixed persistence issue where "Auto-restore saved results on panel open" setting would not save when disabled. Configuration now properly persists user preferences.
+- **Bottom Navigation Conflict**: Fixed z-index conflict between status indicator and site bottom navigation. Status indicator now properly hides behind the bottom nav when visible to prevent visual overlap.
 
 ### Technical
 - **AI Prompt Enhancement**: Added critical quote normalization logic to distinguish between genuine text inconsistencies and formatting differences
 - **Configuration Management**: Improved save/load mechanism to properly handle user preferences
+- **Z-Index Management**: Dynamic z-index adjustment based on bottom navigation presence (z-index: 1029 when bottom nav is visible, 10000 when hidden)
 
 ## [5.3.1] - 2025-11-06
 

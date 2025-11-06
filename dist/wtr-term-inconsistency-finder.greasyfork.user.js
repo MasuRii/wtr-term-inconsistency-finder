@@ -2896,10 +2896,21 @@ function adjustIndicatorPosition() {
   if (!indicator) return;
 
   const otherWidget = document.querySelector('.nig-status-widget');
-  if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
+  const bottomNav = document.querySelector('.bottom-reader-nav');
+  
+  // Check for bottom navigation conflict
+  if (bottomNav && getComputedStyle(bottomNav).display !== 'none') {
+    (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Conflict detected with .bottom-reader-nav, adjusting position and z-index.');
+    // Move status indicator behind the bottom nav (z-index 1030)
+    indicator.style.zIndex = '1029'; // Lower than bottom nav (1030)
+    indicator.style.bottom = '80px'; // Position above where bottom nav would be
+  } else if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
     (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Conflict detected with .nig-status-widget, adjusting position.');
+    indicator.style.zIndex = '10000'; // Restore normal z-index
     indicator.style.bottom = '80px';
   } else {
+    // No conflicts, use normal positioning
+    indicator.style.zIndex = '10000'; // Restore normal z-index
     indicator.style.bottom = '20px';
   }
 }
