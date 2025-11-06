@@ -421,12 +421,6 @@ FodyWeavers.xsd
 build/
 build-*/
 
-# Development and build artifacts
-*.user.js
-*.user.min.js
-*.proxy.user.js
-*.proxy.min.js
-
 # Environment files
 .env
 .env.local
@@ -484,7 +478,6 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/
