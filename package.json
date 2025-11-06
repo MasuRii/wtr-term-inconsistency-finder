@@ -15,7 +15,12 @@
   "homepage": "https://github.com/MasuRii/wtr-term-inconsistency-finder",
   "scripts": {
     "build": "webpack --mode=production",
-    "dev": "webpack serve --mode=development"
+    "build:performance": "webpack --config webpack.performance.config.js --mode=production",
+    "build:greasyfork": "webpack --config webpack.greasyfork.config.js --mode=production",
+    "build:all": "npm run build:performance && npm run build:greasyfork",
+    "dev": "webpack serve --mode=development",
+    "dev:performance": "webpack serve --config webpack.performance.config.js --mode=development",
+    "dev:greasyfork": "webpack serve --config webpack.greasyfork.config.js --mode=development"
   },
   "devDependencies": {
     "css-loader": "^7.1.2",

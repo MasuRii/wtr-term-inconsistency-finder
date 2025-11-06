@@ -931,6 +931,46 @@ var update = injectStylesIntoStyleTag_default()(main/* default */.A, options);
 
        /* harmony default export */ const styles_main = (main/* default */.A && main/* default */.A.locals ? main/* default */.A.locals : undefined);
 
+;// ./src/version.js
+// src/version.js
+// Centralized version configuration for the WTR Lab Term Inconsistency Finder
+// This is the SINGLE SOURCE OF TRUTH for all version information
+
+const VERSION = '5.3.1';
+const VERSION_INFO = {
+  major: 5,
+  minor: 3,
+  patch: 1,
+  build: null, // Set to number for build versions, null for release
+  channel: 'stable' // 'stable', 'dev', 'performance', 'greasyfork'
+};
+
+// Webpack build variants
+const BUILD_VARIANTS = {
+  standard: {
+    version: VERSION,
+    suffix: '',
+    description: 'Standard build for Tampermonkey'
+  },
+  development: {
+    version: `${VERSION}-build.[buildNo]`,
+    suffix: '-build',
+    description: 'Development build with hot reload'
+  },
+  greasyfork: {
+    version: `${VERSION}-greasyfork`,
+    suffix: '-greasyfork',
+    description: 'GreasyFork compliant build'
+  },
+  performance: {
+    version: `${VERSION}-perf`,
+    suffix: '-perf',
+    description: 'Performance optimized build'
+  }
+};
+
+// For runtime version display
+const DISPLAY_VERSION = (/* unused pure expression or super */ null && (`v${VERSION}`));
 ;// ./src/modules/utils.js
 // src/modules/utils.js
 
@@ -2778,13 +2818,14 @@ function addEventListeners() {
 
 
 
+
 function createUI() {
   if (document.getElementById('wtr-if-panel')) return;
 
   const panel = document.createElement('div');
   panel.id = 'wtr-if-panel';
   panel.innerHTML = `
-            <div class="wtr-if-header"><h2>Term Inconsistency Finder v4.8</h2><button class="wtr-if-close-btn">&times;</button></div>
+            <div class="wtr-if-header"><h2>Term Inconsistency Finder ${VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
             <div class="wtr-if-tabs">
                 <button class="wtr-if-tab-btn" data-tab="finder">Finder</button>
                 <button class="wtr-if-tab-btn" data-tab="config">Configuration</button>
@@ -3176,6 +3217,9 @@ function setupConflictObserver() {
 // src/index.js
 
 // Import styles - Webpack will handle injection
+
+
+// Import version information
 
 
 // Import core modules

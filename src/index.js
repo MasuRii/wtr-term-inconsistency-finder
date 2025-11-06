@@ -3,6 +3,9 @@
 // Import styles - Webpack will handle injection
 import "./styles/main.css";
 
+// Import version information
+import { VERSION } from "./version";
+
 // Import core modules
 import { loadConfig } from "./modules/state";
 import { log } from "./modules/utils";

@@ -1,4 +1,5 @@
 // src/modules/ui/panel.js
+import { VERSION } from "../../version";
 import { appState, MODELS_CACHE_KEY } from "../state";
 import { getAvailableApiKey } from "../geminiApi";
 import { escapeHtml, log } from "../utils";
@@ -10,7 +11,7 @@ export function createUI() {
   const panel = document.createElement('div');
   panel.id = 'wtr-if-panel';
   panel.innerHTML = `
-            <div class="wtr-if-header"><h2>Term Inconsistency Finder v4.8</h2><button class="wtr-if-close-btn">&times;</button></div>
+            <div class="wtr-if-header"><h2>Term Inconsistency Finder ${VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
             <div class="wtr-if-tabs">
                 <button class="wtr-if-tab-btn" data-tab="finder">Finder</button>
                 <button class="wtr-if-tab-btn" data-tab="config">Configuration</button>

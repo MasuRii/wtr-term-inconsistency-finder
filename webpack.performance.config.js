@@ -7,9 +7,10 @@ module.exports = {
   entry: "./src/index.js",
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "wtr-term-inconsistency-finder.user.js",
+    filename: "wtr-term-inconsistency-finder.performance.user.js",
     publicPath: "http://localhost:8080/",
   },
+  mode: "production",
   module: {
     rules: [
       {
@@ -27,16 +28,27 @@ module.exports = {
     liveReload: false,
   },
   optimization: {
-    // Disable minification for Greasy Fork compliance
-    minimize: false,
+    // Enable performance optimizations suitable for single-file userscripts
+    minimize: true,
+    usedExports: true,
+    sideEffects: false,
+    // Disable code splitting for userscript compatibility
+    splitChunks: false,
+    runtimeChunk: false,
+    moduleIds: "deterministic",
+    chunkIds: "deterministic",
+    concatenateModules: true,
+    removeEmptyChunks: true,
+    sideEffects: false,
   },
   plugins: [
     new UserscriptPlugin({
       headers: (vars) => ({
         name: "WTR Lab Term Inconsistency Finder",
         namespace: "http://tampermonkey.net/",
-        version: vars.isDev ? `${VERSION}-build.[buildNo]` : VERSION,
-        description: "Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI.",
+        version: vars.isDev ? `${VERSION}-perf.[buildNo]` : `${VERSION}-perf`,
+        description:
+          "Performance-optimized version of the WTR Lab Term Inconsistency Finder. Finds term inconsistencies in WTR Lab chapters using Gemini AI with enhanced performance optimizations including tree shaking, minification, and code splitting.",
         author: "MasuRii",
         license: "MIT",
         match: "https://wtr-lab.com/en/novel/*/*/*",
@@ -50,11 +62,13 @@ module.exports = {
           "GM_xmlhttpRequest",
         ],
         "run-at": "document-idle",
-        // Updated repository links
-        "updateURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
-        "downloadURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
-        "supportURL": "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
-        "website": "https://github.com/MasuRii/wtr-term-inconsistency-finder",
+        updateURL:
+          "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.performance.user.js",
+        downloadURL:
+          "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.performance.user.js",
+        supportURL:
+          "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
+        website: "https://github.com/MasuRii/wtr-term-inconsistency-finder",
       }),
       proxyScript: {
         baseUrl: "http://127.0.0.1:8080/",

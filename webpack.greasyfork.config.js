@@ -7,9 +7,10 @@ module.exports = {
   entry: "./src/index.js",
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "wtr-term-inconsistency-finder.user.js",
+    filename: "wtr-term-inconsistency-finder.greasyfork.user.js",
     publicPath: "http://localhost:8080/",
   },
+  mode: "production",
   module: {
     rules: [
       {
@@ -27,16 +28,25 @@ module.exports = {
     liveReload: false,
   },
   optimization: {
-    // Disable minification for Greasy Fork compliance
+    // Disable minification for GreasyFork compliance
     minimize: false,
+    // Keep module structure for readability
+    usedExports: false,
+    sideEffects: false,
+    splitChunks: false, // Disable code splitting for single-file userscript
+    // Keep original module IDs for readability
+    moduleIds: 'named',
+    chunkIds: 'named',
+    concatenateModules: false,
+    removeEmptyChunks: true,
   },
   plugins: [
     new UserscriptPlugin({
       headers: (vars) => ({
         name: "WTR Lab Term Inconsistency Finder",
         namespace: "http://tampermonkey.net/",
-        version: vars.isDev ? `${VERSION}-build.[buildNo]` : VERSION,
-        description: "Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI.",
+        version: vars.isDev ? `${VERSION}-greasyfork.[buildNo]` : `${VERSION}-greasyfork`,
+        description: "Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI. GreasyFork compliant version.",
         author: "MasuRii",
         license: "MIT",
         match: "https://wtr-lab.com/en/novel/*/*/*",
@@ -50,9 +60,8 @@ module.exports = {
           "GM_xmlhttpRequest",
         ],
         "run-at": "document-idle",
-        // Updated repository links
-        "updateURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
-        "downloadURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
+        "updateURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.greasyfork.user.js",
+        "downloadURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.greasyfork.user.js",
         "supportURL": "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
         "website": "https://github.com/MasuRii/wtr-term-inconsistency-finder",
       }),
