@@ -1,14 +1,20 @@
 // src/modules/geminiApi.js
 import { appState, saveSessionResults } from "./state";
-import { log, summarizeContextResults, validateResultForContext, extractJsonFromString, mergeAnalysisResults } from "./utils";
-import { updateStatusIndicator, displayResults } from "./ui";
+import { displayResults, updateStatusIndicator } from "./ui";
+import {
+  extractJsonFromString,
+  log,
+  mergeAnalysisResults,
+  summarizeContextResults,
+  validateResultForContext,
+} from "./utils";
 
 const MAX_RETRIES_PER_KEY = 3;
 const RETRIABLE_STATUSES = new Set([
-  'RESOURCE_EXHAUSTED', // 429 Rate limit
-  'INTERNAL', // 500 Server error
-  'UNAVAILABLE', // 503 Service overloaded
-  'DEADLINE_EXCEEDED' // 504 Request timed out
+  "RESOURCE_EXHAUSTED", // 429 Rate limit
+  "INTERNAL", // 500 Server error
+  "UNAVAILABLE", // 503 Service overloaded
+  "DEADLINE_EXCEEDED", // 504 Request timed out
 ]);
 
 const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translation Consistency Editor," designed to detect and fix translation inconsistencies in machine-translated novels. Your primary goal is to identify terms (character names, locations, items, abilities, titles, etc.) that have been translated inconsistently across chapters, provide standardization suggestions, and offer contextual analysis for nuances like aliases, stylistic localizations, and cultural honorifics.
@@ -25,6 +31,7 @@ const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translati
 - Do not flag casual internet expressions or emotional vocalizations that are culturally appropriate and intentionally expressive.
 - Do NOT flag anything related to author notes, author commentary, or translator notes - these are intentional additions that may make the text longer but should not be flagged for inconsistencies.
 - Do NOT flag usernames or character references that are clearly aliases, undercovers, or alternate identifications of the same character.
+- CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes “ ” ‘ ’) should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
 
 ## Focus On
 - In-text content within the chapter body.
@@ -53,33 +60,34 @@ You will use a dynamic Impact Score to rank all detected issues, ensuring that i
 
 ## Improved Detection Logic
 Think step by step in your analysis: 1. Scan the text for recurring terms. 2. Build entity profiles and link aliases using contextual clues. 3. Calculate impact scores based on frequency, centrality, volatility, and dependencies. 4. Verify each detection for high-confidence errors (reflect: Is this an unintentional inconsistency or a nuance/evolution? Discard if not a true error). 5. Generate data-driven suggestions.
-1.  Contextual Verification Snippets: For each potential inconsistency, extract and present a brief contextual snippet (1-2 sentences) for each variant to verify the match.
-2.  Disambiguation Logic for Similar Terms: If two similar-sounding terms like "Flame Art" and "Blaze Art" appear in the same chapter or are used by different characters in the same context, treat them as distinct entities.
-3.  Source Term Inference: Infer a probable source term or pinyin as the "Original Concept" anchor for grouping variations (e.g., group "Li Fuchen," "Li Fu Chen," and "Lee Fuchen" under an inferred anchor like \`[Li Fuchen]\`).
-4.  Conceptual Anchoring: If terms with low string similarity share conceptual anchors (e.g., consistently associated with the same character or location), create a high-confidence link.
-5.  Component-Based Matching: Break down long names into core components (e.g., [Azure Dragon] + [Flame/Burning] + [Sword/Blade]) and match based on the core entity and synonymous descriptors.
-6.  Relational Inconsistency Detection: Identify "Relational Clusters" where inconsistencies are linked (e.g., a character's name changing along with their title in the same chapter).
-7.  Track and Flag Chronological Inconsistencies (Term Evolution): If a term disappears and is consistently replaced by a new one from a specific chapter onward, flag it as a "Potential Term Evolution" rather than a simple error.
-8.  Speaker-Based Disambiguation: Associate terms with the characters who use them to avoid false positives.
-9.  Proactively Identify "Root" Inconsistencies: Identify "root" terms that cause multiple dependent inconsistencies and prioritize them.
-10. Advanced Entity Recognition (Aliases & Nicknames): Build a profile for each key entity. Use contextual clues (explicit links like "...friends called him Jon" or implicit links like shared attributes) to link different names to the same entity. CRITICAL: When you encounter terms like 'BattlefieldAtmosphereGroup' and 'BattlefieldOldBro' used for the same character, analyze the context carefully - these are clearly shorthand variants of the same entity. Look for phrases like "also known as", "also called", "alias", "shorthand", "nickname", or contextual patterns where one term consistently refers to the same character as another term. Do NOT flag these as inconsistencies - they are intentional variations used in the story.
-11. Username Analysis Protocol:
+1.  QUOTE NORMALIZATION (CRITICAL): Before comparing any terms for inconsistencies, first normalize all quotation marks by stripping them. Terms like "Project Doomsday", 'Project Doomsday', and “Project Doomsday” should be treated as the SAME term "Project Doomsday" for comparison purposes. Only flag an inconsistency if the CORE TEXT (excluding quotes) differs.
+2.  Contextual Verification Snippets: For each potential inconsistency, extract and present a brief contextual snippet (1-2 sentences) for each variant to verify the match.
+3.  Disambiguation Logic for Similar Terms: If two similar-sounding terms like "Flame Art" and "Blaze Art" appear in the same chapter or are used by different characters in the same context, treat them as distinct entities.
+4.  Source Term Inference: Infer a probable source term or pinyin as the "Original Concept" anchor for grouping variations (e.g., group "Li Fuchen," "Li Fu Chen," and "Lee Fuchen" under an inferred anchor like \`[Li Fuchen]\`).
+5.  Conceptual Anchoring: If terms with low string similarity share conceptual anchors (e.g., consistently associated with the same character or location), create a high-confidence link.
+6.  Component-Based Matching: Break down long names into core components (e.g., [Azure Dragon] + [Flame/Burning] + [Sword/Blade]) and match based on the core entity and synonymous descriptors.
+7.  Relational Inconsistency Detection: Identify "Relational Clusters" where inconsistencies are linked (e.g., a character's name changing along with their title in the same chapter).
+8.  Track and Flag Chronological Inconsistencies (Term Evolution): If a term disappears and is consistently replaced by a new one from a specific chapter onward, flag it as a "Potential Term Evolution" rather than a simple error.
+9.  Speaker-Based Disambiguation: Associate terms with the characters who use them to avoid false positives.
+10.  Proactively Identify "Root" Inconsistencies: Identify "root" terms that cause multiple dependent inconsistencies and prioritize them.
+11. Advanced Entity Recognition (Aliases & Nicknames): Build a profile for each key entity. Use contextual clues (explicit links like "...friends called him Jon" or implicit links like shared attributes) to link different names to the same entity. CRITICAL: When you encounter terms like 'BattlefieldAtmosphereGroup' and 'BattlefieldOldBro' used for the same character, analyze the context carefully - these are clearly shorthand variants of the same entity. Look for phrases like "also known as", "also called", "alias", "shorthand", "nickname", or contextual patterns where one term consistently refers to the same character as another term. Do NOT flag these as inconsistencies - they are intentional variations used in the story.
+12. Username Analysis Protocol:
     *   Formatting Trigger: Flag any potential username containing one or more literal space characters (e.g., 'Elderly Abin').
     *   Lexical Trigger: Flag any potential username matching pinyin, Japanese Romaji, Korean Romanization, or other non-English romanized language patterns. Do not flag fluent, multi-word English usernames.
     *   Formatting Exemption: You MUST NOT flag potential usernames that are presented as a single, concatenated word (e.g., 'PlayerName', 'AnotherUser'), even if they use internal capitalization (PascalCase). This is a standard and acceptable format.
     *   Holistic Analysis: If a username is flagged by BOTH triggers, you MUST provide BOTH formatting and localization suggestions.
     *   Contextual Differentiation: You MUST NOT flag a name for username-style inconsistencies if the context explicitly identifies the character as an NPC (e.g., 'secretary,' 'guard,' 'shopkeeper'). Username analysis should only apply when context strongly suggests a player character (e.g., mentions of 'player,' 'ID,' 'leaderboard').
-12. Non-English Honorifics Handling: Pattern-match for common honorifics, explain their nuance, and present options that align with common genre practices.
-13. Low-Frequency Alias Boosting: Apply a confidence boost to low-frequency terms if they exhibit strong conceptual ties to high-frequency core entities.
-14. Nuance Analysis: When detecting semantically similar terms, analyze usage patterns. If patterns suggest an intentional conceptual distinction (e.g., state vs. government), flag as 'Potential Nuance Cluster' instead of an inconsistency.
-15. Enhanced Alias Recognition Pattern: Look for these specific patterns that indicate intentional aliases, not inconsistencies:
+13. Non-English Honorifics Handling: Pattern-match for common honorifics, explain their nuance, and present options that align with common genre practices.
+14. Low-Frequency Alias Boosting: Apply a confidence boost to low-frequency terms if they exhibit strong conceptual ties to high-frequency core entities.
+15. Nuance Analysis: When detecting semantically similar terms, analyze usage patterns. If patterns suggest an intentional conceptual distinction (e.g., state vs. government), flag as 'Potential Nuance Cluster' instead of an inconsistency.
+16. Enhanced Alias Recognition Pattern: Look for these specific patterns that indicate intentional aliases, not inconsistencies:
     - Contextual indicators: "also known as", "alias", "shorthand", "nickname", "undercover", "went by"
     - Game/online context: References to usernames, player IDs, gaming handles, or online personas
     - Sequential usage: Same character being referred to with different names in different chapters
     - Character development: Names changing as part of character progression or identity evolution
     - Example pattern: A character with full username 'BattlefieldAtmosphereGroup' using shorter variants like 'BattlefieldOldBro' or 'BattlefieldAtmoGroup' - these are deliberate shorthand, not errors
     - When you see this pattern, mark as 'INFO' priority with explanation about intentional alias usage
-16. Pinyin vs. English Mismatch: Identify and flag pinyin terms used inconsistently within a group of otherwise standardized English terms. For example, if a character's skills are 'Fireball', 'Ice Lance', and 'Shenlong Po', flag 'Shenlong Po' as a potential localization inconsistency and suggest an English equivalent.
+17. Pinyin vs. English Mismatch: Identify and flag pinyin terms used inconsistently within a group of otherwise standardized English terms. For example, if a character's skills are 'Fireball', 'Ice Lance', and 'Shenlong Po', flag 'Shenlong Po' as a potential localization inconsistency and suggest an English equivalent.
 
 16. Localization Suggestions Logic:
     - Localization suggestions should ONLY appear for terms that are in pinyin, Chinese characters, or other non-English formats
@@ -101,6 +109,10 @@ Think step by step in your analysis: 1. Scan the text for recurring terms. 2. Bu
 ## Examples (Few-Shot Demonstration)
 Example 1: Text: --- CHAPTER 1 --- The hero Li Fuchen fought in Li City. --- CHAPTER 2 --- Lee Fu Chen escaped to Lee City.
 Step-by-Step Analysis: 1. Scan: Terms 'Li Fuchen', 'Lee Fu Chen' (names); 'Li City', 'Lee City' (locations). 2. Profile: Link as same entity via context (hero's journey). 3. Impact: High frequency, central to plot -> CRITICAL. 4. Verify: Unintentional inconsistency, not evolution. 5. Suggestions: Standardize name to 'Li Fuchen' (frequency: 2, first appearance Ch1).
+
+Quote Normalization Example: Text: --- CHAPTER 1 --- The hero said "Project Doomsday" was dangerous. --- CHAPTER 2 --- The villain whispered 'Project Doomsday' again. --- CHAPTER 3 --- The report mentioned "Project Doomsday" frequently.
+Step-by-Step Analysis: 1. Scan: Terms 'Project Doomsday', 'Project Doomsday', 'Project Doomsday' (same term with different quote styles). 2. Normalize: Strip all quotation marks to compare core terms. 3. Verify: All variations are the same term "Project Doomsday" with different quote formatting. 4. Decision: This is NOT an inconsistency - it's a false positive caused by different chapters being processed by different quote conversion scripts. 5. Action: Do NOT flag this as an inconsistency.
+
 Output JSON:
 \`\`\`json
 [
@@ -164,25 +176,35 @@ function generatePrompt(chapterText, existingResults = []) {
 
   if (existingResults.length > 0) {
     // Validate results before processing
-    const validResults = existingResults.filter(result => {
+    const validResults = existingResults.filter((result) => {
       const isValid = validateResultForContext(result);
       if (!isValid) {
-        log(`Filtered out invalid result from context: ${result.concept || 'Unknown concept'}`);
+        log(
+          `Filtered out invalid result from context: ${
+            result.concept || "Unknown concept"
+          }`
+        );
       }
       return isValid;
     });
 
     if (validResults.length === 0) {
-      log('All existing results failed validation, proceeding without context');
+      log("All existing results failed validation, proceeding without context");
     } else {
-      log(`Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`);
+      log(
+        `Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`
+      );
     }
 
     // Apply context summarization to prevent exponential growth
     const summarizedResults = summarizeContextResults(validResults, 30); // Limit to 30 detailed items
 
     const existingJson = JSON.stringify(
-      summarizedResults.map(({concept, explanation, variations}) => ({concept, explanation, variations})),
+      summarizedResults.map(({ concept, explanation, variations }) => ({
+        concept,
+        explanation,
+        variations,
+      })),
       null,
       2
     );
@@ -285,23 +307,29 @@ export function getAvailableApiKey() {
     }
     // Found a valid key
     appState.runtime.currentApiKeyIndex = keyIndex; // Update index to the one we are returning
-    return {key: key, index: keyIndex};
+    return { key: key, index: keyIndex };
   }
-  log('All available API keys are currently on cooldown.');
+  log("All available API keys are currently on cooldown.");
   return null; // All keys are on cooldown
 }
 
 function handleApiError(errorMessage) {
-  console.error('Inconsistency Finder:', errorMessage);
-  appState.runtime.cumulativeResults.push({error: errorMessage});
+  console.error("Inconsistency Finder:", errorMessage);
+  appState.runtime.cumulativeResults.push({ error: errorMessage });
   appState.runtime.isAnalysisRunning = false;
-  updateStatusIndicator('error', 'Error!');
+  updateStatusIndicator("error", "Error!");
   displayResults(appState.runtime.cumulativeResults);
 }
 
 // Main analysis functions
-export function findInconsistencies(chapterData, existingResults = [], retryCount = 0, parseRetryCount = 0) {
-  const maxTotalRetries = Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
+export function findInconsistencies(
+  chapterData,
+  existingResults = [],
+  retryCount = 0,
+  parseRetryCount = 0
+) {
+  const maxTotalRetries =
+    Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
   if (retryCount >= maxTotalRetries) {
     handleApiError(
       `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`
@@ -311,37 +339,46 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
   const apiKeyInfo = getAvailableApiKey();
   if (!apiKeyInfo) {
-    handleApiError('All API keys are currently rate-limited or failing. Please wait a moment before trying again.');
+    handleApiError(
+      "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+    );
     return;
   }
   const currentKey = apiKeyInfo.key;
   const currentKeyIndex = apiKeyInfo.index;
 
   appState.runtime.isAnalysisRunning = true;
-  updateStatusIndicator('running', `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`);
+  updateStatusIndicator(
+    "running",
+    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`
+  );
 
-  const combinedText = chapterData.map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join('\n\n');
+  const combinedText = chapterData
+    .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+    .join("\n\n");
   log(
-    `Sending ${combinedText.length} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
+    `Sending ${
+      combinedText.length
+    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
       retryCount + 1
     })`
   );
 
   const prompt = generatePrompt(combinedText, existingResults);
   const requestData = {
-    contents: [{parts: [{text: prompt}]}],
+    contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: appState.config.temperature
-    }
+      temperature: appState.config.temperature,
+    },
   };
 
   GM_xmlhttpRequest({
-    method: 'POST',
+    method: "POST",
     url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-    headers: {'Content-Type': 'application/json'},
+    headers: { "Content-Type": "application/json" },
     data: JSON.stringify(requestData),
     onload: function (response) {
-      log('Received raw response from API:', response.responseText);
+      log("Received raw response from API:", response.responseText);
       let apiResponse, parsedResponse, error;
 
       try {
@@ -354,15 +391,27 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
       if (apiResponse.error) {
         const errorStatus = apiResponse.error.status;
-        const errorMessage = apiResponse.error.message || '';
-        const isRetriable = RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes('The model is overloaded');
+        const errorMessage = apiResponse.error.message || "";
+        const isRetriable =
+          RETRIABLE_STATUSES.has(errorStatus) ||
+          errorMessage.includes("The model is overloaded");
 
         if (isRetriable) {
-          log(`Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`);
-          const cooldownSeconds = errorStatus === 'RESOURCE_EXHAUSTED' ? 2 : 1;
-          appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000);
-          updateStatusIndicator('running', `API Error. Rotating key...`);
-          findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount);
+          log(
+            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+          );
+          const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
+          appState.runtime.apiKeyCooldowns.set(
+            currentKey,
+            Date.now() + cooldownSeconds * 1000
+          );
+          updateStatusIndicator("running", `API Error. Rotating key...`);
+          findInconsistencies(
+            chapterData,
+            existingResults,
+            retryCount + 1,
+            parseRetryCount
+          );
           return;
         } else {
           const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`;
@@ -373,11 +422,13 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
       const candidate = apiResponse.candidates?.[0];
       if (!candidate || !candidate.content) {
-        if (candidate?.finishReason === 'MAX_TOKENS') {
+        if (candidate?.finishReason === "MAX_TOKENS") {
           error =
             "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters.";
         } else {
-          error = `Invalid API response: No content found. Finish Reason: ${candidate?.finishReason || 'Unknown'}`;
+          error = `Invalid API response: No content found. Finish Reason: ${
+            candidate?.finishReason || "Unknown"
+          }`;
         }
         handleApiError(error);
         return;
@@ -387,12 +438,22 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
         const resultText = candidate.content.parts[0].text;
         const cleanedJsonString = extractJsonFromString(resultText);
         parsedResponse = JSON.parse(cleanedJsonString);
-        log('Successfully parsed API response content.', parsedResponse);
+        log("Successfully parsed API response content.", parsedResponse);
       } catch (e) {
         if (parseRetryCount < 1) {
-          log(`Failed to parse AI response content, retrying API call once. Error: ${e.message}`);
-          updateStatusIndicator('running', `AI response malformed. Retrying...`);
-          findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1);
+          log(
+            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+          );
+          updateStatusIndicator(
+            "running",
+            `AI response malformed. Retrying...`
+          );
+          findInconsistencies(
+            chapterData,
+            existingResults,
+            retryCount + 1,
+            parseRetryCount + 1
+          );
           return;
         }
         error = `Failed to process AI response content after retry: ${e.message}`;
@@ -401,12 +462,16 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
       }
 
       // On success, advance the key index for the next run
-      appState.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % appState.config.apiKeys.length;
+      appState.runtime.currentApiKeyIndex =
+        (currentKeyIndex + 1) % appState.config.apiKeys.length;
       appState.runtime.isAnalysisRunning = false;
       const isVerificationRun = existingResults.length > 0;
 
       if (isVerificationRun) {
-        if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
+        if (
+          !parsedResponse.verified_inconsistencies ||
+          !parsedResponse.new_inconsistencies
+        ) {
           handleApiError(
             "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
           );
@@ -416,48 +481,67 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
         const newItems = parsedResponse.new_inconsistencies || [];
         // AI verification decisions are trusted - no manual status override needed
         // The AI properly categorizes results into verified_inconsistencies and new_inconsistencies
-        verifiedItems.forEach(item => {
+        verifiedItems.forEach((item) => {
           item.isNew = false;
-          item.status = 'Verified';
+          item.status = "Verified";
         });
-        newItems.forEach(item => {
+        newItems.forEach((item) => {
           item.isNew = true;
         });
-        log(`Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`);
+        log(
+          `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`
+        );
         appState.runtime.cumulativeResults = [...verifiedItems, ...newItems];
       } else {
         if (!Array.isArray(parsedResponse)) {
-          handleApiError('Invalid response format for initial run. Expected a JSON array.');
+          handleApiError(
+            "Invalid response format for initial run. Expected a JSON array."
+          );
           return;
         }
-        parsedResponse.forEach(r => (r.isNew = true));
+        parsedResponse.forEach((r) => (r.isNew = true));
         appState.runtime.cumulativeResults = parsedResponse;
       }
 
       // Save session results
       saveSessionResults();
 
-      updateStatusIndicator('complete', 'Complete!');
-      document.getElementById('wtr-if-continue-btn').disabled = false;
+      updateStatusIndicator("complete", "Complete!");
+      document.getElementById("wtr-if-continue-btn").disabled = false;
       displayResults(appState.runtime.cumulativeResults);
     },
     onerror: function (error) {
-      console.error('Inconsistency Finder: Network error:', error);
-      log(`Network error with key index ${currentKeyIndex}. Rotating key and retrying.`);
+      console.error("Inconsistency Finder: Network error:", error);
+      log(
+        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+      );
       appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-      updateStatusIndicator('running', `Network Error. Rotating key...`);
-      findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount);
-    }
+      updateStatusIndicator("running", `Network Error. Rotating key...`);
+      findInconsistencies(
+        chapterData,
+        existingResults,
+        retryCount + 1,
+        parseRetryCount
+      );
+    },
   });
 }
 
-export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targetDepth = 1, currentDepth = 1) {
+export function findInconsistenciesDeepAnalysis(
+  chapterData,
+  existingResults = [],
+  targetDepth = 1,
+  currentDepth = 1
+) {
   if (currentDepth > targetDepth) {
     // Deep analysis complete
     appState.runtime.isAnalysisRunning = false;
-    const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : 'Complete!';
-    updateStatusIndicator('complete', statusMessage);
-    document.getElementById('wtr-if-continue-btn').disabled = false;
+    const statusMessage =
+      targetDepth > 1
+        ? `Complete! (Deep Analysis: ${targetDepth} iterations)`
+        : "Complete!";
+    updateStatusIndicator("complete", statusMessage);
+    document.getElementById("wtr-if-continue-btn").disabled = false;
     displayResults(appState.runtime.cumulativeResults);
     return;
   }
@@ -466,29 +550,47 @@ export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [
 
   // Update status to show iteration progress
   if (targetDepth > 1) {
-    updateStatusIndicator('running', `Deep Analysis (${currentDepth}/${targetDepth})...`);
+    updateStatusIndicator(
+      "running",
+      `Deep Analysis (${currentDepth}/${targetDepth})...`
+    );
   } else {
     updateStatusIndicator(
-      'running',
-      currentDepth > 1 ? `Deep Analysis (${currentDepth}/${targetDepth})...` : 'Analyzing...'
+      "running",
+      currentDepth > 1
+        ? `Deep Analysis (${currentDepth}/${targetDepth})...`
+        : "Analyzing..."
     );
   }
 
   // Standardized context selection - always use cumulative results for deep analysis
   const contextResults =
-    appState.runtime.cumulativeResults.length > 0 ? appState.runtime.cumulativeResults : existingResults;
+    appState.runtime.cumulativeResults.length > 0
+      ? appState.runtime.cumulativeResults
+      : existingResults;
 
   // Run iteration only if we have a real deep analysis (depth > 1)
   if (targetDepth > 1) {
-    findInconsistenciesIteration(chapterData, contextResults, targetDepth, currentDepth);
+    findInconsistenciesIteration(
+      chapterData,
+      contextResults,
+      targetDepth,
+      currentDepth
+    );
   } else {
     // For normal analysis (depth = 1), use the regular analysis function
     findInconsistencies(chapterData, contextResults);
   }
 }
 
-function findInconsistenciesIteration(chapterData, existingResults, targetDepth, currentDepth) {
-  const maxTotalRetries = Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
+function findInconsistenciesIteration(
+  chapterData,
+  existingResults,
+  targetDepth,
+  currentDepth
+) {
+  const maxTotalRetries =
+    Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
   let retryCount = 0;
   let parseRetryCount = 0;
 
@@ -502,34 +604,40 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
     const apiKeyInfo = getAvailableApiKey();
     if (!apiKeyInfo) {
-      handleApiError('All API keys are currently rate-limited or failing. Please wait a moment before trying again.');
+      handleApiError(
+        "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+      );
       return;
     }
     const currentKey = apiKeyInfo.key;
     const currentKeyIndex = apiKeyInfo.index;
 
-    const combinedText = chapterData.map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join('\n\n');
+    const combinedText = chapterData
+      .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+      .join("\n\n");
     log(
       `Deep Analysis Iteration ${currentDepth}/${targetDepth}: Sending ${
         combinedText.length
-      } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`
+      } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
+        retryCount + 1
+      })`
     );
 
     const prompt = generatePrompt(combinedText, existingResults);
     const requestData = {
-      contents: [{parts: [{text: prompt}]}],
+      contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: appState.config.temperature
-      }
+        temperature: appState.config.temperature,
+      },
     };
 
     GM_xmlhttpRequest({
-      method: 'POST',
+      method: "POST",
       url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-      headers: {'Content-Type': 'application/json'},
+      headers: { "Content-Type": "application/json" },
       data: JSON.stringify(requestData),
       onload: function (response) {
-        log('Received raw response from API:', response.responseText);
+        log("Received raw response from API:", response.responseText);
         let apiResponse, parsedResponse, error;
 
         try {
@@ -542,14 +650,22 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
         if (apiResponse.error) {
           const errorStatus = apiResponse.error.status;
-          const errorMessage = apiResponse.error.message || '';
-          const isRetriable = RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes('The model is overloaded');
+          const errorMessage = apiResponse.error.message || "";
+          const isRetriable =
+            RETRIABLE_STATUSES.has(errorStatus) ||
+            errorMessage.includes("The model is overloaded");
 
           if (isRetriable) {
-            log(`Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`);
-            const cooldownSeconds = errorStatus === 'RESOURCE_EXHAUSTED' ? 2 : 1;
-            appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000);
-            updateStatusIndicator('running', `API Error. Rotating key...`);
+            log(
+              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+            );
+            const cooldownSeconds =
+              errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
+            appState.runtime.apiKeyCooldowns.set(
+              currentKey,
+              Date.now() + cooldownSeconds * 1000
+            );
+            updateStatusIndicator("running", `API Error. Rotating key...`);
             retryCount++;
             executeIteration();
             return;
@@ -562,11 +678,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
         const candidate = apiResponse.candidates?.[0];
         if (!candidate || !candidate.content) {
-          if (candidate?.finishReason === 'MAX_TOKENS') {
+          if (candidate?.finishReason === "MAX_TOKENS") {
             error =
               "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters.";
           } else {
-            error = `Invalid API response: No content found. Finish Reason: ${candidate?.finishReason || 'Unknown'}`;
+            error = `Invalid API response: No content found. Finish Reason: ${
+              candidate?.finishReason || "Unknown"
+            }`;
           }
           handleApiError(error);
           return;
@@ -576,11 +694,16 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
           const resultText = candidate.content.parts[0].text;
           const cleanedJsonString = extractJsonFromString(resultText);
           parsedResponse = JSON.parse(cleanedJsonString);
-          log('Successfully parsed API response content.', parsedResponse);
+          log("Successfully parsed API response content.", parsedResponse);
         } catch (e) {
           if (parseRetryCount < 1) {
-            log(`Failed to parse AI response content, retrying API call once. Error: ${e.message}`);
-            updateStatusIndicator('running', `AI response malformed. Retrying...`);
+            log(
+              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+            );
+            updateStatusIndicator(
+              "running",
+              `AI response malformed. Retrying...`
+            );
             retryCount++;
             parseRetryCount++;
             executeIteration();
@@ -592,13 +715,17 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
         }
 
         // On success, advance the key index for the next run
-        appState.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % appState.config.apiKeys.length;
+        appState.runtime.currentApiKeyIndex =
+          (currentKeyIndex + 1) % appState.config.apiKeys.length;
 
         const isVerificationRun = existingResults.length > 0;
         const isDeepAnalysis = targetDepth > 1;
 
         if (isVerificationRun) {
-          if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
+          if (
+            !parsedResponse.verified_inconsistencies ||
+            !parsedResponse.new_inconsistencies
+          ) {
             handleApiError(
               "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
             );
@@ -608,11 +735,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
           const newItems = parsedResponse.new_inconsistencies || [];
           // AI verification decisions are trusted - no manual status override needed
           // The AI properly categorizes results into verified_inconsistencies and new_inconsistencies
-          verifiedItems.forEach(item => {
+          verifiedItems.forEach((item) => {
             item.isNew = false;
-            item.status = 'Verified';
+            item.status = "Verified";
           });
-          newItems.forEach(item => {
+          newItems.forEach((item) => {
             item.isNew = true;
           });
           log(
@@ -621,15 +748,23 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
           // Standardized result handling for all iterations
           const allNewItems = [...verifiedItems, ...newItems];
-          appState.runtime.cumulativeResults = mergeAnalysisResults(appState.runtime.cumulativeResults, allNewItems);
+          appState.runtime.cumulativeResults = mergeAnalysisResults(
+            appState.runtime.cumulativeResults,
+            allNewItems
+          );
         } else {
           if (!Array.isArray(parsedResponse)) {
-            handleApiError('Invalid response format for initial run. Expected a JSON array.');
+            handleApiError(
+              "Invalid response format for initial run. Expected a JSON array."
+            );
             return;
           }
-          parsedResponse.forEach(r => (r.isNew = true));
+          parsedResponse.forEach((r) => (r.isNew = true));
           // Standardized result handling for all iterations
-          appState.runtime.cumulativeResults = mergeAnalysisResults(appState.runtime.cumulativeResults, parsedResponse);
+          appState.runtime.cumulativeResults = mergeAnalysisResults(
+            appState.runtime.cumulativeResults,
+            parsedResponse
+          );
         }
 
         // REMOVED: Critical bug fix - was overwriting AI verification decisions
@@ -644,24 +779,34 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
         if (currentDepth < targetDepth) {
           // Continue to next iteration
           setTimeout(() => {
-            findInconsistenciesDeepAnalysis(chapterData, appState.runtime.cumulativeResults, targetDepth, currentDepth + 1);
+            findInconsistenciesDeepAnalysis(
+              chapterData,
+              appState.runtime.cumulativeResults,
+              targetDepth,
+              currentDepth + 1
+            );
           }, 1000); // Brief pause between iterations
         } else {
           // Deep analysis complete
           appState.runtime.isAnalysisRunning = false;
-          updateStatusIndicator('complete', `Complete! (Deep Analysis: ${targetDepth} iterations)`);
-          document.getElementById('wtr-if-continue-btn').disabled = false;
+          updateStatusIndicator(
+            "complete",
+            `Complete! (Deep Analysis: ${targetDepth} iterations)`
+          );
+          document.getElementById("wtr-if-continue-btn").disabled = false;
           displayResults(appState.runtime.cumulativeResults);
         }
       },
       onerror: function (error) {
-        console.error('Inconsistency Finder: Network error:', error);
-        log(`Network error with key index ${currentKeyIndex}. Rotating key and retrying.`);
+        console.error("Inconsistency Finder: Network error:", error);
+        log(
+          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+        );
         appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-        updateStatusIndicator('running', `Network Error. Rotating key...`);
+        updateStatusIndicator("running", `Network Error. Rotating key...`);
         retryCount++;
         executeIteration();
-      }
+      },
     });
   };
 

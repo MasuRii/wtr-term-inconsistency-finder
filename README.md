@@ -3,7 +3,7 @@
 A sophisticated userscript for finding translation inconsistencies in WTR Lab chapters using the Gemini AI API. Built with a modern, modular architecture for maintainability and advanced features.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-5.3.1-blue.svg)](https://github.com/MasuRii/wtr-term-inconsistency-finder)
+[![Version](https://img.shields.io/badge/version-5.3.2-blue.svg)](https://github.com/MasuRii/wtr-term-inconsistency-finder)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-Install-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
 ## 🚀 Quick Install (Recommended)
@@ -39,27 +39,34 @@ A sophisticated userscript for finding translation inconsistencies in WTR Lab ch
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/MasuRii/wtr-term-inconsistency-finder.git
    cd wtr-term-inconsistency-finder
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Configure API keys**
+
    - Create `.env` file (optional, for local testing):
+
    ```
    GEMINI_API_KEY=your_api_key_here
    ```
+
    - Or add them through the script's UI
 
 4. **Start development server**
+
    ```bash
    npm run dev
    ```
+
    - Opens development server on `http://localhost:8080`
    - Produces proxy script for hot reload testing
    - Watch for changes and auto-rebuild
@@ -100,11 +107,13 @@ wtr-term-inconsistency-finder/
 ### For End Users (Userscript Handler Installation)
 
 1. **Install the script**
+
    - Download the built `.user.js` file from the repository
    - Open in browser with any userscript handler (Tampermonkey, Violentmonkey, etc.) installed
    - Follow installation prompts
 
 2. **Configure API keys**
+
    - Open the script panel (click the analysis button)
    - Go to Configuration tab
    - Add your Gemini API keys (multiple supported)
@@ -120,17 +129,21 @@ wtr-term-inconsistency-finder/
 ### For Developers
 
 1. **Local development with hot reload**
+
    ```bash
    npm run dev
    ```
+
    - Creates proxy script that auto-reloads
    - Test changes in real-time
    - Check console for detailed logs
 
 2. **Production build**
+
    ```bash
    npm run build
    ```
+
    - Minified, single-file output
    - Ready for distribution
    - Optimized for performance
@@ -177,6 +190,7 @@ The script supports multiple API keys with smart rotation:
 ### Deep Analysis
 
 Run multiple analysis iterations for comprehensive results:
+
 - **Single Analysis** (1 iteration): Quick scan
 - **Deep Analysis** (2-5 iterations): Thorough investigation
 - Each iteration builds on previous findings
@@ -207,23 +221,27 @@ Run multiple analysis iterations for comprehensive results:
 ### Common Issues
 
 **Script not loading?**
+
 - Check Tampermonkey is enabled
 - Verify script is activated for WTR Lab domain
 - Check browser console for errors
 
 **API errors?**
+
 - Verify API keys are valid
 - Check rate limits haven't been exceeded
 - Try switching to a different model
 - Enable debug logging for details
 
 **No results found?**
+
 - Ensure you have multiple chapters loaded
 - Check if text is in the expected format
 - Try increasing analysis depth
 - Verify AI model supports the content length
 
 **UI not responsive?**
+
 - Disable other conflicting extensions
 - Try refreshing the page
 - Clear Tampermonkey storage
@@ -232,6 +250,7 @@ Run multiple analysis iterations for comprehensive results:
 ### Debug Mode
 
 Enable debug logging in Configuration tab for detailed information:
+
 - API request/response logs
 - Analysis progress updates
 - Error details and stack traces

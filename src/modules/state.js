@@ -100,6 +100,12 @@ export async function loadConfig() {
   }
   // --- End Migration ---
 
+  // Load preferences from saved config if they exist
+  if (savedConfig.preferences) {
+    appState.preferences = {...appState.preferences, ...savedConfig.preferences};
+    log('Loaded preferences from config:', appState.preferences);
+  }
+
   appState.config = {...appState.config, ...savedConfig};
 
   // Load session results if available
@@ -146,7 +152,11 @@ export async function loadConfig() {
 
 export async function saveConfig() {
   try {
-    await GM_setValue(CONFIG_KEY, appState.config);
+    const configToSave = {
+      ...appState.config,
+      preferences: appState.preferences
+    };
+    await GM_setValue(CONFIG_KEY, configToSave);
     return true;
   } catch (e) {
     console.error('Inconsistency Finder: Error saving config:', e);

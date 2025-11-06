@@ -1,6 +1,12 @@
-# WTR Lab Term Inconsistency Finder
+# WTR Lab Term Inconsistency Finder v5.3.2
 
 A powerful userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini AI. Perfect for translators, proofreaders, and anyone who wants to maintain consistency in WTR Lab novels.
+
+## 🆕 What's New in v5.3.2
+
+- **Fixed Quote False Positives**: No more false alarms from quote style differences (straight quotes vs smart quotes vs curly quotes)
+- **Fixed Auto-Restore Bug**: Configuration settings now properly save when changed
+- **Smarter AI Analysis**: Enhanced detection to focus on real inconsistencies only
 
 ## 🚀 Quick Install
 

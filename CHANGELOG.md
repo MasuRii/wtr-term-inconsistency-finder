@@ -5,6 +5,16 @@ All notable changes to the WTR Lab Term Inconsistency Finder will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.2] - 2025-11-06
+
+### Fixed
+- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes ", single quotes ', or smart quotes “ ” ‘ ’). This resolves false positives caused by different chapters being processed by different quote conversion scripts.
+- **Auto-Restore Configuration Bug**: Fixed persistence issue where "Auto-restore saved results on panel open" setting would not save when disabled. Configuration now properly persists user preferences.
+
+### Technical
+- **AI Prompt Enhancement**: Added critical quote normalization logic to distinguish between genuine text inconsistencies and formatting differences
+- **Configuration Management**: Improved save/load mechanism to properly handle user preferences
+
 ## [5.3.1] - 2025-11-06
 
 ### Added
@@ -33,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session Management**: More robust storage and recovery mechanisms
 
 ### Fixed
+- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes, smart quotes, curly quotes) - caused by different chapters being processed by different quote conversion scripts
+- **Auto-Restore Configuration Bug**: Fixed persistence issue where "Auto-restore saved results on panel open" setting would not save when disabled
 - **Session Restoration**: Fixed corrupted suggestion data handling
 - **Memory Leaks**: Resolved issues with large analysis result sets
 - **API Rate Limiting**: Improved cooldown and rotation logic
@@ -47,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testing**: Local development server with auto-rebuild
 - **Distribution**: GitHub Actions for automated builds
 - **Documentation**: Comprehensive developer and user guides
+- **Quote Normalization**: AI prompt enhancement for smarter quote-style inconsistency detection
+- **Configuration Management**: Improved save/load mechanism for user preferences
 
 ## [5.2.0] - 2025-10-XX (Legacy)
 
