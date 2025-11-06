@@ -3420,7 +3420,7 @@ const VERSION = "5.3.2";
 const VERSION_INFO = {
   major: 5,
   minor: 3,
-  patch: 1,
+  patch: 2,
   build: null, // Set to number for build versions, null for release
   channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
 };
