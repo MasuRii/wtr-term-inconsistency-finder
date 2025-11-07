@@ -397,7 +397,7 @@
             .wtr-if-verified-badge { background-color: var(--bs-success, #198754); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; }
             .wtr-if-recommended-badge { background-color: var(--bs-info, #0dcaf0); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
             #wtr-if-status-indicator {
-                position: fixed; bottom: 20px; left: 20px; z-index: 10000;
+                position: fixed; bottom: var(--nig-space-xl, 20px); left: 20px; z-index: 10000;
                 background-color: #2c2c2e; color: #f0f0f0; padding: 10px 15px;
                 border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
                 display: none; align-items: center; gap: 10px; font-family: sans-serif;

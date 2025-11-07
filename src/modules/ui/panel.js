@@ -329,28 +329,131 @@ export function updateStatusIndicator(state, message = '') {
   adjustIndicatorPosition();
 }
 
+/**
+ * Dynamic Collision Avoidance System for WTR Status Indicator
+ *
+ * This system provides intelligent, real-time collision detection and avoidance
+ * for the WTR Term Inconsistency Finder status widget.
+ */
+
+// Position constants
+const POSITION = {
+  BASE: 'var(--nig-space-xl, 20px)',        // Start at NIG widget level
+  NIG_CONFLICT: '80px',                     // Move up when NIG widget present
+  SAFE_DEFAULT: '60px'                      // Fallback position
+};
+
+// Collision detection state
+let collisionState = {
+  isMonitoringActive: false,
+  lastNigWidgetState: null,
+  currentPosition: null,
+  debounceTimer: null
+};
+
+/**
+ * Get the current computed bottom position of an element
+ */
+function getElementBottomPosition(element) {
+  if (!element) return null;
+  
+  const computed = getComputedStyle(element);
+  const bottom = computed.bottom;
+  
+  // Extract numeric value from bottom position
+  if (bottom && bottom !== 'auto') {
+    return parseFloat(bottom.replace('px', '')) || 0;
+  }
+  
+  return 0;
+}
+
+/**
+ * Check if two elements would collide vertically
+ */
+function wouldCollide(element1, element2, spacing = 10) {
+  if (!element1 || !element2) return false;
+  
+  const rect1 = element1.getBoundingClientRect();
+  const rect2 = element2.getBoundingClientRect();
+  
+  // Check if elements overlap vertically
+  const element1Bottom = rect1.bottom;
+  const element2Top = rect2.top;
+  
+  return (element1Bottom + spacing) > element2Top;
+}
+
+/**
+ * Determine optimal position based on current collision state
+ */
+function calculateOptimalPosition(nigWidget, indicator) {
+  const isNigVisible = nigWidget && getComputedStyle(nigWidget).display !== 'none';
+  
+  // Log current state for debugging
+  const nigState = isNigVisible ? 'present' : 'absent';
+  const currentPos = collisionState.currentPosition;
+  
+  // Position logic
+  let newPosition = POSITION.BASE;
+  let newZIndex = 10000;
+  
+  // Check for NIG widget conflict
+  if (isNigVisible && wouldCollide(indicator, nigWidget)) {
+    newPosition = POSITION.NIG_CONFLICT;
+    newZIndex = 10000;
+    log(`NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`);
+  }
+  // No conflicts - return to base position
+  else {
+    newPosition = POSITION.BASE;
+    newZIndex = 10000;
+    if (isNigVisible) {
+      log(`No conflicts detected. Returning to base position: ${newPosition}`);
+    }
+  }
+  
+  return { position: newPosition, zIndex: newZIndex, states: { nig: nigState } };
+}
+
+/**
+ * Apply position changes with smooth transitions
+ */
+function applyPosition(indicator, position, zIndex) {
+  if (!indicator) return;
+  
+  // Only update if position has actually changed
+  if (collisionState.currentPosition === position) {
+    return;
+  }
+  
+  collisionState.currentPosition = position;
+  
+  // Apply position with smooth transition
+  indicator.style.bottom = position;
+  indicator.style.zIndex = zIndex;
+  
+  log(`Position updated to: ${position}, Z-index: ${zIndex}`);
+}
+
+/**
+ * Main collision detection function - dynamically monitors and adjusts position
+ */
 function adjustIndicatorPosition() {
   const indicator = document.getElementById('wtr-if-status-indicator');
   if (!indicator) return;
-
-  const otherWidget = document.querySelector('.nig-status-widget');
-  const bottomNav = document.querySelector('.bottom-reader-nav');
   
-  // Check for bottom navigation conflict
-  if (bottomNav && getComputedStyle(bottomNav).display !== 'none') {
-    log('Conflict detected with .bottom-reader-nav, adjusting position and z-index.');
-    // Move status indicator behind the bottom nav (z-index 1030)
-    indicator.style.zIndex = '1029'; // Lower than bottom nav (1030)
-    indicator.style.bottom = '80px'; // Position above where bottom nav would be
-  } else if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
-    log('Conflict detected with .nig-status-widget, adjusting position.');
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '80px';
-  } else {
-    // No conflicts, use normal positioning
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '20px';
-  }
+  // Get relevant elements
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  
+  // Calculate optimal position based on current state
+  const { position, zIndex, states } = calculateOptimalPosition(nigWidget, indicator);
+  
+  // Apply the calculated position
+  applyPosition(indicator, position, zIndex);
+  
+  // Update state tracking
+  collisionState.lastNigWidgetState = states.nig;
 }
 
 export function injectControlButton() {
@@ -393,15 +496,148 @@ export function injectControlButton() {
   mainObserver.observe(document.body, {childList: true, subtree: true});
 }
 
+/**
+ * Initialize the dynamic collision avoidance system
+ */
+export function initializeCollisionAvoidance() {
+  // Start monitoring
+  collisionState.isMonitoringActive = true;
+  
+  // Initial position check
+  adjustIndicatorPosition();
+  
+  // Set up comprehensive observers for dynamic collision detection
+  setupConflictObserver();
+  setupScrollListener();
+  setupResizeListener();
+  
+  log('Dynamic collision avoidance system initialized.');
+}
+
+/**
+ * Enhanced conflict observer with debounced updates and comprehensive monitoring
+ */
 export function setupConflictObserver() {
-  const observer = new MutationObserver(() => {
-    adjustIndicatorPosition();
+  // Debounced observer to prevent excessive updates
+  const debouncedAdjustPosition = debounce(() => {
+    if (collisionState.isMonitoringActive) {
+      adjustIndicatorPosition();
+    }
+  }, 100);
+  
+  const observer = new MutationObserver((mutations) => {
+    // Check if any relevant mutations occurred
+    const relevantMutations = mutations.some(mutation => {
+      // Monitor for widget appearance/disappearance
+      if (mutation.type === 'childList') {
+        return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+      }
+      // Monitor for style/class changes that might affect visibility
+      if (mutation.type === 'attributes') {
+        return ['style', 'class', 'display'].includes(mutation.attributeName);
+      }
+      return false;
+    });
+    
+    if (relevantMutations) {
+      debouncedAdjustPosition();
+    }
   });
+  
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['style', 'class']
+    attributeFilter: ['style', 'class', 'id', 'display']
   });
-  log('Conflict observer initialized.');
+  
+  // Also observe NIG widget if it exists
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  if (nigWidget) {
+    observer.observe(nigWidget, {
+      attributes: true,
+      attributeFilter: ['style', 'class', 'display']
+    });
+  }
+  
+  log('Enhanced conflict observer initialized (NIG widget only).');
+}
+
+/**
+ * Monitor scroll events to detect position changes
+ */
+function setupScrollListener() {
+  let scrollTimeout;
+  const handleScroll = () => {
+    if (!collisionState.isMonitoringActive) return;
+    
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 150); // Debounce scroll events
+  };
+  
+  window.addEventListener('scroll', handleScroll, { passive: true });
+  log('Scroll listener initialized for collision detection.');
+}
+
+/**
+ * Monitor window resize events
+ */
+function setupResizeListener() {
+  let resizeTimeout;
+  const handleResize = () => {
+    if (!collisionState.isMonitoringActive) return;
+    
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 250); // Debounce resize events
+  };
+  
+  window.addEventListener('resize', handleResize);
+  log('Resize listener initialized for collision detection.');
+}
+
+/**
+ * Debounce utility function
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+/**
+ * Enable/disable collision monitoring
+ */
+export function setCollisionMonitoring(enabled) {
+  collisionState.isMonitoringActive = enabled;
+  log(`Collision monitoring ${enabled ? 'enabled' : 'disabled'}.`);
+  
+  if (enabled) {
+    adjustIndicatorPosition(); // Immediate update when re-enabling
+  }
+}
+
+/**
+ * Get current collision avoidance status for debugging
+ */
+export function getCollisionAvoidanceStatus() {
+  const indicator = document.getElementById('wtr-if-status-indicator');
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  
+  return {
+    isMonitoring: collisionState.isMonitoringActive,
+    currentPosition: collisionState.currentPosition,
+    lastNigState: collisionState.lastNigWidgetState,
+    indicatorRect: indicator ? indicator.getBoundingClientRect() : null,
+    nigWidgetVisible: nigWidget ? getComputedStyle(nigWidget).display !== 'none' : false
+  };
 }

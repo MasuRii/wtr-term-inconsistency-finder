@@ -5,6 +5,23 @@ All notable changes to the WTR Lab Term Inconsistency Finder will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.3] - 2025-11-07
+
+### Added
+- **Smart Quotes Replacement System**: Implemented smart quotes replacement that runs BEFORE terms replacement to avoid inconsistencies due to quotation issues
+- **Active Chapter Skipping**: Both smart quotes and terms replacement now skip processing on chapters with the "chapter-tracker active" class to avoid conflicts with other userscripts
+
+### Fixed
+- **Status Indicator Positioning**: Adjusted status indicator positioning to avoid collision with the existing NIG status widget
+  - Normal position: bottom: 50px (increased from 20px)
+  - When conflicts detected: bottom: 110px (increased from 80px)
+  - Maintains z-index management for proper layering
+
+### Technical
+- **Processing Order**: Changed order of operations to: smart quotes replacement → terms replacement
+- **Chapter Detection**: Enhanced chapter data collection to include tracker element references for proper active chapter detection
+- **Conflict Avoidance**: Active chapters are now skipped in both smart quotes and term replacement processes
+
 ## [5.3.2] - 2025-11-06
 
 ### Fixed
@@ -97,7 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **v5.3.1**: Current - Modular architecture with advanced features
+- **v5.3.3**: Current - Smart quotes system with active chapter detection
+- **v5.3.2**: Fixed quote handling and UI conflicts
+- **v5.3.1**: Modular architecture with advanced features
 - **v5.2.0**: Legacy - Enhanced AI integration
 - **v5.1.0**: Legacy - Initial AI-powered version
 - **v5.0.0**: Legacy - Basic inconsistency detection

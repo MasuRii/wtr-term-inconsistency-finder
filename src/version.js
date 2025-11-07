@@ -2,11 +2,11 @@
 // Centralized version configuration for the WTR Lab Term Inconsistency Finder
 // This is the SINGLE SOURCE OF TRUTH for all version information
 
-export const VERSION = "5.3.2";
+export const VERSION = "5.3.3";
 export const VERSION_INFO = {
   major: 5,
   minor: 3,
-  patch: 2,
+  patch: 3,
   build: null, // Set to number for build versions, null for release
   channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
 };

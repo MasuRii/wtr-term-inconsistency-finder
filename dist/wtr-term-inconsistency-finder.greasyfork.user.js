@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI. GreasyFork compliant version.
-// @version 5.3.2-greasyfork
+// @version 5.3.3-greasyfork
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -439,7 +439,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin { 0% { transfor
             .wtr-if-verified-badge { background-color: var(--bs-success, #198754); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; }
             .wtr-if-recommended-badge { background-color: var(--bs-info, #0dcaf0); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
             #wtr-if-status-indicator {
-                position: fixed; bottom: 20px; left: 20px; z-index: 10000;
+                position: fixed; bottom: var(--nig-space-xl, 20px); left: 20px; z-index: 10000;
                 background-color: #2c2c2e; color: #f0f0f0; padding: 10px 15px;
                 border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
                 display: none; align-items: center; gap: 10px; font-family: sans-serif;
@@ -2112,7 +2112,9 @@ function startAnalysis(isContinuation = false) {
     document.getElementById('wtr-if-file-input').click();
   } else {
     const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.crawlChapterData)();
-    const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applyTermReplacements)(chapterData);
+    // Apply smart quotes replacement first, then term replacements
+    const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applySmartQuotesReplacement)(chapterData);
+    const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applyTermReplacements)(smartQuotesData);
     (0,_geminiApi__WEBPACK_IMPORTED_MODULE_2__.findInconsistenciesDeepAnalysis)(
       processedData,
       isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__.appState.runtime.cumulativeResults : [],
@@ -2181,7 +2183,9 @@ function handleFileImportAndAnalyze(event) {
       // --- End Validation ---
 
       const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.crawlChapterData)();
-      const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applyTermReplacements)(chapterData, terms || []);
+      // Apply smart quotes replacement first, then term replacements
+      const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applySmartQuotesReplacement)(chapterData);
+      const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__.applyTermReplacements)(smartQuotesData, terms || []);
       const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__.appState.config.deepAnalysisDepth) || 1);
       (0,_geminiApi__WEBPACK_IMPORTED_MODULE_2__.findInconsistenciesDeepAnalysis)(
         processedData,
@@ -2514,6 +2518,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   createUI: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.createUI),
 /* harmony export */   displayResults: () => (/* reexport safe */ _display__WEBPACK_IMPORTED_MODULE_1__.displayResults),
 /* harmony export */   fetchAndCacheModels: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.fetchAndCacheModels),
+/* harmony export */   getCollisionAvoidanceStatus: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.getCollisionAvoidanceStatus),
 /* harmony export */   handleApplyClick: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleApplyClick),
 /* harmony export */   handleClearSession: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleClearSession),
 /* harmony export */   handleContinueAnalysis: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleContinueAnalysis),
@@ -2523,9 +2528,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   handleRestoreSession: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleRestoreSession),
 /* harmony export */   handleSaveConfig: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleSaveConfig),
 /* harmony export */   handleStatusClick: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.handleStatusClick),
+/* harmony export */   initializeCollisionAvoidance: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.initializeCollisionAvoidance),
 /* harmony export */   injectControlButton: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.injectControlButton),
 /* harmony export */   populateModelSelector: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.populateModelSelector),
 /* harmony export */   renderApiKeysUI: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.renderApiKeysUI),
+/* harmony export */   setCollisionMonitoring: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.setCollisionMonitoring),
 /* harmony export */   setupConflictObserver: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.setupConflictObserver),
 /* harmony export */   togglePanel: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.togglePanel),
 /* harmony export */   updateStatusIndicator: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.updateStatusIndicator)
@@ -2548,9 +2555,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   addApiKeyRow: () => (/* binding */ addApiKeyRow),
 /* harmony export */   createUI: () => (/* binding */ createUI),
 /* harmony export */   fetchAndCacheModels: () => (/* binding */ fetchAndCacheModels),
+/* harmony export */   getCollisionAvoidanceStatus: () => (/* binding */ getCollisionAvoidanceStatus),
+/* harmony export */   initializeCollisionAvoidance: () => (/* binding */ initializeCollisionAvoidance),
 /* harmony export */   injectControlButton: () => (/* binding */ injectControlButton),
 /* harmony export */   populateModelSelector: () => (/* binding */ populateModelSelector),
 /* harmony export */   renderApiKeysUI: () => (/* binding */ renderApiKeysUI),
+/* harmony export */   setCollisionMonitoring: () => (/* binding */ setCollisionMonitoring),
 /* harmony export */   setupConflictObserver: () => (/* binding */ setupConflictObserver),
 /* harmony export */   togglePanel: () => (/* binding */ togglePanel),
 /* harmony export */   updateStatusIndicator: () => (/* binding */ updateStatusIndicator)
@@ -2891,28 +2901,131 @@ function updateStatusIndicator(state, message = '') {
   adjustIndicatorPosition();
 }
 
+/**
+ * Dynamic Collision Avoidance System for WTR Status Indicator
+ *
+ * This system provides intelligent, real-time collision detection and avoidance
+ * for the WTR Term Inconsistency Finder status widget.
+ */
+
+// Position constants
+const POSITION = {
+  BASE: 'var(--nig-space-xl, 20px)',        // Start at NIG widget level
+  NIG_CONFLICT: '80px',                     // Move up when NIG widget present
+  SAFE_DEFAULT: '60px'                      // Fallback position
+};
+
+// Collision detection state
+let collisionState = {
+  isMonitoringActive: false,
+  lastNigWidgetState: null,
+  currentPosition: null,
+  debounceTimer: null
+};
+
+/**
+ * Get the current computed bottom position of an element
+ */
+function getElementBottomPosition(element) {
+  if (!element) return null;
+  
+  const computed = getComputedStyle(element);
+  const bottom = computed.bottom;
+  
+  // Extract numeric value from bottom position
+  if (bottom && bottom !== 'auto') {
+    return parseFloat(bottom.replace('px', '')) || 0;
+  }
+  
+  return 0;
+}
+
+/**
+ * Check if two elements would collide vertically
+ */
+function wouldCollide(element1, element2, spacing = 10) {
+  if (!element1 || !element2) return false;
+  
+  const rect1 = element1.getBoundingClientRect();
+  const rect2 = element2.getBoundingClientRect();
+  
+  // Check if elements overlap vertically
+  const element1Bottom = rect1.bottom;
+  const element2Top = rect2.top;
+  
+  return (element1Bottom + spacing) > element2Top;
+}
+
+/**
+ * Determine optimal position based on current collision state
+ */
+function calculateOptimalPosition(nigWidget, indicator) {
+  const isNigVisible = nigWidget && getComputedStyle(nigWidget).display !== 'none';
+  
+  // Log current state for debugging
+  const nigState = isNigVisible ? 'present' : 'absent';
+  const currentPos = collisionState.currentPosition;
+  
+  // Position logic
+  let newPosition = POSITION.BASE;
+  let newZIndex = 10000;
+  
+  // Check for NIG widget conflict
+  if (isNigVisible && wouldCollide(indicator, nigWidget)) {
+    newPosition = POSITION.NIG_CONFLICT;
+    newZIndex = 10000;
+    (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)(`NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`);
+  }
+  // No conflicts - return to base position
+  else {
+    newPosition = POSITION.BASE;
+    newZIndex = 10000;
+    if (isNigVisible) {
+      (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)(`No conflicts detected. Returning to base position: ${newPosition}`);
+    }
+  }
+  
+  return { position: newPosition, zIndex: newZIndex, states: { nig: nigState } };
+}
+
+/**
+ * Apply position changes with smooth transitions
+ */
+function applyPosition(indicator, position, zIndex) {
+  if (!indicator) return;
+  
+  // Only update if position has actually changed
+  if (collisionState.currentPosition === position) {
+    return;
+  }
+  
+  collisionState.currentPosition = position;
+  
+  // Apply position with smooth transition
+  indicator.style.bottom = position;
+  indicator.style.zIndex = zIndex;
+  
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)(`Position updated to: ${position}, Z-index: ${zIndex}`);
+}
+
+/**
+ * Main collision detection function - dynamically monitors and adjusts position
+ */
 function adjustIndicatorPosition() {
   const indicator = document.getElementById('wtr-if-status-indicator');
   if (!indicator) return;
-
-  const otherWidget = document.querySelector('.nig-status-widget');
-  const bottomNav = document.querySelector('.bottom-reader-nav');
   
-  // Check for bottom navigation conflict
-  if (bottomNav && getComputedStyle(bottomNav).display !== 'none') {
-    (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Conflict detected with .bottom-reader-nav, adjusting position and z-index.');
-    // Move status indicator behind the bottom nav (z-index 1030)
-    indicator.style.zIndex = '1029'; // Lower than bottom nav (1030)
-    indicator.style.bottom = '80px'; // Position above where bottom nav would be
-  } else if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
-    (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Conflict detected with .nig-status-widget, adjusting position.');
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '80px';
-  } else {
-    // No conflicts, use normal positioning
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '20px';
-  }
+  // Get relevant elements
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  
+  // Calculate optimal position based on current state
+  const { position, zIndex, states } = calculateOptimalPosition(nigWidget, indicator);
+  
+  // Apply the calculated position
+  applyPosition(indicator, position, zIndex);
+  
+  // Update state tracking
+  collisionState.lastNigWidgetState = states.nig;
 }
 
 function injectControlButton() {
@@ -2955,17 +3068,150 @@ function injectControlButton() {
   mainObserver.observe(document.body, {childList: true, subtree: true});
 }
 
+/**
+ * Initialize the dynamic collision avoidance system
+ */
+function initializeCollisionAvoidance() {
+  // Start monitoring
+  collisionState.isMonitoringActive = true;
+  
+  // Initial position check
+  adjustIndicatorPosition();
+  
+  // Set up comprehensive observers for dynamic collision detection
+  setupConflictObserver();
+  setupScrollListener();
+  setupResizeListener();
+  
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Dynamic collision avoidance system initialized.');
+}
+
+/**
+ * Enhanced conflict observer with debounced updates and comprehensive monitoring
+ */
 function setupConflictObserver() {
-  const observer = new MutationObserver(() => {
-    adjustIndicatorPosition();
+  // Debounced observer to prevent excessive updates
+  const debouncedAdjustPosition = debounce(() => {
+    if (collisionState.isMonitoringActive) {
+      adjustIndicatorPosition();
+    }
+  }, 100);
+  
+  const observer = new MutationObserver((mutations) => {
+    // Check if any relevant mutations occurred
+    const relevantMutations = mutations.some(mutation => {
+      // Monitor for widget appearance/disappearance
+      if (mutation.type === 'childList') {
+        return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+      }
+      // Monitor for style/class changes that might affect visibility
+      if (mutation.type === 'attributes') {
+        return ['style', 'class', 'display'].includes(mutation.attributeName);
+      }
+      return false;
+    });
+    
+    if (relevantMutations) {
+      debouncedAdjustPosition();
+    }
   });
+  
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['style', 'class']
+    attributeFilter: ['style', 'class', 'id', 'display']
   });
-  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Conflict observer initialized.');
+  
+  // Also observe NIG widget if it exists
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  if (nigWidget) {
+    observer.observe(nigWidget, {
+      attributes: true,
+      attributeFilter: ['style', 'class', 'display']
+    });
+  }
+  
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Enhanced conflict observer initialized (NIG widget only).');
+}
+
+/**
+ * Monitor scroll events to detect position changes
+ */
+function setupScrollListener() {
+  let scrollTimeout;
+  const handleScroll = () => {
+    if (!collisionState.isMonitoringActive) return;
+    
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 150); // Debounce scroll events
+  };
+  
+  window.addEventListener('scroll', handleScroll, { passive: true });
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Scroll listener initialized for collision detection.');
+}
+
+/**
+ * Monitor window resize events
+ */
+function setupResizeListener() {
+  let resizeTimeout;
+  const handleResize = () => {
+    if (!collisionState.isMonitoringActive) return;
+    
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 250); // Debounce resize events
+  };
+  
+  window.addEventListener('resize', handleResize);
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)('Resize listener initialized for collision detection.');
+}
+
+/**
+ * Debounce utility function
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+/**
+ * Enable/disable collision monitoring
+ */
+function setCollisionMonitoring(enabled) {
+  collisionState.isMonitoringActive = enabled;
+  (0,_utils__WEBPACK_IMPORTED_MODULE_3__.log)(`Collision monitoring ${enabled ? 'enabled' : 'disabled'}.`);
+  
+  if (enabled) {
+    adjustIndicatorPosition(); // Immediate update when re-enabling
+  }
+}
+
+/**
+ * Get current collision avoidance status for debugging
+ */
+function getCollisionAvoidanceStatus() {
+  const indicator = document.getElementById('wtr-if-status-indicator');
+  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  
+  return {
+    isMonitoring: collisionState.isMonitoringActive,
+    currentPosition: collisionState.currentPosition,
+    lastNigState: collisionState.lastNigWidgetState,
+    indicatorRect: indicator ? indicator.getBoundingClientRect() : null,
+    nigWidgetVisible: nigWidget ? getComputedStyle(nigWidget).display !== 'none' : false
+  };
 }
 
 /***/ }),
@@ -2975,6 +3221,7 @@ function setupConflictObserver() {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   applySmartQuotesReplacement: () => (/* binding */ applySmartQuotesReplacement),
 /* harmony export */   applyTermReplacements: () => (/* binding */ applyTermReplacements),
 /* harmony export */   areSemanticallySimilar: () => (/* binding */ areSemanticallySimilar),
 /* harmony export */   calculateResultQuality: () => (/* binding */ calculateResultQuality),
@@ -3012,13 +3259,98 @@ function crawlChapterData() {
     const chapterNo = tracker.dataset.chapterNo;
     if (chapterBody && chapterNo) {
       log(`Processing chapter #${chapterNo}...`);
-      chapterData.push({chapter: chapterNo, text: chapterBody.innerText});
+      chapterData.push({chapter: chapterNo, text: chapterBody.innerText, tracker: tracker});
     } else {
       log(`Skipping element at index ${index}: missing chapter number or body. Chapter No: ${chapterNo || 'not found'}`);
     }
   });
   log(`Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(', ')}]`);
   return chapterData;
+}
+
+/**
+ * Converts straight quotes to curly quotes and double hyphens to em-dashes.
+ * Based on the principles of SmartyPants.
+ * @param {string} text The input string.
+ * @returns {string} The processed string with smart typography.
+ */
+function smartenQuotes(text) {
+  if (!text) return '';
+
+  // The order of these replacements is important.
+  return text
+    // Special case for apostrophes in years like '70s
+    .replace(/'(\d+s)/g, '\u2019$1')
+    // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【"“])'/g, '$1\u2018')
+    // All remaining single quotes are closing quotes or apostrophes.
+    .replace(/'/g, '\u2019')
+    // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【'‘])"/g, '$1\u201c')
+    // All remaining double quotes are closing quotes.
+    .replace(/"/g, '\u201d')
+    // Em-dashes
+    .replace(/--/g, '\u2014');
+}
+
+/**
+ * Applies smart quotes replacement to chapter text, skipping the active chapter
+ * to avoid conflicts with other userscripts.
+ * @param {Array} chapterData Array of chapter data objects
+ * @returns {Array} Chapter data with smart quotes applied (where applicable)
+ */
+function applySmartQuotesReplacement(chapterData) {
+  log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
+  
+  let totalConversions = 0;
+  let skippedChapters = 0;
+  
+  return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`);
+      skippedChapters++;
+      return data;
+    }
+    
+    // Store original text for comparison
+    const originalText = data.text;
+    const originalStraightQuotes = (originalText.match(/["']/g) || []).length;
+    const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length;
+    
+    // Apply smart quotes to the text
+    const smartenedText = smartenQuotes(data.text);
+    
+    // Count conversions
+    const newStraightQuotes = (smartenedText.match(/["']/g) || []).length;
+    const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length;
+    const quotesConverted = newSmartQuotes - originalSmartQuotes;
+    
+    if (smartenedText !== originalText) {
+      totalConversions++;
+      
+      // Show detailed conversion information
+      log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
+      log(`  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`);
+      log(`  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`);
+      log(`  Converted: ${quotesConverted} quotes to smart format`);
+      
+      // Show a sample of the conversion
+      const sampleLength = Math.min(100, originalText.length);
+      const originalSample = originalText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      const convertedSample = smartenedText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      log(`  Sample before: "${originalSample}${originalText.length > sampleLength ? '...' : ''}"`);
+      log(`  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? '...' : ''}"`);
+    } else {
+      log(`No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`);
+    }
+    
+    return {...data, text: smartenedText};
+  });
+  
+  // Summary log
+  // removed by dead control flow
+
 }
 
 function applyTermReplacements(chapterData, terms = []) {
@@ -3086,6 +3418,12 @@ function applyTermReplacements(chapterData, terms = []) {
 
   // 2. Process each chapter's text.
   return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`);
+      return data;
+    }
+
     let fullText = data.text;
 
     // 3. Find ALL possible matches from all compiled terms.
@@ -3427,11 +3765,11 @@ __webpack_require__.r(__webpack_exports__);
 // Centralized version configuration for the WTR Lab Term Inconsistency Finder
 // This is the SINGLE SOURCE OF TRUTH for all version information
 
-const VERSION = "5.3.2";
+const VERSION = "5.3.3";
 const VERSION_INFO = {
   major: 5,
   minor: 3,
-  patch: 2,
+  patch: 3,
   build: null, // Set to number for build versions, null for release
   channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
 };
@@ -3565,7 +3903,7 @@ async function main() {
   (0,_modules_utils__WEBPACK_IMPORTED_MODULE_3__.log)("Configuration loaded.");
   (0,_modules_ui__WEBPACK_IMPORTED_MODULE_4__.createUI)();
   (0,_modules_ui__WEBPACK_IMPORTED_MODULE_4__.injectControlButton)();
-  (0,_modules_ui__WEBPACK_IMPORTED_MODULE_4__.setupConflictObserver)();
+  (0,_modules_ui__WEBPACK_IMPORTED_MODULE_4__.initializeCollisionAvoidance)();
   GM_registerMenuCommand("Term Inconsistency Finder", () => (0,_modules_ui__WEBPACK_IMPORTED_MODULE_4__.togglePanel)(true));
 }
 

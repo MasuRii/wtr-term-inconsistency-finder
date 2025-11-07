@@ -3,6 +3,7 @@ import { appState, saveConfig, clearSessionResults } from "../state";
 import {
   crawlChapterData,
   applyTermReplacements,
+  applySmartQuotesReplacement,
   getNovelSlug,
   log,
   escapeRegExp
@@ -55,7 +56,9 @@ function startAnalysis(isContinuation = false) {
     document.getElementById('wtr-if-file-input').click();
   } else {
     const chapterData = crawlChapterData();
-    const processedData = applyTermReplacements(chapterData);
+    // Apply smart quotes replacement first, then term replacements
+    const smartQuotesData = applySmartQuotesReplacement(chapterData);
+    const processedData = applyTermReplacements(smartQuotesData);
     findInconsistenciesDeepAnalysis(
       processedData,
       isContinuation ? appState.runtime.cumulativeResults : [],
@@ -124,7 +127,9 @@ export function handleFileImportAndAnalyze(event) {
       // --- End Validation ---
 
       const chapterData = crawlChapterData();
-      const processedData = applyTermReplacements(chapterData, terms || []);
+      // Apply smart quotes replacement first, then term replacements
+      const smartQuotesData = applySmartQuotesReplacement(chapterData);
+      const processedData = applyTermReplacements(smartQuotesData, terms || []);
       const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1);
       findInconsistenciesDeepAnalysis(
         processedData,

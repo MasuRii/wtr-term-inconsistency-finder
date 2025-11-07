@@ -12,7 +12,7 @@ import { log } from "./modules/utils";
 import {
   createUI,
   injectControlButton,
-  setupConflictObserver,
+  initializeCollisionAvoidance,
   togglePanel
 } from "./modules/ui";
 
@@ -22,7 +22,7 @@ async function main() {
   log("Configuration loaded.");
   createUI();
   injectControlButton();
-  setupConflictObserver();
+  initializeCollisionAvoidance();
   GM_registerMenuCommand("Term Inconsistency Finder", () => togglePanel(true));
 }
 

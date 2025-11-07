@@ -21,13 +21,97 @@ export function crawlChapterData() {
     const chapterNo = tracker.dataset.chapterNo;
     if (chapterBody && chapterNo) {
       log(`Processing chapter #${chapterNo}...`);
-      chapterData.push({chapter: chapterNo, text: chapterBody.innerText});
+      chapterData.push({chapter: chapterNo, text: chapterBody.innerText, tracker: tracker});
     } else {
       log(`Skipping element at index ${index}: missing chapter number or body. Chapter No: ${chapterNo || 'not found'}`);
     }
   });
   log(`Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(', ')}]`);
   return chapterData;
+}
+
+/**
+ * Converts straight quotes to curly quotes and double hyphens to em-dashes.
+ * Based on the principles of SmartyPants.
+ * @param {string} text The input string.
+ * @returns {string} The processed string with smart typography.
+ */
+function smartenQuotes(text) {
+  if (!text) return '';
+
+  // The order of these replacements is important.
+  return text
+    // Special case for apostrophes in years like '70s
+    .replace(/'(\d+s)/g, '\u2019$1')
+    // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【"“])'/g, '$1\u2018')
+    // All remaining single quotes are closing quotes or apostrophes.
+    .replace(/'/g, '\u2019')
+    // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【'‘])"/g, '$1\u201c')
+    // All remaining double quotes are closing quotes.
+    .replace(/"/g, '\u201d')
+    // Em-dashes
+    .replace(/--/g, '\u2014');
+}
+
+/**
+ * Applies smart quotes replacement to chapter text, skipping the active chapter
+ * to avoid conflicts with other userscripts.
+ * @param {Array} chapterData Array of chapter data objects
+ * @returns {Array} Chapter data with smart quotes applied (where applicable)
+ */
+export function applySmartQuotesReplacement(chapterData) {
+  log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
+  
+  let totalConversions = 0;
+  let skippedChapters = 0;
+  
+  return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`);
+      skippedChapters++;
+      return data;
+    }
+    
+    // Store original text for comparison
+    const originalText = data.text;
+    const originalStraightQuotes = (originalText.match(/["']/g) || []).length;
+    const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length;
+    
+    // Apply smart quotes to the text
+    const smartenedText = smartenQuotes(data.text);
+    
+    // Count conversions
+    const newStraightQuotes = (smartenedText.match(/["']/g) || []).length;
+    const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length;
+    const quotesConverted = newSmartQuotes - originalSmartQuotes;
+    
+    if (smartenedText !== originalText) {
+      totalConversions++;
+      
+      // Show detailed conversion information
+      log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
+      log(`  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`);
+      log(`  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`);
+      log(`  Converted: ${quotesConverted} quotes to smart format`);
+      
+      // Show a sample of the conversion
+      const sampleLength = Math.min(100, originalText.length);
+      const originalSample = originalText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      const convertedSample = smartenedText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      log(`  Sample before: "${originalSample}${originalText.length > sampleLength ? '...' : ''}"`);
+      log(`  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? '...' : ''}"`);
+    } else {
+      log(`No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`);
+    }
+    
+    return {...data, text: smartenedText};
+  });
+  
+  // Summary log
+  log(`SMART QUOTES SUMMARY: Processed ${chapterData.length} chapters, skipped ${skippedChapters} active chapters, converted quotes in ${totalConversions} chapters`);
 }
 
 export function applyTermReplacements(chapterData, terms = []) {
@@ -95,6 +179,12 @@ export function applyTermReplacements(chapterData, terms = []) {
 
   // 2. Process each chapter's text.
   return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`);
+      return data;
+    }
+
     let fullText = data.text;
 
     // 3. Find ALL possible matches from all compiled terms.

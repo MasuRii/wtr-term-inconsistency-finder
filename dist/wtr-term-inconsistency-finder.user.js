@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI.
-// @version 5.3.2
+// @version 5.3.3
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -564,7 +564,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin { 0% { transfor
             .wtr-if-verified-badge { background-color: var(--bs-success, #198754); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; }
             .wtr-if-recommended-badge { background-color: var(--bs-info, #0dcaf0); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
             #wtr-if-status-indicator {
-                position: fixed; bottom: 20px; left: 20px; z-index: 10000;
+                position: fixed; bottom: 120px; left: 20px; z-index: 10000;
                 background-color: #2c2c2e; color: #f0f0f0; padding: 10px 15px;
                 border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
                 display: none; align-items: center; gap: 10px; font-family: sans-serif;
@@ -936,11 +936,11 @@ var update = injectStylesIntoStyleTag_default()(main/* default */.A, options);
 // Centralized version configuration for the WTR Lab Term Inconsistency Finder
 // This is the SINGLE SOURCE OF TRUTH for all version information
 
-const VERSION = "5.3.2";
+const VERSION = "5.3.3";
 const VERSION_INFO = {
   major: 5,
   minor: 3,
-  patch: 2,
+  patch: 3,
   build: null, // Set to number for build versions, null for release
   channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
 };
@@ -996,13 +996,98 @@ function crawlChapterData() {
     const chapterNo = tracker.dataset.chapterNo;
     if (chapterBody && chapterNo) {
       log(`Processing chapter #${chapterNo}...`);
-      chapterData.push({chapter: chapterNo, text: chapterBody.innerText});
+      chapterData.push({chapter: chapterNo, text: chapterBody.innerText, tracker: tracker});
     } else {
       log(`Skipping element at index ${index}: missing chapter number or body. Chapter No: ${chapterNo || 'not found'}`);
     }
   });
   log(`Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(', ')}]`);
   return chapterData;
+}
+
+/**
+ * Converts straight quotes to curly quotes and double hyphens to em-dashes.
+ * Based on the principles of SmartyPants.
+ * @param {string} text The input string.
+ * @returns {string} The processed string with smart typography.
+ */
+function smartenQuotes(text) {
+  if (!text) return '';
+
+  // The order of these replacements is important.
+  return text
+    // Special case for apostrophes in years like '70s
+    .replace(/'(\d+s)/g, '\u2019$1')
+    // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【"“])'/g, '$1\u2018')
+    // All remaining single quotes are closing quotes or apostrophes.
+    .replace(/'/g, '\u2019')
+    // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+    .replace(/(^|[-\u2014\s(\[【'‘])"/g, '$1\u201c')
+    // All remaining double quotes are closing quotes.
+    .replace(/"/g, '\u201d')
+    // Em-dashes
+    .replace(/--/g, '\u2014');
+}
+
+/**
+ * Applies smart quotes replacement to chapter text, skipping the active chapter
+ * to avoid conflicts with other userscripts.
+ * @param {Array} chapterData Array of chapter data objects
+ * @returns {Array} Chapter data with smart quotes applied (where applicable)
+ */
+function applySmartQuotesReplacement(chapterData) {
+  log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
+  
+  let totalConversions = 0;
+  let skippedChapters = 0;
+  
+  return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`);
+      skippedChapters++;
+      return data;
+    }
+    
+    // Store original text for comparison
+    const originalText = data.text;
+    const originalStraightQuotes = (originalText.match(/["']/g) || []).length;
+    const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length;
+    
+    // Apply smart quotes to the text
+    const smartenedText = smartenQuotes(data.text);
+    
+    // Count conversions
+    const newStraightQuotes = (smartenedText.match(/["']/g) || []).length;
+    const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length;
+    const quotesConverted = newSmartQuotes - originalSmartQuotes;
+    
+    if (smartenedText !== originalText) {
+      totalConversions++;
+      
+      // Show detailed conversion information
+      log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
+      log(`  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`);
+      log(`  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`);
+      log(`  Converted: ${quotesConverted} quotes to smart format`);
+      
+      // Show a sample of the conversion
+      const sampleLength = Math.min(100, originalText.length);
+      const originalSample = originalText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      const convertedSample = smartenedText.substring(0, sampleLength).replace(/\n/g, '\\n');
+      log(`  Sample before: "${originalSample}${originalText.length > sampleLength ? '...' : ''}"`);
+      log(`  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? '...' : ''}"`);
+    } else {
+      log(`No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`);
+    }
+    
+    return {...data, text: smartenedText};
+  });
+  
+  // Summary log
+  // removed by dead control flow
+
 }
 
 function applyTermReplacements(chapterData, terms = []) {
@@ -1070,6 +1155,12 @@ function applyTermReplacements(chapterData, terms = []) {
 
   // 2. Process each chapter's text.
   return chapterData.map(data => {
+    // Skip processing if this is the active chapter
+    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
+      log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`);
+      return data;
+    }
+
     let fullText = data.text;
 
     // 3. Find ALL possible matches from all compiled terms.
@@ -2573,7 +2664,9 @@ function startAnalysis(isContinuation = false) {
     document.getElementById('wtr-if-file-input').click();
   } else {
     const chapterData = crawlChapterData();
-    const processedData = applyTermReplacements(chapterData);
+    // Apply smart quotes replacement first, then term replacements
+    const smartQuotesData = applySmartQuotesReplacement(chapterData);
+    const processedData = applyTermReplacements(smartQuotesData);
     findInconsistenciesDeepAnalysis(
       processedData,
       isContinuation ? appState.runtime.cumulativeResults : [],
@@ -2642,7 +2735,9 @@ function handleFileImportAndAnalyze(event) {
       // --- End Validation ---
 
       const chapterData = crawlChapterData();
-      const processedData = applyTermReplacements(chapterData, terms || []);
+      // Apply smart quotes replacement first, then term replacements
+      const smartQuotesData = applySmartQuotesReplacement(chapterData);
+      const processedData = applyTermReplacements(smartQuotesData, terms || []);
       const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1);
       findInconsistenciesDeepAnalysis(
         processedData,
@@ -3301,20 +3396,20 @@ function adjustIndicatorPosition() {
   const otherWidget = document.querySelector('.nig-status-widget');
   const bottomNav = document.querySelector('.bottom-reader-nav');
   
-  // Check for bottom navigation conflict
+  // Check for bottom navigation conflict first
   if (bottomNav && getComputedStyle(bottomNav).display !== 'none') {
     log('Conflict detected with .bottom-reader-nav, adjusting position and z-index.');
     // Move status indicator behind the bottom nav (z-index 1030)
     indicator.style.zIndex = '1029'; // Lower than bottom nav (1030)
-    indicator.style.bottom = '80px'; // Position above where bottom nav would be
+    indicator.style.bottom = '160px'; // Higher position to avoid collision with NIG status widget
   } else if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
-    log('Conflict detected with .nig-status-widget, adjusting position.');
+    log('Conflict detected with .nig-status-widget, adjusting position to avoid collision.');
     indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '80px';
+    indicator.style.bottom = '180px'; // Much lower position to avoid NIG widget collision
   } else {
-    // No conflicts, use normal positioning
+    // No conflicts, use safe default positioning
     indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '20px';
+    indicator.style.bottom = '120px'; // Safe default that's lower than before
   }
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "wtr-lab-term-inconsistency-finder",
-  "version": "5.3.2",
+  "version": "5.3.3",
   "description": "Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.",
   "author": "MasuRii",
   "license": "MIT",
@@ -20,7 +20,9 @@
     "build:all": "npm run build:performance && npm run build:greasyfork",
     "dev": "webpack serve --mode=development",
     "dev:performance": "webpack serve --config webpack.performance.config.js --mode=development",
-    "dev:greasyfork": "webpack serve --config webpack.greasyfork.config.js --mode=development"
+    "dev:greasyfork": "webpack serve --config webpack.performance.config.js --mode=development",
+    "sync-readme": "node scripts/sync-readme-version.js",
+    "prebuild": "npm run sync-readme"
   },
   "devDependencies": {
     "css-loader": "^7.1.2",
