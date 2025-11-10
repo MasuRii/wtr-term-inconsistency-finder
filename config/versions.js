@@ -6,8 +6,9 @@ const envVersion = process.env.WTR_VERSION || process.env.APP_VERSION;
 const buildEnv = process.env.WTR_BUILD_ENV || process.env.BUILD_ENV || process.env.NODE_ENV;
 const buildDate = process.env.WTR_BUILD_DATE || process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
 
-// Current semantic version (from package.json)
-const BASE_VERSION = "5.3.3";
+// Derive base version from package.json at runtime so only package.json is edited manually
+const pkg = require("../package.json");
+const BASE_VERSION = pkg.version;
 
 const VERSION_INFO = {
   SEMANTIC: envVersion || BASE_VERSION,           // Semantic version

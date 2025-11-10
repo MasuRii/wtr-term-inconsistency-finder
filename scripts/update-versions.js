@@ -28,16 +28,22 @@ const FILES_TO_UPDATE = [
   }
 ];
 
-// Command line argument handling
 const command = process.argv[2] || "update";
 
+/**
+ * Safely update a file using explicit patterns.
+ * Returns:
+ * - true if any changes were written
+ * - false if no changes were needed
+ * - throws on hard failure (I/O or unexpected error)
+ */
 function updateFile(filePath, patterns) {
-  try {
-    if (!fs.existsSync(filePath)) {
-      console.log(`⚠️  File not found: ${filePath}`);
-      return false;
-    }
+  if (!fs.existsSync(filePath)) {
+    console.log(`⚠️  File not found: ${filePath}`);
+    return false;
+  }
 
+  try {
     const content = fs.readFileSync(filePath, "utf8");
     let updatedContent = content;
     let hasChanges = false;
@@ -53,13 +59,14 @@ function updateFile(filePath, patterns) {
       fs.writeFileSync(filePath, updatedContent, "utf8");
       console.log(`✅ Updated ${filePath}`);
       return true;
-    } else {
-      console.log(`ℹ️  No changes needed for ${filePath}`);
-      return false;
     }
-  } catch (error) {
-    console.error(`❌ Error updating ${filePath}:`, error.message);
+
+    console.log(`ℹ️  No changes needed for ${filePath}`);
     return false;
+  } catch (error) {
+    // Treat as hard failure so build can surface the problem
+    console.error(`❌ Error updating ${filePath}:`, error.message);
+    throw error;
   }
 }
 
@@ -130,15 +137,45 @@ console.log("=" .repeat(55));
 switch (command) {
   case "update":
     console.log("🔄 Updating versioned files...");
+
     let updatedFiles = 0;
+    let hadHardFailure = false;
+
+    // 1) Update all configured files (package.json, README, etc.)
     FILES_TO_UPDATE.forEach(({ file, patterns }) => {
-      if (updateFile(file, patterns)) {
-        updatedFiles++;
+      const filePath = path.join(__dirname, "..", file);
+      try {
+        if (updateFile(filePath, patterns)) {
+          updatedFiles++;
+        }
+      } catch (error) {
+        hadHardFailure = true;
       }
     });
-    generateBanner();
-    generateHeader();
-    console.log(`✅ Completed! Updated ${updatedFiles} files.`);
+
+    // 2) Generate banner and header directly from VERSION_INFO
+    try {
+      generateBanner();
+      updatedFiles++;
+    } catch (error) {
+      console.error("❌ Failed to generate banner.js:", error.message);
+      hadHardFailure = true;
+    }
+
+    try {
+      generateHeader();
+      updatedFiles++;
+    } catch (error) {
+      console.error("❌ Failed to generate header.js:", error.message);
+      hadHardFailure = true;
+    }
+
+    if (hadHardFailure) {
+      console.error("❌ Version update failed. Build aborted due to version sync errors.");
+      process.exit(1);
+    }
+
+    console.log(`✅ Completed! Updated ${updatedFiles} items (including banner.js and header.js).`);
     break;
 
   case "check":
@@ -146,11 +183,21 @@ switch (command) {
     break;
 
   case "banner":
-    generateBanner();
+    try {
+      generateBanner();
+    } catch (error) {
+      console.error("❌ Failed to generate banner.js:", error.message);
+      process.exit(1);
+    }
     break;
 
   case "header":
-    generateHeader();
+    try {
+      generateHeader();
+    } catch (error) {
+      console.error("❌ Failed to generate header.js:", error.message);
+      process.exit(1);
+    }
     break;
 
   default:

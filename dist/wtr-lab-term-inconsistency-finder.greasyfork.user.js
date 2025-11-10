@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.3
+// @version 5.3.5
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -735,8 +735,16 @@ module.exports = function (cssWithMappingToString) {
 
 /***/ }),
 
-/***/ 387:
+/***/ 330:
 /***/ ((module) => {
+
+"use strict";
+module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.5","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run format && npm run lint:fix && npm run version:update && webpack --mode=production","build:performance":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js version","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"css-loader":"^7.1.2","eslint":"^9.39.1","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.4","prettier":"^3.6.2","style-loader":"^4.0.0","stylelint":"^16.25.0","stylelint-prettier":"^5.0.3","stylelint-config-standard":"^39.0.1","webpack":"^5.102.1","webpack-cli":"^6.0.1","webpack-dev-server":"^5.2.2","webpack-userscript":"^3.2.3"}}');
+
+/***/ }),
+
+/***/ 387:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 // config/versions.js
 // Centralized version management for WTR Term Inconsistency Finder
@@ -746,8 +754,9 @@ const envVersion = process.env.WTR_VERSION || process.env.APP_VERSION;
 const buildEnv = process.env.WTR_BUILD_ENV || process.env.BUILD_ENV || "production";
 const buildDate = process.env.WTR_BUILD_DATE || process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
 
-// Current semantic version (from package.json)
-const BASE_VERSION = "5.3.3";
+// Derive base version from package.json at runtime so only package.json is edited manually
+const pkg = __webpack_require__(330);
+const BASE_VERSION = pkg.version;
 
 const VERSION_INFO = {
   SEMANTIC: envVersion || BASE_VERSION,           // Semantic version
