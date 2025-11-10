@@ -5,6 +5,15 @@ All notable changes to the WTR Lab Term Inconsistency Finder will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.6] - 2025-11-10
+
+### Changed
+- **Gemini Prompt Refinement**: Updated the advanced system prompt in [`src/modules/geminiApi.js`](src/modules/geminiApi.js:20) to explicitly exclude non-user-actionable chapter title numbering discrepancies that originate from WTR Lab site-level or template-level behavior (such as systematic off-by-one chapter title patterns).
+
+### Fixed
+- **False-Positive Reduction**: Ensured systematic chapter-number offset patterns (e.g., text for Chapter 302 containing a title "Chapter 301: ...", consistently across multiple chapters) are treated as structural issues outside user control and are not surfaced as inconsistency findings.
+- **User-Focus Preservation**: Clarified that only isolated, user-editable chapter title or numbering mistakes should be flagged, while preserving detection of other chapter-related issues (misspellings, inconsistent wording, user-fixable title mismatches).
+
 ## [5.3.5] - 2025-11-10
 
 ### Added
