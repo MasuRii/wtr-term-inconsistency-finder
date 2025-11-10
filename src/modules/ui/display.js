@@ -1,7 +1,11 @@
 // src/modules/ui/display.js
 import { appState } from "../state";
 import { escapeHtml, log } from "../utils";
-import { handleApplyClick, handleCopyVariationClick } from "./events";
+import {
+  handleApplyClick,
+  handleCopyVariationClick,
+  updateApplyCopyButtonsMode,
+} from "./events";
 
 export function displayResults(results) {
   // Ensure we render only into the dedicated results container inside Finder tab.
@@ -237,4 +241,7 @@ export function displayResults(results) {
   resultsContainer
     .querySelectorAll(".wtr-if-copy-variation-btn")
     .forEach((btn) => btn.addEventListener("click", handleCopyVariationClick));
+
+  // Ensure Apply/Copy button modes are synchronized after results are rendered
+  updateApplyCopyButtonsMode();
 }

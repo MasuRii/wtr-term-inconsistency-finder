@@ -1,5 +1,10 @@
 // src/modules/geminiApi.js
-import { appState, saveSessionResults } from "./state";
+import {
+  appState,
+  saveSessionResults,
+  getNextAvailableKey,
+  updateKeyState,
+} from "./state";
 import { displayResults, updateStatusIndicator } from "./ui";
 import {
   extractJsonFromString,
@@ -70,7 +75,7 @@ function scheduleRetriableRetry({
   );
   updateStatusIndicator(
     "running",
-    `${operationName} retrying in ${Math.round(delay / 1000)}s due to temporary API issues...`,
+    `Retrying in ${Math.round(delay / 1000)}s...`,
   );
 
   // Ensure no uncaught exceptions propagate from the scheduled callback
@@ -362,30 +367,15 @@ ${schemaDefinition}
 }
 
 export function getAvailableApiKey() {
-  if (!appState.config.apiKeys || appState.config.apiKeys.length === 0) {
-    return null;
+  const apiKeyInfo = getNextAvailableKey();
+  if (apiKeyInfo) {
+    return {
+      key: apiKeyInfo.key,
+      index: apiKeyInfo.index,
+      state: apiKeyInfo.state,
+    };
   }
-  const totalKeys = appState.config.apiKeys.length;
-  for (let i = 0; i < totalKeys; i++) {
-    const keyIndex = (appState.runtime.currentApiKeyIndex + i) % totalKeys;
-    const key = appState.config.apiKeys[keyIndex];
-
-    if (appState.runtime.apiKeyCooldowns.has(key)) {
-      const cooldownEnd = appState.runtime.apiKeyCooldowns.get(key);
-      if (Date.now() < cooldownEnd) {
-        log(`Key at index ${keyIndex} is on cooldown. Skipping.`);
-        continue; // Key is still on cooldown
-      } else {
-        log(`Cooldown for key at index ${keyIndex} has expired.`);
-        appState.runtime.apiKeyCooldowns.delete(key); // Cooldown expired
-      }
-    }
-    // Found a valid key
-    appState.runtime.currentApiKeyIndex = keyIndex; // Update index to the one we are returning
-    return { key: key, index: keyIndex };
-  }
-  log("All available API keys are currently on cooldown.");
-  return null; // All keys are on cooldown
+  return null;
 }
 
 function handleApiError(errorMessage) {
@@ -516,13 +506,31 @@ export function findInconsistencies(
 
         if (isRetriable) {
           log(
-            `${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+            `${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}.`,
           );
-          const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
-          appState.runtime.apiKeyCooldowns.set(
-            currentKey,
-            Date.now() + cooldownSeconds * 1000,
-          );
+
+          if (errorStatus === "RESOURCE_EXHAUSTED") {
+            // Mark key as exhausted with 24-hour cooldown (daily reset)
+            const unlockTime = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+            updateKeyState(currentKeyIndex, "EXHAUSTED", unlockTime, 1);
+            log(
+              `Key ${currentKeyIndex} marked as EXHAUSTED. Will reset in 24 hours.`,
+            );
+          } else if (
+            errorStatus === "UNAVAILABLE" ||
+            errorStatus === "INTERNAL"
+          ) {
+            // Temporary server issues - put on short cooldown
+            const unlockTime = Date.now() + 60 * 1000; // 1 minute
+            updateKeyState(currentKeyIndex, "ON_COOLDOWN", unlockTime, 1);
+            log(`Key ${currentKeyIndex} on temporary COOLDOWN for 1 minute.`);
+          } else if (errorStatus === "DEADLINE_EXCEEDED") {
+            // Request timeout - brief cooldown
+            const unlockTime = Date.now() + 30 * 1000; // 30 seconds
+            updateKeyState(currentKeyIndex, "ON_COOLDOWN", unlockTime, 1);
+            log(`Key ${currentKeyIndex} on timeout COOLDOWN for 30 seconds.`);
+          }
+
           scheduleRetriableRetry({
             operationName,
             retryCount,

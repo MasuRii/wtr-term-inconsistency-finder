@@ -5,6 +5,7 @@ const SCRIPT_PREFIX = "wtr_inconsistency_finder_";
 export const CONFIG_KEY = `${SCRIPT_PREFIX}config`;
 export const MODELS_CACHE_KEY = `${SCRIPT_PREFIX}models_cache`;
 export const SESSION_RESULTS_KEY = `${SCRIPT_PREFIX}session_results`;
+export const KEY_STATE_KEY = `${SCRIPT_PREFIX}key_states`; // Persistent key state tracking
 
 export const appState = {
   // Configuration
@@ -24,6 +25,7 @@ export const appState = {
     cumulativeResults: [],
     currentApiKeyIndex: 0,
     apiKeyCooldowns: new Map(),
+    failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
     currentIteration: 1,
     totalIterations: 1,
   },
@@ -216,4 +218,208 @@ export function clearSessionResults() {
   } catch (e) {
     console.error("Inconsistency Finder: Error clearing session results:", e);
   }
+}
+
+// --- KEY STATE MANAGEMENT ---
+/**
+ * Load persisted key states from localStorage
+ * States: AVAILABLE, ON_COOLDOWN, EXHAUSTED, INVALID
+ */
+export function loadKeyStates() {
+  try {
+    const savedStates = GM_getValue(KEY_STATE_KEY, {});
+    return savedStates || {};
+  } catch (e) {
+    console.error("Inconsistency Finder: Error loading key states:", e);
+    return {};
+  }
+}
+
+/**
+ * Save key states to localStorage for persistence across page reloads
+ */
+export function saveKeyStates(keyStates) {
+  try {
+    GM_setValue(KEY_STATE_KEY, keyStates);
+  } catch (e) {
+    console.error("Inconsistency Finder: Error saving key states:", e);
+  }
+}
+
+/**
+ * Initialize key states for all available keys
+ */
+export function initializeKeyStates() {
+  const keyStates = loadKeyStates();
+  const now = Date.now();
+  let hasChanges = false;
+
+  if (appState.config.apiKeys) {
+    appState.config.apiKeys.forEach((key, index) => {
+      if (!keyStates[index]) {
+        keyStates[index] = {
+          status: "AVAILABLE",
+          unlockTime: 0,
+          lastUsed: null,
+          failureCount: 0,
+        };
+        hasChanges = true;
+      } else {
+        // Check if cooldown has expired
+        if (
+          keyStates[index].status === "ON_COOLDOWN" &&
+          now > keyStates[index].unlockTime
+        ) {
+          keyStates[index].status = "AVAILABLE";
+          keyStates[index].unlockTime = 0;
+          hasChanges = true;
+        }
+        // Check if daily reset has occurred (for exhausted keys)
+        if (keyStates[index].status === "EXHAUSTED") {
+          const lastReset = keyStates[index].lastReset || now;
+          const daysSinceReset = Math.floor(
+            (now - lastReset) / (24 * 60 * 60 * 1000),
+          );
+          if (daysSinceReset >= 1) {
+            keyStates[index] = {
+              status: "AVAILABLE",
+              unlockTime: 0,
+              lastUsed: null,
+              failureCount: 0,
+              lastReset: now,
+            };
+            hasChanges = true;
+          }
+        }
+      }
+    });
+  }
+
+  if (hasChanges) {
+    saveKeyStates(keyStates);
+  }
+
+  return keyStates;
+}
+
+/**
+ * Update the state of a specific key
+ */
+export function updateKeyState(
+  keyIndex,
+  status,
+  unlockTime = null,
+  failureCount = 0,
+) {
+  const keyStates = loadKeyStates();
+  const now = Date.now();
+
+  if (!keyStates[keyIndex]) {
+    keyStates[keyIndex] = {
+      status: "AVAILABLE",
+      unlockTime: 0,
+      lastUsed: null,
+      failureCount: 0,
+    };
+  }
+
+  keyStates[keyIndex] = {
+    ...keyStates[keyIndex],
+    status: status,
+    unlockTime: unlockTime || 0,
+    lastUsed: now,
+    failureCount: Math.max(0, keyStates[keyIndex].failureCount + failureCount),
+  };
+
+  // Mark as permanently invalid after 3 consecutive failures
+  if (keyStates[keyIndex].failureCount >= 3 && status !== "INVALID") {
+    keyStates[keyIndex].status = "INVALID";
+  }
+
+  saveKeyStates(keyStates);
+  return keyStates[keyIndex];
+}
+
+/**
+ * Get the next available key according to state management rules
+ */
+export function getNextAvailableKey() {
+  const keyStates = initializeKeyStates();
+  const now = Date.now();
+
+  if (!appState.config.apiKeys || appState.config.apiKeys.length === 0) {
+    return null;
+  }
+
+  // First pass: look for AVAILABLE keys
+  for (let i = 0; i < appState.config.apiKeys.length; i++) {
+    const keyIndex =
+      (appState.runtime.currentApiKeyIndex + i) %
+      appState.config.apiKeys.length;
+    const keyState = keyStates[keyIndex];
+
+    if (keyState && keyState.status === "AVAILABLE") {
+      // Found an available key
+      updateKeyState(keyIndex, "AVAILABLE", 0, -1); // Reset failure count
+      appState.runtime.currentApiKeyIndex =
+        (keyIndex + 1) % appState.config.apiKeys.length;
+      return {
+        key: appState.config.apiKeys[keyIndex],
+        index: keyIndex,
+        state: keyState,
+      };
+    }
+  }
+
+  // Second pass: check for keys whose cooldown has expired
+  for (let i = 0; i < appState.config.apiKeys.length; i++) {
+    const keyIndex =
+      (appState.runtime.currentApiKeyIndex + i) %
+      appState.config.apiKeys.length;
+    const keyState = keyStates[keyIndex];
+
+    if (
+      keyState &&
+      keyState.status === "ON_COOLDOWN" &&
+      now > keyState.unlockTime
+    ) {
+      // Cooldown expired, make it available
+      updateKeyState(keyIndex, "AVAILABLE", 0, -1);
+      appState.runtime.currentApiKeyIndex =
+        (keyIndex + 1) % appState.config.apiKeys.length;
+      return {
+        key: appState.config.apiKeys[keyIndex],
+        index: keyIndex,
+        state: keyStates[keyIndex],
+      };
+    }
+  }
+
+  // No keys available, find the one that will be available soonest
+  let soonestKey = null;
+  let soonestTime = Infinity;
+
+  for (let i = 0; i < appState.config.apiKeys.length; i++) {
+    const keyState = keyStates[i];
+    if (
+      keyState &&
+      keyState.status === "ON_COOLDOWN" &&
+      keyState.unlockTime < soonestTime
+    ) {
+      soonestKey = i;
+      soonestTime = keyState.unlockTime;
+    }
+  }
+
+  if (soonestKey !== null) {
+    const waitTime = Math.max(0, soonestTime - now);
+    const minutes = Math.ceil(waitTime / (60 * 1000));
+    log(
+      `All keys are currently unavailable. Next key (index ${soonestKey}) will be available in ${minutes} minutes.`,
+    );
+  } else {
+    log("All available API keys are permanently invalid or exhausted.");
+  }
+
+  return null; // No keys currently available
 }

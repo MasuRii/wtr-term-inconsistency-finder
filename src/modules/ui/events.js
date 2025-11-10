@@ -723,6 +723,9 @@ export function addEventListeners() {
     displayResults(appState.runtime.cumulativeResults);
     appState.config.activeFilter = filterSelect.value;
     saveConfig();
+
+    // Ensure Apply/Copy button modes are synchronized after filter change and result re-render
+    updateApplyCopyButtonsMode();
   });
 
   document

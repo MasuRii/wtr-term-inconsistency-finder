@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Using the original WTR site term replacer.
     - Using the external WTR Lab Term Replacer userscript and JSON compatibility mode.
   - Added clear configuration messaging and link to the supported external userscript, so users can explicitly choose their integration mode.
+- **Advanced API Key Rotation System**: Implemented state-managed key pool with persistent storage for improved reliability:
+  - **State Management**: Four key statuses (`AVAILABLE`, `ON_COOLDOWN`, `EXHAUSTED`, `INVALID`) persisted across page reloads
+  - **Smart Cooldowns**: Context-aware cooldowns based on error type:
+    - `EXHAUSTED`: 24-hour cooldown with automatic daily reset for quota exhaustion
+    - `ON_COOLDOWN` (UNAVAILABLE/INTERNAL): 1-minute cooldown for temporary server issues
+    - `ON_COOLDOWN` (DEADLINE_EXCEEDED): 30-second cooldown for timeouts
+    - `ON_COOLDOWN` (network errors): 5-minute cooldown for connectivity issues
+  - **Persistent State**: Key states saved to `localStorage` for cross-session reliability
+  - **Automatic Recovery**: Keys automatically transition to `AVAILABLE` when cooldowns expire
+  - **Failure Tracking**: Keys marked as `INVALID` after 3 consecutive failures
+  - **Intelligent Selection**: System finds the key that will be available soonest when all keys are temporarily unavailable
 
 ### Changed
 - **Gemini Prompt Refinement**: Updated the advanced system prompt in [`src/modules/geminiApi.js`](src/modules/geminiApi.js:20) to explicitly exclude non-user-actionable chapter title numbering discrepancies that originate from WTR Lab site-level or template-level behavior (such as systematic off-by-one chapter title patterns).
@@ -24,14 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Results Display Area
   - Restricted dynamic rendering to the dedicated `#wtr-if-results` container so structural UI elements are never cleared when updating results.
 - **Panel Stacking Order**:
-  - Updated `#wtr-if-panel` to use `z-index: 1040` (via [`src/styles/panel.css`](src/styles/panel.css:11)) so the Inconsistency Finder panel consistently appears above the site’s bottom navigator while remaining independent from status widget stacking.
+  - Updated `#wtr-if-panel` to use `z-index: 1040` (via [`src/styles/panel.css`](src/styles/panel.css:11)) so the Inconsistency Finder panel consistently appears above the site's bottom navigator while remaining independent from status widget stacking.
+- **UI Header Cleanup**: Removed version number from panel header for cleaner appearance (now shows "Term Inconsistency Finder" instead of "Term Inconsistency Finder 5.3.5")
 
 ### Fixed
 - **Status Widget Collision and Jitter**:
   - Refined collision logic in [`src/modules/ui/panel.js`](src/modules/ui/panel.js:441) so the status widget:
     - Defaults to `bottom: var(--nig-space-xl, 20px)` in normal conditions.
     - Only moves up to the conflict offset (e.g., `80px`) when a visible NIG status widget (or equivalent external status widget) actually overlaps the default position.
-    - Ignores the site’s bottom reader navigator for vertical repositioning (it no longer causes spurious jumps), while preserving correct z-index ordering.
+    - Ignores the site's bottom reader navigator for vertical repositioning (it no longer causes spurious jumps), while preserving correct z-index ordering.
 - **Dynamic Apply/Copy Behavior for Finder Actions**:
   - Centralized Apply/Copy mode handling in [`src/modules/ui/events.updateApplyCopyButtonsMode()`](src/modules/ui/events.js:286) so all Finder action buttons (global and per-result, including session-restored ones):
     - Show and use "Apply Selected"/"Apply All" (with `apply-*` actions) only when the external WTR Lab Term Replacer userscript is detected.
@@ -42,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       - `Term: variant1|variant2|...`
       - `Replaced: chosenSuggestion`
     - Prevents accidental apply attempts when the external replacer is unavailable.
+- **Button Behavior Consistency**: Fixed critical synchronization issues where button labels and functionality would become desynchronized from userscript detection state:
+  - Added `updateApplyCopyButtonsMode()` calls after filter changes to prevent drift during user interactions
+  - Added button mode synchronization after result rendering to maintain consistent state
+  - Added button synchronization when panel opens to establish correct initial state
+  - Prevents button labels from incorrectly reverting between "Copy"/"Apply" modes during filter changes
 - **Smart Quotes Safety and Correctness**:
   - Reworked smart quote handling in [`src/modules/utils.smartenQuotes()`](src/modules/utils.js:54) and [`applySmartQuotesReplacement()`](src/modules/utils.js:186) to:
     - Be conservative and context-aware for apostrophes and quotes.
@@ -59,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Incorporate script-aware checks (Latin/CJK/Cyrillic) and proper-name heuristics.
     - Block cross-script or low-quality merges (e.g., preventing "Rhode" from merging with "雜物").
     - Ensure replacement regexes are built only from the variations of the selected concept.
+- **API Key Rotation Critical Bug**: Fixed critical issue where script was stuck using only key index 0 despite having 5 keys configured:
+  - Root cause: Short cooldowns (1-2 seconds) were expiring before exponential backoff delays, causing repeated use of same failed key
+  - Solution: Implemented proper state-managed key rotation with persistent storage
+  - Result: Now properly rotates through all available keys instead of getting stuck in quota exhaustion loops
+  - Enhanced error messages for better troubleshooting and user feedback
+- **Status Widget User Experience**: Improved status widget messages by shortening verbose text that was causing width issues, making the interface more user-friendly
 
 ## [5.3.5] - 2025-11-10
 

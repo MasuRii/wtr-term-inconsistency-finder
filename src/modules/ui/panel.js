@@ -1,5 +1,4 @@
 // src/modules/ui/panel.js
-import { VERSION } from "../../version";
 import { appState, MODELS_CACHE_KEY } from "../state";
 import { getAvailableApiKey } from "../geminiApi";
 import { escapeHtml, log, isWTRLabTermReplacerLoaded } from "../utils";
@@ -13,7 +12,7 @@ export function createUI() {
   const panel = document.createElement("div");
   panel.id = "wtr-if-panel";
   panel.innerHTML = `
-            <div class="wtr-if-header"><h2>Term Inconsistency Finder ${VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
+            <div class="wtr-if-header"><h2>Term Inconsistency Finder</h2><button class="wtr-if-close-btn">&times;</button></div>
             <div class="wtr-if-tabs">
                 <button class="wtr-if-tab-btn" data-tab="finder">Finder</button>
                 <button class="wtr-if-tab-btn" data-tab="config">Configuration</button>
@@ -410,6 +409,17 @@ export async function togglePanel(show = null) {
       sessionRestore.style.display = "block";
     } else {
       sessionRestore.style.display = "none";
+    }
+
+    // Ensure Apply/Copy button modes are synchronized after panel initialization
+    try {
+      const { updateApplyCopyButtonsMode } = await import("./events.js");
+      updateApplyCopyButtonsMode();
+    } catch (error) {
+      log(
+        "Failed to sync Apply/Copy button modes after panel initialization:",
+        error,
+      );
     }
   }
 }
