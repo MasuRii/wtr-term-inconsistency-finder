@@ -7,6 +7,7 @@ import {
   getNovelSlug,
   log,
   escapeRegExp,
+  isWTRLabTermReplacerLoaded,
 } from "../utils";
 import { findInconsistenciesDeepAnalysis } from "../geminiApi";
 import {
@@ -181,7 +182,12 @@ export function handleFileImportAndAnalyze(event) {
 
 export function handleRestoreSession() {
   if (appState.session.hasSavedResults) {
+    // 1) Build Finder UI for restored results
     displayResults(appState.runtime.cumulativeResults);
+
+    // 2) Immediately sync Apply/Copy mode on the actual rendered Finder buttons
+    //    This ensures restored sessions respect the current external integration state.
+    updateApplyCopyButtonsMode();
 
     // Hide session restore element if it exists (removed UI section)
     const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
@@ -231,37 +237,165 @@ export function handleStatusClick() {
     indicator.classList.contains("complete") ||
     indicator.classList.contains("error")
   ) {
+    // Show panel
     togglePanel(true);
-    document.querySelector('.wtr-if-tab-btn[data-tab="finder"]').click();
-    displayResults(appState.runtime.cumulativeResults);
+
+    // Activate Finder tab
+    const finderTabBtn = document.querySelector(
+      '.wtr-if-tab-btn[data-tab="finder"]',
+    );
+    if (finderTabBtn) {
+      finderTabBtn.click();
+    }
+
+    // Re-render results (if any) into Finder tab
+    if (
+      Array.isArray(appState.runtime.cumulativeResults) &&
+      appState.runtime.cumulativeResults.length > 0
+    ) {
+      displayResults(appState.runtime.cumulativeResults);
+    }
+
+    // Ensure status indicator is hidden after navigation
     updateStatusIndicator("hidden");
+
+    // IMPORTANT:
+    // Run after Finder DOM is present so button modes match current detection state.
+    updateApplyCopyButtonsMode();
   }
 }
 
+/**
+ * Single source of truth for Finder Apply/Copy button mode.
+ *
+ * This helper:
+ * - Checks isWTRLabTermReplacerLoaded()
+ * - Updates Finder tab Apply/Copy buttons:
+ *     - #wtr-if-apply-selected
+ *     - #wtr-if-apply-all
+ *   or any matching .wtr-if-apply-action buttons with data-scope attributes.
+ * - When external detected:
+ *     - Labels: "Apply Selected" / "Apply All"
+ *     - data-action: "apply-selected" / "apply-all"
+ * - When external NOT detected:
+ *     - Labels: "Copy Selected" / "Copy All"
+ *     - data-action: "copy-selected" / "copy-all"
+ *
+ * Idempotent, cheap, and safe if elements are missing.
+ */
+export function updateApplyCopyButtonsMode() {
+  let externalAvailable = false;
+
+  try {
+    externalAvailable = isWTRLabTermReplacerLoaded();
+  } catch (err) {
+    log(
+      "WTR Lab Term Replacer detection failed in updateApplyCopyButtonsMode; falling back to safe copy mode.",
+      err,
+    );
+    externalAvailable = false;
+  }
+
+  // Scope to the Finder tab content to avoid touching any non-related buttons.
+  const finderTab = document.getElementById("wtr-if-tab-finder");
+  if (!finderTab) {
+    return;
+  }
+
+  // Helper to keep labels/actions in sync for a given scope.
+  function syncButton(btn, scope) {
+    if (!btn) {
+      return;
+    }
+    const isSelected = scope === "selected";
+    const applyLabel = isSelected ? "Apply Selected" : "Apply All";
+    const copyLabel = isSelected ? "Copy Selected" : "Copy All";
+    const applyAction = isSelected ? "apply-selected" : "apply-all";
+    const copyAction = isSelected ? "copy-selected" : "copy-all";
+
+    btn.textContent = externalAvailable ? applyLabel : copyLabel;
+    btn.dataset.action = externalAvailable ? applyAction : copyAction;
+  }
+
+  // Explicit Finder tab buttons.
+  syncButton(finderTab.querySelector("#wtr-if-apply-selected"), "selected");
+  syncButton(finderTab.querySelector("#wtr-if-apply-all"), "all");
+
+  // Also support any dynamically rendered action buttons inside result groups.
+  // Be robust:
+  // - Prefer [data-role='wtr-if-apply-action'] with data-scope.
+  // - Fallback to plain .wtr-if-apply-btn (e.g., from restored sessions) and
+  //   infer scope from existing data.
+  const groupButtons = finderTab.querySelectorAll(
+    "[data-role='wtr-if-apply-action'], .wtr-if-apply-btn",
+  );
+  groupButtons.forEach((btn) => {
+    let scope = btn.dataset.scope || btn.getAttribute("data-scope");
+    if (!scope) {
+      const a = btn.dataset.action || "";
+      if (a.endsWith("-selected")) {
+        scope = "selected";
+      } else if (a.endsWith("-all")) {
+        scope = "all";
+      }
+    }
+    if (scope === "selected" || scope === "all") {
+      syncButton(btn, scope);
+    }
+  });
+}
+
+/**
+ * Handle Apply/Copy actions for a group of variations.
+ *
+ * Behavior is dynamic:
+ * - If WTR Lab Term Replacer is detected:
+ *     - Dispatches "wtr:addTerm" with aggregated term(s) for external script.
+ *     - Buttons represent "Apply Selected"/"Apply All" semantics.
+ * - If not detected (safe mode):
+ *     - Copies variations or suggestion text to clipboard instead.
+ *     - Buttons represent "Copy Selected"/"Copy All" semantics.
+ */
 export function handleApplyClick(event) {
   const button = event.currentTarget;
-  const action = button.dataset.action;
+  const action = button.dataset.action || "";
   const replacement = button.dataset.suggestion || "";
   let variationsToApply = [];
 
-  // Enhanced logging for debugging the empty suggestion issue
+  let externalAvailable = false;
+  try {
+    externalAvailable = isWTRLabTermReplacerLoaded();
+  } catch {
+    // If detection explodes for any reason, treat as not available for safety.
+    externalAvailable = false;
+  }
+
   if (appState.config.loggingEnabled) {
-    log("Button click analysis:", {
-      action: action,
+    log("Apply/Copy button click", {
+      action,
       replacementValue: replacement,
       replacementLength: replacement ? replacement.length : "empty",
-      buttonDataset: button.dataset,
+      buttonDataset: { ...button.dataset },
+      externalAvailable,
     });
   }
 
-  if (action === "apply-all") {
-    variationsToApply = JSON.parse(button.dataset.variations);
-  } else if (action === "apply-selected") {
+  // Resolve variations based on the button scope, mirroring existing apply selection semantics.
+  if (action === "apply-all" || action === "copy-all") {
+    try {
+      variationsToApply = JSON.parse(button.dataset.variations || "[]");
+    } catch (e) {
+      log("Failed to parse variations for apply-all/copy-all.", e);
+      variationsToApply = [];
+    }
+  } else if (action === "apply-selected" || action === "copy-selected") {
     const groupEl = button.closest(".wtr-if-result-group");
-    const checkedBoxes = groupEl.querySelectorAll(
-      ".wtr-if-variation-checkbox:checked",
-    );
-    checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+    if (groupEl) {
+      const checkedBoxes = groupEl.querySelectorAll(
+        ".wtr-if-variation-checkbox:checked",
+      );
+      checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+    }
   }
 
   const uniqueVariations = [...new Set(variationsToApply)];
@@ -275,27 +409,106 @@ export function handleApplyClick(event) {
     return;
   }
 
-  let originalTerm;
-  let isRegex;
-
-  if (uniqueVariations.length > 1) {
-    uniqueVariations.sort((a, b) => b.length - a.length);
-    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
-    isRegex = true;
-    log(
-      `Applying suggestion "${replacement}" via multi-term regex: /${originalTerm}/gi`,
-    );
-  } else {
-    originalTerm = uniqueVariations[0];
-    isRegex = false;
-    log(
-      `Applying suggestion "${replacement}" via simple replacement for: "${originalTerm}"`,
-    );
-  }
-
-  // Enhanced validation to prevent empty suggestions
+  // Helper to compute final replacement text.
   const finalReplacement =
     replacement && replacement.trim() !== "" ? replacement.trim() : null;
+
+  // Handle Copy Selected / Copy All (safe mode semantics) WITHOUT mutating content or dispatching events.
+  if (action === "copy-selected" || action === "copy-all") {
+    // For copy, we reuse the same conceptual resolution:
+    // - uniqueVariations is the set of variations for this concept (no cross-concept mixing).
+    // - finalReplacement is the chosen suggestion (if available).
+    if (!finalReplacement) {
+      // If we somehow lack a valid suggestion, degrade gracefully and use variations only.
+      if (appState.config.loggingEnabled) {
+        log(
+          "Copy action invoked without a valid suggestion; falling back to variations-only output.",
+          { uniqueVariations },
+        );
+      }
+    }
+
+    const termPart = uniqueVariations.join("|");
+    const replacedPart = finalReplacement || "";
+
+    let output = "";
+    if (termPart) {
+      output += `Term: ${termPart}\n`;
+    }
+    if (replacedPart) {
+      output += `Replaced: ${replacedPart}\n`;
+    }
+
+    if (!output) {
+      const originalText = button.textContent;
+      button.textContent = "Nothing to Copy";
+      setTimeout(() => {
+        button.textContent = originalText;
+      }, 1500);
+      return;
+    }
+
+    const writeToClipboard = (text) => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+
+      // Fallback using a temporary textarea for environments without navigator.clipboard
+      return new Promise((resolve, reject) => {
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          const successful = document.execCommand("copy");
+          document.body.removeChild(textarea);
+          if (!successful) {
+            reject(new Error("execCommand copy failed"));
+          } else {
+            resolve();
+          }
+        } catch (err) {
+          reject(err);
+        }
+      });
+    };
+
+    const originalText = button.textContent;
+    writeToClipboard(output.trimEnd())
+      .then(() => {
+        button.textContent = "Copied!";
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 1500);
+      })
+      .catch((err) => {
+        log("Failed to copy terms payload.", err);
+        button.textContent = "Copy Failed";
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 1500);
+      });
+
+    return;
+  }
+
+  // From here on, handle Apply Selected / Apply All semantics.
+  if (action !== "apply-selected" && action !== "apply-all") {
+    // Unknown action; do nothing for safety.
+    return;
+  }
+
+  // Apply actions must only operate when the external replacer is available.
+  if (!externalAvailable) {
+    log(
+      "Apply action attempted while external replacer is not available; ignoring.",
+      { action, uniqueVariations },
+    );
+    return;
+  }
+
   if (!finalReplacement) {
     log(
       "ERROR: Empty or invalid replacement value detected. Aborting term addition.",
@@ -313,6 +526,25 @@ export function handleApplyClick(event) {
       button.style.backgroundColor = "";
     }, 3000);
     return;
+  }
+
+  // External replacer IS available -> preserve original apply behavior semantics.
+  let originalTerm;
+  let isRegex;
+
+  if (uniqueVariations.length > 1) {
+    uniqueVariations.sort((a, b) => b.length - a.length);
+    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
+    isRegex = true;
+    log(
+      `Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`,
+    );
+  } else {
+    originalTerm = uniqueVariations[0];
+    isRegex = false;
+    log(
+      `Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`,
+    );
   }
 
   const customEvent = new CustomEvent("wtr:addTerm", {
@@ -527,6 +759,47 @@ export function addEventListeners() {
       panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add("active");
       appState.config.activeTab = targetTab;
       saveConfig();
+
+      // When switching to Finder tab, (re)sync Apply/Copy labels and actions.
+      if (targetTab === "finder") {
+        updateApplyCopyButtonsMode();
+      }
+
+      // When switching to config tab, re-evaluate WTR Lab Term Replacer state
+      if (targetTab === "config") {
+        try {
+          const isExternal = isWTRLabTermReplacerLoaded();
+          const useJsonContainer = document.getElementById(
+            "wtr-if-use-json-container",
+          );
+          const useJsonCheckbox = document.getElementById("wtr-if-use-json");
+          const modeHint = document.getElementById(
+            "wtr-if-term-replacer-mode-hint",
+          );
+
+          if (useJsonContainer && useJsonCheckbox && modeHint) {
+            if (isExternal) {
+              useJsonContainer.style.display = "";
+              useJsonCheckbox.disabled = false;
+              modeHint.textContent =
+                "Detected WTR Lab Term Replacer userscript. You can use JSON mode or direct Apply integration.";
+            } else {
+              useJsonContainer.style.display = "none";
+              useJsonCheckbox.checked = false;
+              if (appState.config.useJson) {
+                appState.config.useJson = false;
+              }
+              modeHint.textContent =
+                "External WTR Lab Term Replacer userscript not detected. JSON integration is disabled; using built-in behavior.";
+            }
+          }
+        } catch (err) {
+          log(
+            "WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.",
+            err,
+          );
+        }
+      }
     });
   });
 
@@ -544,4 +817,34 @@ export function addEventListeners() {
         }
       }
     });
+
+  // Delayed-load handling: re-check external userscript presence shortly after init.
+  // This is allowed to call updateApplyCopyButtonsMode(), which no-ops if Finder DOM
+  // is not yet present, so it does not create stale wiring.
+  setTimeout(() => {
+    try {
+      const isExternal = isWTRLabTermReplacerLoaded();
+      const modeHint = document.getElementById(
+        "wtr-if-term-replacer-mode-hint",
+      );
+      if (modeHint) {
+        if (isExternal) {
+          modeHint.textContent =
+            "Detected WTR Lab Term Replacer userscript. Apply buttons will send terms directly to the external replacer.";
+        } else if (!modeHint.textContent) {
+          modeHint.textContent =
+            "External WTR Lab Term Replacer userscript not detected yet. Actions will operate in safe (copy/manual) mode unless the userscript loads.";
+        }
+      }
+
+      // Ensure Finder buttons reflect the latest detection state AFTER this delayed check,
+      // but only if the Finder DOM exists (function itself performs this guard).
+      updateApplyCopyButtonsMode();
+    } catch (err) {
+      log(
+        "WTR Lab Term Replacer delayed detection check failed; continuing safely.",
+        err,
+      );
+    }
+  }, 2000);
 }

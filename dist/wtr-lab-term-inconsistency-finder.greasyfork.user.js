@@ -1345,7 +1345,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
   top: 50%;
   transform: translate(-50%, -50%);
   width: 90%;
-  z-index: 10001;
+  z-index: 1040;
 }
 
 .wtr-if-header {
@@ -1573,32 +1573,141 @@ function crawlChapterData() {
 }
 
 /**
- * Converts straight quotes to curly quotes and double hyphens to em-dashes.
- * Based on the principles of SmartyPants.
+ * Safely converts straight quotes to curly quotes and double hyphens to em-dashes.
+ * Conservative implementation inspired by SmartyPants:
+ * - Preserves existing smart quotes.
+ * - Handles common English contractions/possessives.
+ * - Handles years like '70s.
+ * - Handles typical opening/closing quotes around words/sentences.
+ * - Avoids exponential or runaway replacements via validation.
+ *
  * @param {string} text The input string.
- * @returns {string} The processed string with smart typography.
+ * @returns {string} The processed string with smart typography, or original text on anomaly.
  */
 function smartenQuotes(text) {
-  if (!text) {
+  if (!text || typeof text !== "string") {
     return "";
   }
 
-  // The order of these replacements is important.
-  return (
-    text
-      // Special case for apostrophes in years like '70s
-      .replace(/'(\d+s)/g, "\u2019$1")
-      // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
-      .replace(/(^|[-\u2014\s([【"'])/g, "$1\u2018")
-      // All remaining single quotes are closing quotes or apostrophes.
-      .replace(/'/g, "\u2019")
-      // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
-      .replace(/(^|[-\u2014\s([【"'])/g, "$1\u201c")
-      // All remaining double quotes are closing quotes.
-      .replace(/"/g, "\u201d")
-      // Em-dashes
-      .replace(/--/g, "\u2014")
-  );
+  // Configuration toggle (global config is preferred; local constant as safe default)
+  const smartQuotesEnabled =
+    appState?.config?.smartQuotesEnabled !== undefined
+      ? Boolean(appState.config.smartQuotesEnabled)
+      : true;
+
+  if (!smartQuotesEnabled) {
+    return text;
+  }
+
+  try {
+    const original = text;
+
+    // Pre-counts
+    const originalStraightSingles = (original.match(/'/g) || []).length;
+    const originalStraightDoubles = (original.match(/"/g) || []).length;
+    const originalSmart = (original.match(/[“”‘’]/g) || []).length;
+
+    // If there are no straight quotes, nothing to do.
+    if (originalStraightSingles === 0 && originalStraightDoubles === 0) {
+      return original;
+    }
+
+    // 1) Normalize em-dashes first (safe, independent).
+    let out = original.replace(/--/g, "\u2014");
+
+    // 2) Handle years like '70s -> ’70s (must be before generic apostrophe handling).
+    out = out.replace(/'(\d{2}s)/g, "\u2019$1");
+
+    // 3) Handle common contractions/possessives:
+    //    don't, it's, we've, I'll, John's, etc.
+    //    Pattern: letter ' letter(s) (no spaces), treat the ' as apostrophe.
+    out = out.replace(/(\p{L})'(\p{L}{1,3}\b)/gu, "$1\u2019$2");
+
+    // 4) Handle possessives like Councilor's, John's (letter ' s\b).
+    out = out.replace(/(\p{L})'s\b/gu, "$1\u2019s");
+
+    // Note: Above rules intentionally only touch ASCII ' that are clearly apostrophes.
+    // Remaining straight single quotes will be processed more structurally below.
+
+    // 5) Double quotes: conservative opening/closing.
+    //    - Opening double quote when at start or after whitespace/([{- and followed by non-space.
+    //    - Closing double quote otherwise.
+    out = out.replace(/(^|[\s({>“”[])"(?=\S)/g, "$1\u201c");
+    out = out.replace(/"/g, "\u201d");
+
+    // 6) Single quotes (excluding ones already converted by contractions/years rules):
+    //    - Opening single quote when at start or after whitespace/([{- or opening quote and before non-space.
+    //    - Remaining straight single quotes become closing/apostrophe.
+    out = out.replace(/(^|[\s({>“”[] )'(?=\S)/g, "$1\u2018");
+    out = out.replace(/'/g, "\u2019");
+
+    // Post-counts
+    const newStraightSingles = (out.match(/'/g) || []).length;
+    const newStraightDoubles = (out.match(/"/g) || []).length;
+    const newSmart = (out.match(/[“”‘’]/g) || []).length;
+
+    const straightSinglesConsumed =
+      originalStraightSingles - newStraightSingles;
+    const straightDoublesConsumed =
+      originalStraightDoubles - newStraightDoubles;
+    const totalStraightOriginal =
+      originalStraightSingles + originalStraightDoubles;
+    const totalStraightRemaining = newStraightSingles + newStraightDoubles;
+    const totalStraightConsumed =
+      totalStraightOriginal - totalStraightRemaining;
+
+    // Validation / anomaly detection:
+    // - New smart quotes should not exceed:
+    //   originalSmart + totalStraightOriginal * 2 (extremely generous upper bound).
+    // - Straight quotes consumed should not be negative.
+    // - If we somehow produced far more smart quotes than plausible, revert.
+    const maxAllowedNewSmart = originalSmart + totalStraightOriginal * 2;
+
+    const anomaly =
+      newSmart > maxAllowedNewSmart ||
+      straightSinglesConsumed < 0 ||
+      straightDoublesConsumed < 0;
+
+    if (anomaly) {
+      utils_log(
+        "SMART QUOTES SAFEGUARD: Detected anomalous conversion. Reverting to original text.",
+        {
+          originalStraightSingles,
+          originalStraightDoubles,
+          originalSmart,
+          newStraightSingles,
+          newStraightDoubles,
+          newSmart,
+          totalStraightOriginal,
+          totalStraightRemaining,
+          maxAllowedNewSmart,
+        },
+      );
+      return original;
+    }
+
+    // Debug logging (chapter-level wrapper will also log context).
+    utils_log("SMART QUOTES STATS (smartenQuotes):", {
+      originalStraightSingles,
+      originalStraightDoubles,
+      originalSmart,
+      newStraightSingles,
+      newStraightDoubles,
+      newSmart,
+      totalStraightOriginal,
+      totalStraightRemaining,
+      totalStraightConsumed,
+    });
+
+    return out;
+  } catch (error) {
+    // Hard safeguard: never let smart quotes break analysis.
+    utils_log(
+      "SMART QUOTES ERROR: Failed to apply smart quotes. Returning original text.",
+      error,
+    );
+    return text;
+  }
 }
 
 /**
@@ -1608,9 +1717,25 @@ function smartenQuotes(text) {
  * @returns {Array} Chapter data with smart quotes applied (where applicable)
  */
 function applySmartQuotesReplacement(chapterData) {
+  if (!Array.isArray(chapterData) || chapterData.length === 0) {
+    return chapterData || [];
+  }
+
+  const smartQuotesEnabled =
+    appState?.config?.smartQuotesEnabled !== undefined
+      ? Boolean(appState.config.smartQuotesEnabled)
+      : true;
+
+  if (!smartQuotesEnabled) {
+    utils_log(
+      "SMART QUOTES: Skipping conversion because smartQuotesEnabled is false.",
+    );
+    return chapterData;
+  }
+
   utils_log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
 
-  let totalConversions = 0;
+  let chaptersWithChanges = 0;
   let skippedChapters = 0;
 
   const processedData = chapterData.map((data) => {
@@ -1626,58 +1751,99 @@ function applySmartQuotesReplacement(chapterData) {
       return data;
     }
 
-    // Store original text for comparison
-    const originalText = data.text;
+    const originalText = data.text || "";
     const originalStraightQuotes = (originalText.match(/["']/g) || []).length;
     const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length;
 
-    // Apply smart quotes to the text
-    const smartenedText = smartenQuotes(data.text);
+    // If no straight quotes, skip for efficiency.
+    if (originalStraightQuotes === 0) {
+      utils_log(
+        `SMART QUOTES: No straight quotes to convert for chapter #${data.chapter}. Skipping.`,
+      );
+      return data;
+    }
 
-    // Count conversions
+    let smartenedText = originalText;
+    let usedFallback = false;
+
+    try {
+      smartenedText = smartenQuotes(originalText);
+    } catch (error) {
+      // Defensive: log and fallback to original.
+      utils_log(
+        `SMART QUOTES ERROR: Conversion failed for chapter #${data.chapter}. Using original text.`,
+        error,
+      );
+      smartenedText = originalText;
+      usedFallback = true;
+    }
+
+    // Post counts
     const newStraightQuotes = (smartenedText.match(/["']/g) || []).length;
     const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length;
     const quotesConverted = newSmartQuotes - originalSmartQuotes;
 
-    if (smartenedText !== originalText) {
-      totalConversions++;
+    // Safeguard at chapter level:
+    // If we somehow increased smart quotes wildly relative to original straight quotes,
+    // treat as anomaly and revert this chapter only.
+    const totalOriginalStraight = originalStraightQuotes;
+    const maxAllowedNewSmart = originalSmartQuotes + totalOriginalStraight * 2;
 
-      // Show detailed conversion information
-      utils_log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
-      utils_log(
-        `  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`,
-      );
-      utils_log(
-        `  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`,
-      );
-      utils_log(`  Converted: ${quotesConverted} quotes to smart format`);
+    const anomaly =
+      !usedFallback &&
+      (newSmartQuotes > maxAllowedNewSmart || quotesConverted < 0);
 
-      // Show a sample of the conversion
-      const sampleLength = Math.min(100, originalText.length);
+    if (anomaly) {
+      utils_log(
+        `SMART QUOTES SAFEGUARD (chapter #${data.chapter}): Anomalous stats detected. Reverting to original text.`,
+        {
+          originalStraightQuotes,
+          originalSmartQuotes,
+          newStraightQuotes,
+          newSmartQuotes,
+          quotesConverted,
+          maxAllowedNewSmart,
+        },
+      );
+      smartenedText = originalText;
+    } else if (!usedFallback && smartenedText !== originalText) {
+      chaptersWithChanges++;
+
+      const sampleLength = Math.min(160, originalText.length);
       const originalSample = originalText
         .substring(0, sampleLength)
         .replace(/\n/g, "\\n");
       const convertedSample = smartenedText
         .substring(0, sampleLength)
         .replace(/\n/g, "\\n");
+
+      utils_log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
       utils_log(
-        `  Sample before: "${originalSample}${originalText.length > sampleLength ? "..." : ""}"`,
+        `  Original: ${originalStraightQuotes} straight, ${originalSmartQuotes} smart`,
+      );
+      utils_log(`  After:    ${newStraightQuotes} straight, ${newSmartQuotes} smart`);
+      utils_log(`  Converted: ${quotesConverted} quotes to smart format`);
+      utils_log(
+        `  Sample before: "${originalSample}${
+          originalText.length > sampleLength ? "..." : ""
+        }"`,
       );
       utils_log(
-        `  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? "..." : ""}"`,
+        `  Sample after:  "${convertedSample}${
+          smartenedText.length > sampleLength ? "..." : ""
+        }"`,
       );
     } else {
       utils_log(
-        `No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`,
+        `SMART QUOTES: No safe changes for chapter #${data.chapter} (${originalStraightQuotes} straight, ${originalSmartQuotes} smart).`,
       );
     }
 
     return { ...data, text: smartenedText };
   });
 
-  // Summary log
   utils_log(
-    `SMART QUOTES SUMMARY: Processed ${chapterData.length} chapters, skipped ${skippedChapters} active chapters, converted quotes in ${totalConversions} chapters`,
+    `SMART QUOTES SUMMARY: Processed ${chapterData.length} chapters, skipped ${skippedChapters} active chapters, applied safe conversions to ${chaptersWithChanges} chapters.`,
   );
 
   return processedData;
@@ -1953,107 +2119,325 @@ function calculateResultQuality(result) {
     quality -= 10;
   }
 
+  // Penalize clearly low-signal / noisy contexts to avoid them dominating merges.
+  const concept = (result.concept || "").toString();
+  if (/^\s*$/.test(concept)) {
+    quality -= 30;
+  }
+
   return quality;
 }
 
-function areSemanticallySimilar(concept1, concept2) {
-  // Basic semantic similarity check for concept names
-  const normalize = (str) =>
-    str
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .trim();
-  const norm1 = normalize(concept1);
-  const norm2 = normalize(concept2);
-
-  // Exact match
-  if (norm1 === norm2) {
-    return true;
+/**
+ * Lightweight script detection helpers for semantic safeguards.
+ * These are conservative and only used to block obviously invalid merges.
+ */
+function detectScriptCategory(text) {
+  if (!text || typeof text !== "string") {
+    return "unknown";
   }
 
-  // Check if one is contained in the other (for partial matches)
-  if (norm1.includes(norm2) || norm2.includes(norm1)) {
-    return true;
+  let hasLatin = false;
+  let hasCJK = false;
+  let hasCyrillic = false;
+  let hasOther = false;
+
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+
+    // Latin (basic + extended)
+    if (
+      (code >= 0x0041 && code <= 0x005a) || // A-Z
+      (code >= 0x0061 && code <= 0x007a) || // a-z
+      (code >= 0x00c0 && code <= 0x024f) // Latin Extended
+    ) {
+      hasLatin = true;
+      continue;
+    }
+
+    // CJK Unified, Hiragana, Katakana, etc.
+    if (
+      (code >= 0x3040 && code <= 0x30ff) || // Hiragana & Katakana
+      (code >= 0x3400 && code <= 0x9fff) || // CJK Unified Ideographs
+      (code >= 0xf900 && code <= 0xfaff) // CJK Compatibility Ideographs
+    ) {
+      hasCJK = true;
+      continue;
+    }
+
+    // Cyrillic
+    if (code >= 0x0400 && code <= 0x04ff) {
+      hasCyrillic = true;
+      continue;
+    }
+
+    // Skip punctuation, spaces, digits for classification
+    if (
+      (code >= 0x0030 && code <= 0x0039) || // 0-9
+      /\s/.test(ch) ||
+      /[.,!?'"`:;()[\]{}\-_/\\]/.test(ch)
+    ) {
+      continue;
+    }
+
+    hasOther = true;
   }
 
-  // Check for common words (for compound names)
-  const words1 = norm1.split(/\s+/);
-  const words2 = norm2.split(/\s+/);
-  const commonWords = words1.filter((word) => words2.includes(word));
-  if (
-    commonWords.length > 0 &&
-    commonWords.length / Math.max(words1.length, words2.length) > 0.5
-  ) {
+  if (hasCJK && !hasLatin && !hasCyrillic && !hasOther) {
+    return "cjk";
+  }
+  if (hasCyrillic && !hasLatin && !hasCJK && !hasOther) {
+    return "cyrillic";
+  }
+  if (hasLatin && !hasCJK && !hasCyrillic && !hasOther) {
+    return "latin";
+  }
+
+  // Mixed or unknown scripts; treat conservatively.
+  return "mixed";
+}
+
+function isProperNameLike(concept) {
+  if (!concept || typeof concept !== "string") {
+    return false;
+  }
+  const trimmed = concept.trim();
+
+  // Single token with leading capital and not all caps -> likely proper name
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length === 1) {
+    const t = tokens[0];
+    if (/^[A-Z][a-zA-Z]+$/.test(t)) {
+      return true;
+    }
+  }
+
+  // Simple heuristic: multiple capitalized tokens
+  if (tokens.length > 1 && tokens.every((t) => /^[A-Z][a-z]+$/.test(t))) {
     return true;
   }
 
   return false;
 }
 
+/**
+ * More conservative semantic similarity with script & contextual safeguards.
+ */
+function areSemanticallySimilar(concept1, concept2) {
+  if (!concept1 || !concept2) {
+    return false;
+  }
+
+  const c1 = concept1.toString();
+  const c2 = concept2.toString();
+
+  const script1 = detectScriptCategory(c1);
+  const script2 = detectScriptCategory(c2);
+
+  // Hard rule: do not treat clearly different scripts as similar.
+  if (script1 !== "unknown" && script2 !== "unknown" && script1 !== script2) {
+    utils_log(
+      `Semantic similarity blocked by script mismatch: "${c1}" [${script1}] vs "${c2}" [${script2}]`,
+    );
+    return false;
+  }
+
+  // Normalize for ASCII/Latin similarity. Non-Latin content will mostly reduce to empty,
+  // which is fine because we already guard by script category above.
+  const normalize = (str) =>
+    str
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .trim();
+
+  const norm1 = normalize(c1);
+  const norm2 = normalize(c2);
+
+  // If both normalizations are empty (e.g., pure CJK) and scripts are same non-latin,
+  // fall back to strict exact match only.
+  if (!norm1 && !norm2) {
+    const exact = c1.trim() === c2.trim();
+    if (!exact) {
+      utils_log(
+        `Semantic similarity rejected for non-Latin pair (no normalized content): "${c1}" vs "${c2}"`,
+      );
+    }
+    return exact;
+  }
+
+  // Exact match after normalization.
+  if (norm1 === norm2 && norm1.length > 0) {
+    return true;
+  }
+
+  // Very short tokens (<=3) should only match on exact equality to avoid noise.
+  if (norm1.length <= 3 || norm2.length <= 3) {
+    return norm1.length > 0 && norm1 === norm2;
+  }
+
+  // Block merging clearly unrelated when one looks like a proper name and the other does not.
+  const proper1 = isProperNameLike(c1);
+  const proper2 = isProperNameLike(c2);
+  if (proper1 !== proper2) {
+    utils_log(
+      `Semantic similarity rejected due to proper-name mismatch: "${c1}" (proper=${proper1}) vs "${c2}" (proper=${proper2})`,
+    );
+    return false;
+  }
+
+  // Check if one is contained in the other (for partial matches), but require decent length overlap.
+  if (norm1.length >= 4 && norm2.length >= 4) {
+    if (norm1.includes(norm2) || norm2.includes(norm1)) {
+      return true;
+    }
+  }
+
+  // Token overlap with conservative threshold.
+  const words1 = norm1.split(/\s+/).filter(Boolean);
+  const words2 = norm2.split(/\s+/).filter(Boolean);
+
+  if (words1.length && words2.length) {
+    const commonWords = words1.filter((word) => words2.includes(word));
+    const overlapRatio =
+      commonWords.length / Math.max(words1.length, words2.length);
+
+    // Require strong overlap to consider them semantically similar.
+    if (overlapRatio >= 0.8 && commonWords.length > 0) {
+      return true;
+    }
+  }
+
+  utils_log(
+    `Semantic similarity not strong enough: "${c1}" [${script1}] vs "${c2}" [${script2}] (norm1="${norm1}", norm2="${norm2}")`,
+  );
+  return false;
+}
+
+/**
+ * Merge analysis results with strict semantic & script-aware safeguards.
+ */
 function mergeAnalysisResults(existingResults, newResults) {
-  // Enhanced merge strategy with semantic duplicate detection and quality-based conflict resolution
   const merged = [...existingResults];
 
   newResults.forEach((newResult) => {
-    // Find potential semantic duplicates
-    const duplicateIndex = merged.findIndex((existing) =>
-      areSemanticallySimilar(existing.concept, newResult.concept),
-    );
+    if (!newResult || typeof newResult !== "object") {
+      return;
+    }
+
+    const newConcept = newResult.concept || "";
+    const newScript = detectScriptCategory(newConcept);
+
+    // Find potential semantic duplicates (script-aware via areSemanticallySimilar)
+    const duplicateIndex = merged.findIndex((existing) => {
+      if (!existing || !existing.concept) {
+        return false;
+      }
+      return areSemanticallySimilar(existing.concept, newConcept);
+    });
 
     if (duplicateIndex === -1) {
       // No duplicate found, add as new entry
       merged.push(newResult);
-    } else {
-      // Found potential duplicate, perform quality-based merge
-      const existing = merged[duplicateIndex];
-      const existingQuality = calculateResultQuality(existing);
-      const newQuality = calculateResultQuality(newResult);
+      return;
+    }
 
+    // Found potential duplicate, perform stricter merge validation
+    const existing = merged[duplicateIndex];
+    const existingConcept = existing.concept || "";
+    const existingScript = detectScriptCategory(existingConcept);
+
+    const existingQuality = calculateResultQuality(existing);
+    const newQuality = calculateResultQuality(newResult);
+
+    // Ensure scripts are compatible before merging (defensive double-check)
+    if (
+      existingScript !== "unknown" &&
+      newScript !== "unknown" &&
+      existingScript !== newScript
+    ) {
       utils_log(
-        `Semantic duplicate detected: "${existing.concept}" vs "${newResult.concept}". Quality scores: ${existingQuality} vs ${newQuality}`,
+        `Merge prevented: script mismatch between "${existingConcept}" [${existingScript}] and "${newConcept}" [${newScript}].`,
       );
+      // Treat as distinct concepts despite prior similarity signal.
+      merged.push(newResult);
+      return;
+    }
 
-      if (newQuality > existingQuality) {
-        // New result has higher quality, replace existing
-        merged[duplicateIndex] = newResult;
-        utils_log("Replaced lower quality result with higher quality version");
-      } else {
-        // Existing result has equal or higher quality, merge intelligently
-        const mergedResult = {
-          ...existing,
-          // Preserve existing core data
-          concept: existing.concept, // Keep original concept name
-          priority: existing.priority, // Keep original priority
-          explanation: existing.explanation, // Keep original explanation
-          // Merge variations (avoid duplicates)
-          variations: [
-            ...(existing.variations || []),
-            ...(newResult.variations || []),
-          ].filter(
-            (variation, index, arr) =>
-              arr.findIndex(
-                (v) =>
-                  v.phrase === variation.phrase &&
-                  v.chapter === variation.chapter,
-              ) === index,
-          ),
-          // Merge suggestions (avoid duplicates)
-          suggestions: [
-            ...(existing.suggestions || []),
-            ...(newResult.suggestions || []),
-          ].filter(
-            (suggestion, index, arr) =>
-              arr.findIndex((s) => s.suggestion === suggestion.suggestion) ===
-              index,
-          ),
-          // Preserve status flags from higher quality result
-          status: existing.status || newResult.status,
-          isNew: existing.isNew && newResult.isNew, // Only mark as new if both are new
-        };
+    // Extra safeguard: prevent merging clearly different-language or mixed-script terms.
+    if (
+      (existingScript === "mixed" && newScript !== "mixed") ||
+      (newScript === "mixed" && existingScript !== "mixed")
+    ) {
+      utils_log(
+        `Merge prevented: mixed/ambiguous script conflict between "${existingConcept}" [${existingScript}] and "${newConcept}" [${newScript}].`,
+      );
+      merged.push(newResult);
+      return;
+    }
 
-        merged[duplicateIndex] = mergedResult;
-        utils_log("Merged duplicate results, preserving higher quality data");
-      }
+    utils_log(
+      `Semantic duplicate candidate: "${existingConcept}" vs "${newConcept}". Quality scores: ${existingQuality} vs ${newQuality}`,
+    );
+
+    // Require at least one side to be reasonably strong to allow merge.
+    const MIN_QUALITY_FOR_MERGE = 40;
+    if (
+      existingQuality < MIN_QUALITY_FOR_MERGE &&
+      newQuality < MIN_QUALITY_FOR_MERGE
+    ) {
+      utils_log(
+        `Merge prevented: both candidates have low quality (${existingQuality}, ${newQuality}). Keeping as separate concepts.`,
+      );
+      merged.push(newResult);
+      return;
+    }
+
+    if (newQuality > existingQuality) {
+      merged[duplicateIndex] = {
+        ...newResult,
+        // Preserve original concept if they are near-identical variants
+        concept: newResult.concept,
+      };
+      utils_log(
+        "Merged duplicate results by favoring higher quality new result for this concept.",
+      );
+    } else {
+      // Existing result has equal or higher quality, merge intelligently INTO existing.
+      const mergedResult = {
+        ...existing,
+        concept: existing.concept,
+        priority: existing.priority,
+        explanation: existing.explanation,
+        // Merge variations (avoid duplicates)
+        variations: [
+          ...(existing.variations || []),
+          ...(newResult.variations || []),
+        ].filter(
+          (variation, index, arr) =>
+            arr.findIndex(
+              (v) =>
+                v.phrase === variation.phrase &&
+                v.chapter === variation.chapter,
+            ) === index,
+        ),
+        // Merge suggestions (avoid duplicates)
+        suggestions: [
+          ...(existing.suggestions || []),
+          ...(newResult.suggestions || []),
+        ].filter(
+          (suggestion, index, arr) =>
+            arr.findIndex((s) => s.suggestion === suggestion.suggestion) ===
+            index,
+        ),
+        // Preserve status flags from higher quality result
+        status: existing.status || newResult.status,
+        isNew: Boolean(existing.isNew && newResult.isNew),
+      };
+
+      merged[duplicateIndex] = mergedResult;
+      utils_log(
+        "Merged duplicate results, preserving higher or equal quality concept and safely aggregating variations/suggestions.",
+      );
     }
   });
 
@@ -2110,6 +2494,80 @@ function escapeHtml(unsafe) {
     .replace(/>/g, ">")
     .replace(/"/g, '"')
     .replace(/'/g, "&#039;");
+}
+
+/**
+ * Detect whether the external "WTR Lab Term Replacer" userscript is loaded.
+ *
+ * This function is designed to be:
+ * - Defensive: never throws, always falls back to `false` on errors.
+ * - Heuristic-based: checks multiple non-breaking indicators.
+ * - Side-effect free: does not modify any external state.
+ *
+ * Detection heuristics (any passing => detected):
+ * - Presence of known global hooks (e.g. window.WTR_LAB_TERM_REPLACER, window.wtrLabTermReplacer)
+ * - Presence of a well-known DOM marker element/attribute used by the replacer
+ * - Presence of a registered listener for the "wtr:addTerm" CustomEvent on window
+ *
+ * Note: Listener detection is best-effort. If it cannot be verified reliably,
+ *       this helper will not treat it as fatal and will default to safe mode.
+ */
+let _wtrReplacerDetectionCache = {
+  lastResult: false,
+  lastCheck: 0,
+};
+
+/**
+ * Detect whether the external "WTR Lab Term Replacer" userscript is loaded.
+ *
+ * Primary rule:
+ *   - Returns true iff the well-known settings button injected by the real script exists:
+ *       .replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm
+ *
+ * Behavior:
+ *   - Defensive: exceptions are caught and logged; returns false on error.
+ *   - Cached: repeated calls within a short window reuse the last result to avoid DOM thrash.
+ *   - Side-effect free: does not modify external script state.
+ */
+function isWTRLabTermReplacerLoaded() {
+  try {
+    const now = Date.now();
+    const CACHE_WINDOW_MS = 3000;
+
+    // Use cached value if within the cache window
+    if (now - _wtrReplacerDetectionCache.lastCheck < CACHE_WINDOW_MS) {
+      return _wtrReplacerDetectionCache.lastResult;
+    }
+
+    const marker = document.querySelector(
+      ".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm",
+    );
+
+    const detected = Boolean(marker);
+
+    _wtrReplacerDetectionCache = {
+      lastResult: detected,
+      lastCheck: now,
+    };
+
+    if (detected) {
+      utils_log(
+        "WTR Lab Term Replacer detection: positive via settings button marker.",
+      );
+    }
+
+    return detected;
+  } catch (error) {
+    utils_log(
+      "WTR Lab Term Replacer detection error; defaulting to safe mode (not loaded).",
+      error,
+    );
+    _wtrReplacerDetectionCache = {
+      lastResult: false,
+      lastCheck: Date.now(),
+    };
+    return false;
+  }
 }
 
 ;// ./src/modules/state.js
@@ -2340,12 +2798,84 @@ function clearSessionResults() {
 
 
 const MAX_RETRIES_PER_KEY = 3;
+
+// Exponential backoff settings (per logical operation, not per key)
+const BASE_BACKOFF_MS = 2000; // 2s
+const MAX_BACKOFF_MS = 60000; // 60s cap
+const MAX_TOTAL_RETRY_DURATION_MS = 5 * 60 * 1000; // 5 minutes safety cap per run
+
 const RETRIABLE_STATUSES = new Set([
   "RESOURCE_EXHAUSTED", // 429 Rate limit
   "INTERNAL", // 500 Server error
   "UNAVAILABLE", // 503 Service overloaded
   "DEADLINE_EXCEEDED", // 504 Request timed out
 ]);
+
+/**
+ * Calculate exponential backoff delay with an upper bound.
+ * retryIndex is zero-based: 0 -> BASE_BACKOFF_MS, 1 -> 2x, 2 -> 4x, etc.
+ */
+function calculateBackoffDelayMs(retryIndex) {
+  const delay = BASE_BACKOFF_MS * Math.pow(2, retryIndex);
+  return Math.min(delay, MAX_BACKOFF_MS);
+}
+
+/**
+ * Schedule a retriable retry with exponential backoff.
+ * - Preserves existing key rotation & cooldown logic (caller must have set cooldowns).
+ * - Ensures we do not exceed a global max retry window.
+ * - Provides consistent logging and UI feedback.
+ */
+function scheduleRetriableRetry({
+  operationName,
+  retryCount,
+  maxTotalRetries,
+  startedAt,
+  nextStep,
+}) {
+  const now = Date.now();
+
+  // Enforce attempt-based and time-based ceilings
+  if (retryCount >= maxTotalRetries) {
+    handleApiError(
+      `${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
+    );
+    return;
+  }
+
+  if (now - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+    handleApiError(
+      `${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
+    );
+    return;
+  }
+
+  const delay = calculateBackoffDelayMs(retryCount);
+  utils_log(
+    `${operationName}: Scheduling retry #${
+      retryCount + 1
+    } with exponential backoff delay ${delay}ms.`,
+  );
+  updateStatusIndicator(
+    "running",
+    `${operationName} retrying in ${Math.round(delay / 1000)}s due to temporary API issues...`,
+  );
+
+  // Ensure no uncaught exceptions propagate from the scheduled callback
+  setTimeout(() => {
+    try {
+      nextStep();
+    } catch (e) {
+      console.error(
+        `Inconsistency Finder: Uncaught error during scheduled retry for ${operationName}:`,
+        e,
+      );
+      handleApiError(
+        `${operationName} encountered an unexpected error during retry. Please try again.`,
+      );
+    }
+  }, delay);
+}
 
 const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translation Consistency Editor," designed to detect and fix translation inconsistencies in machine-translated novels. Your primary goal is to identify terms (character names, locations, items, abilities, titles, etc.) that have been translated inconsistently across chapters, provide standardization suggestions, and offer contextual analysis for nuances like aliases, stylistic localizations, and cultural honorifics.
 
@@ -2650,6 +3180,13 @@ function handleApiError(errorMessage) {
   console.error("Inconsistency Finder:", errorMessage);
   appState.runtime.cumulativeResults.push({ error: errorMessage });
   appState.runtime.isAnalysisRunning = false;
+
+  // Reset retry-related state so future runs are clean
+  appState.runtime.analysisStartedAt = null;
+  if (appState.runtime.deepAnalysisStartTimes) {
+    appState.runtime.deepAnalysisStartTimes = {};
+  }
+
   updateStatusIndicator("error", "Error!");
   displayResults(appState.runtime.cumulativeResults);
 }
@@ -2661,11 +3198,28 @@ function findInconsistencies(
   retryCount = 0,
   parseRetryCount = 0,
 ) {
+  const operationName = "Analysis";
   const maxTotalRetries =
     Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
+
+  // Initialize or reuse startedAt to enforce a global safety window for this run
+  const startedAt = appState.runtime.analysisStartedAt || Date.now();
+  if (!appState.runtime.analysisStartedAt) {
+    appState.runtime.analysisStartedAt = startedAt;
+  }
+
+  // Hard cap by attempts
   if (retryCount >= maxTotalRetries) {
     handleApiError(
-      `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
+      `${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
+    );
+    return;
+  }
+
+  // Hard cap by duration (5-minute safety net)
+  if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+    handleApiError(
+      `${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
     );
     return;
   }
@@ -2683,16 +3237,20 @@ function findInconsistencies(
   appState.runtime.isAnalysisRunning = true;
   updateStatusIndicator(
     "running",
-    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`,
+    `${operationName} (Key ${currentKeyIndex + 1}, Attempt ${
+      retryCount + 1
+    })...`,
   );
 
   const combinedText = chapterData
     .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
     .join("\n\n");
   utils_log(
-    `Sending ${
+    `${operationName}: Sending ${
       combinedText.length
-    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
+    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
+      retryCount + 1
+    })`,
   );
 
   const prompt = generatePrompt(combinedText, existingResults);
@@ -2710,16 +3268,33 @@ function findInconsistencies(
     data: JSON.stringify(requestData),
     onload: function (response) {
       utils_log("Received raw response from API:", response.responseText);
-      let apiResponse, parsedResponse, error;
+      let apiResponse;
+      let parsedResponse;
 
+      // Shell parse errors are treated as retriable (can be transient)
       try {
         apiResponse = JSON.parse(response.responseText);
       } catch (e) {
-        error = `Failed to parse API response shell: ${e.message}`;
-        handleApiError(error);
+        utils_log(
+          `${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+        );
+        scheduleRetriableRetry({
+          operationName: `${operationName} (shell parse recovery)`,
+          retryCount,
+          maxTotalRetries,
+          startedAt,
+          nextStep: () =>
+            findInconsistencies(
+              chapterData,
+              existingResults,
+              retryCount + 1,
+              parseRetryCount,
+            ),
+        });
         return;
       }
 
+      // Handle explicit API error responses
       if (apiResponse.error) {
         const errorStatus = apiResponse.error.status;
         const errorMessage = apiResponse.error.message || "";
@@ -2729,30 +3304,38 @@ function findInconsistencies(
 
         if (isRetriable) {
           utils_log(
-            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
+            `${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
           );
           const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
           appState.runtime.apiKeyCooldowns.set(
             currentKey,
             Date.now() + cooldownSeconds * 1000,
           );
-          updateStatusIndicator("running", "API Error. Rotating key...");
-          findInconsistencies(
-            chapterData,
-            existingResults,
-            retryCount + 1,
-            parseRetryCount,
-          );
-          return;
-        } else {
-          const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`;
-          handleApiError(finalError);
+          scheduleRetriableRetry({
+            operationName,
+            retryCount,
+            maxTotalRetries,
+            startedAt,
+            nextStep: () =>
+              findInconsistencies(
+                chapterData,
+                existingResults,
+                retryCount + 1,
+                parseRetryCount,
+              ),
+          });
           return;
         }
+
+        // Non-retriable API error -> final failure
+        const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`;
+        handleApiError(finalError);
+        return;
       }
 
       const candidate = apiResponse.candidates?.[0];
       if (!candidate || !candidate.content) {
+        let error;
         if (candidate?.finishReason === "MAX_TOKENS") {
           error =
             "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters.";
@@ -2765,37 +3348,50 @@ function findInconsistencies(
         return;
       }
 
+      // Parse the inner content (model JSON); treat malformed JSON as retriable once
       try {
         const resultText = candidate.content.parts[0].text;
         const cleanedJsonString = extractJsonFromString(resultText);
         parsedResponse = JSON.parse(cleanedJsonString);
-        utils_log("Successfully parsed API response content.", parsedResponse);
+        utils_log(
+          `${operationName}: Successfully parsed API response content.`,
+          parsedResponse,
+        );
       } catch (e) {
         if (parseRetryCount < 1) {
           utils_log(
-            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
+            `${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
           );
           updateStatusIndicator(
             "running",
             "AI response malformed. Retrying...",
           );
-          findInconsistencies(
-            chapterData,
-            existingResults,
-            retryCount + 1,
-            parseRetryCount + 1,
-          );
+          scheduleRetriableRetry({
+            operationName: `${operationName} (parse recovery)`,
+            retryCount,
+            maxTotalRetries,
+            startedAt,
+            nextStep: () =>
+              findInconsistencies(
+                chapterData,
+                existingResults,
+                retryCount + 1,
+                parseRetryCount + 1,
+              ),
+          });
           return;
         }
-        error = `Failed to process AI response content after retry: ${e.message}`;
+        const error = `${operationName} failed to process AI response content after retry: ${e.message}`;
         handleApiError(error);
         return;
       }
 
-      // On success, advance the key index for the next run
+      // Success: rotate key index for next invocation
       appState.runtime.currentApiKeyIndex =
         (currentKeyIndex + 1) % appState.config.apiKeys.length;
       appState.runtime.isAnalysisRunning = false;
+      appState.runtime.analysisStartedAt = null;
+
       const isVerificationRun = existingResults.length > 0;
 
       if (isVerificationRun) {
@@ -2810,8 +3406,7 @@ function findInconsistencies(
         }
         const verifiedItems = parsedResponse.verified_inconsistencies || [];
         const newItems = parsedResponse.new_inconsistencies || [];
-        // AI verification decisions are trusted - no manual status override needed
-        // The AI properly categorizes results into verified_inconsistencies and new_inconsistencies
+
         verifiedItems.forEach((item) => {
           item.isNew = false;
           item.status = "Verified";
@@ -2819,6 +3414,7 @@ function findInconsistencies(
         newItems.forEach((item) => {
           item.isNew = true;
         });
+
         utils_log(
           `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
         );
@@ -2834,26 +3430,34 @@ function findInconsistencies(
         appState.runtime.cumulativeResults = parsedResponse;
       }
 
-      // Save session results
       saveSessionResults();
-
       updateStatusIndicator("complete", "Complete!");
-      document.getElementById("wtr-if-continue-btn").disabled = false;
+      const continueBtn = document.getElementById("wtr-if-continue-btn");
+      if (continueBtn) {
+        continueBtn.disabled = false;
+      }
       displayResults(appState.runtime.cumulativeResults);
     },
     onerror: function (error) {
       console.error("Inconsistency Finder: Network error:", error);
       utils_log(
-        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
+        `${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
       );
       appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-      updateStatusIndicator("running", "Network Error. Rotating key...");
-      findInconsistencies(
-        chapterData,
-        existingResults,
-        retryCount + 1,
-        parseRetryCount,
-      );
+
+      scheduleRetriableRetry({
+        operationName,
+        retryCount,
+        maxTotalRetries,
+        startedAt,
+        nextStep: () =>
+          findInconsistencies(
+            chapterData,
+            existingResults,
+            retryCount + 1,
+            parseRetryCount,
+          ),
+      });
     },
   });
 }
@@ -2925,11 +3529,35 @@ function findInconsistenciesIteration(
   let retryCount = 0;
   let parseRetryCount = 0;
 
+  // Track when this deep analysis iteration started to enforce a safety window
+  const iterationKey = `deep_${currentDepth}`;
+  const now = Date.now();
+  if (!appState.runtime.deepAnalysisStartTimes) {
+    appState.runtime.deepAnalysisStartTimes = {};
+  }
+  if (!appState.runtime.deepAnalysisStartTimes[iterationKey]) {
+    appState.runtime.deepAnalysisStartTimes[iterationKey] = now;
+  }
+  const startedAt = appState.runtime.deepAnalysisStartTimes[iterationKey];
+
+  const operationName = `Deep analysis iteration ${currentDepth}/${targetDepth}`;
+
   const executeIteration = () => {
+    // Attempt-based ceiling
     if (retryCount >= maxTotalRetries) {
       handleApiError(
-        `Deep analysis iteration ${currentDepth} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
+        `${operationName} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
       );
+      delete appState.runtime.deepAnalysisStartTimes[iterationKey];
+      return;
+    }
+
+    // Time-based safety ceiling
+    if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+      handleApiError(
+        `${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
+      );
+      delete appState.runtime.deepAnalysisStartTimes[iterationKey];
       return;
     }
 
@@ -2938,6 +3566,7 @@ function findInconsistenciesIteration(
       handleApiError(
         "All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
       );
+      delete appState.runtime.deepAnalysisStartTimes[iterationKey];
       return;
     }
     const currentKey = apiKeyInfo.key;
@@ -2947,7 +3576,7 @@ function findInconsistenciesIteration(
       .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
       .join("\n\n");
     utils_log(
-      `Deep Analysis Iteration ${currentDepth}/${targetDepth}: Sending ${
+      `${operationName}: Sending ${
         combinedText.length
       } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
         retryCount + 1
@@ -2969,13 +3598,26 @@ function findInconsistenciesIteration(
       data: JSON.stringify(requestData),
       onload: function (response) {
         utils_log("Received raw response from API:", response.responseText);
-        let apiResponse, parsedResponse, error;
+        let apiResponse;
+        let parsedResponse;
 
+        // Shell parse: treat as retriable (can be transient / truncation)
         try {
           apiResponse = JSON.parse(response.responseText);
         } catch (e) {
-          error = `Failed to parse API response shell: ${e.message}`;
-          handleApiError(error);
+          utils_log(
+            `${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+          );
+          scheduleRetriableRetry({
+            operationName: `${operationName} (shell parse recovery)`,
+            retryCount,
+            maxTotalRetries,
+            startedAt,
+            nextStep: () => {
+              retryCount++;
+              executeIteration();
+            },
+          });
           return;
         }
 
@@ -2988,7 +3630,7 @@ function findInconsistenciesIteration(
 
           if (isRetriable) {
             utils_log(
-              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
+              `${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
             );
             const cooldownSeconds =
               errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
@@ -2996,19 +3638,28 @@ function findInconsistenciesIteration(
               currentKey,
               Date.now() + cooldownSeconds * 1000,
             );
-            updateStatusIndicator("running", "API Error. Rotating key...");
-            retryCount++;
-            executeIteration();
-            return;
-          } else {
-            const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`;
-            handleApiError(finalError);
+            scheduleRetriableRetry({
+              operationName,
+              retryCount,
+              maxTotalRetries,
+              startedAt,
+              nextStep: () => {
+                retryCount++;
+                executeIteration();
+              },
+            });
             return;
           }
+
+          const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`;
+          handleApiError(finalError);
+          delete appState.runtime.deepAnalysisStartTimes[iterationKey];
+          return;
         }
 
         const candidate = apiResponse.candidates?.[0];
         if (!candidate || !candidate.content) {
+          let error;
           if (candidate?.finishReason === "MAX_TOKENS") {
             error =
               "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters.";
@@ -3018,6 +3669,7 @@ function findInconsistenciesIteration(
             }`;
           }
           handleApiError(error);
+          delete appState.runtime.deepAnalysisStartTimes[iterationKey];
           return;
         }
 
@@ -3025,23 +3677,35 @@ function findInconsistenciesIteration(
           const resultText = candidate.content.parts[0].text;
           const cleanedJsonString = extractJsonFromString(resultText);
           parsedResponse = JSON.parse(cleanedJsonString);
-          utils_log("Successfully parsed API response content.", parsedResponse);
+          utils_log(
+            `${operationName}: Successfully parsed API response content.`,
+            parsedResponse,
+          );
         } catch (e) {
           if (parseRetryCount < 1) {
             utils_log(
-              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
+              `${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
             );
             updateStatusIndicator(
               "running",
               "AI response malformed. Retrying...",
             );
-            retryCount++;
-            parseRetryCount++;
-            executeIteration();
+            scheduleRetriableRetry({
+              operationName: `${operationName} (parse recovery)`,
+              retryCount,
+              maxTotalRetries,
+              startedAt,
+              nextStep: () => {
+                retryCount++;
+                parseRetryCount++;
+                executeIteration();
+              },
+            });
             return;
           }
-          error = `Failed to process AI response content after retry: ${e.message}`;
+          const error = `${operationName} failed to process AI response content after retry: ${e.message}`;
           handleApiError(error);
+          delete appState.runtime.deepAnalysisStartTimes[iterationKey];
           return;
         }
 
@@ -3050,7 +3714,6 @@ function findInconsistenciesIteration(
           (currentKeyIndex + 1) % appState.config.apiKeys.length;
 
         const isVerificationRun = existingResults.length > 0;
-        const _isDeepAnalysis = targetDepth > 1;
 
         if (isVerificationRun) {
           if (
@@ -3060,12 +3723,12 @@ function findInconsistenciesIteration(
             handleApiError(
               "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
             );
+            delete appState.runtime.deepAnalysisStartTimes[iterationKey];
             return;
           }
           const verifiedItems = parsedResponse.verified_inconsistencies || [];
           const newItems = parsedResponse.new_inconsistencies || [];
-          // AI verification decisions are trusted - no manual status override needed
-          // The AI properly categorizes results into verified_inconsistencies and new_inconsistencies
+
           verifiedItems.forEach((item) => {
             item.isNew = false;
             item.status = "Verified";
@@ -3073,11 +3736,11 @@ function findInconsistenciesIteration(
           newItems.forEach((item) => {
             item.isNew = true;
           });
+
           utils_log(
-            `Deep Analysis Iteration ${currentDepth}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
+            `${operationName}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
           );
 
-          // Standardized result handling for all iterations
           const allNewItems = [...verifiedItems, ...newItems];
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
@@ -3088,19 +3751,15 @@ function findInconsistenciesIteration(
             handleApiError(
               "Invalid response format for initial run. Expected a JSON array.",
             );
+            delete appState.runtime.deepAnalysisStartTimes[iterationKey];
             return;
           }
           parsedResponse.forEach((r) => (r.isNew = true));
-          // Standardized result handling for all iterations
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
             parsedResponse,
           );
         }
-
-        // REMOVED: Critical bug fix - was overwriting AI verification decisions
-        // The AI's verification process now works correctly without manual status assignment
-        // AI properly categorizes results into verified_inconsistencies and new_inconsistencies
 
         // Save session results after each iteration
         saveSessionResults();
@@ -3108,7 +3767,7 @@ function findInconsistenciesIteration(
         // Continue to next iteration or complete
         appState.runtime.currentIteration = currentDepth + 1;
         if (currentDepth < targetDepth) {
-          // Continue to next iteration
+          // Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
           setTimeout(() => {
             findInconsistenciesDeepAnalysis(
               chapterData,
@@ -3116,27 +3775,39 @@ function findInconsistenciesIteration(
               targetDepth,
               currentDepth + 1,
             );
-          }, 1000); // Brief pause between iterations
+          }, 1000);
         } else {
-          // Deep analysis complete
+          // Deep analysis complete for this path
+          delete appState.runtime.deepAnalysisStartTimes[iterationKey];
           appState.runtime.isAnalysisRunning = false;
           updateStatusIndicator(
             "complete",
             `Complete! (Deep Analysis: ${targetDepth} iterations)`,
           );
-          document.getElementById("wtr-if-continue-btn").disabled = false;
+          const continueBtn = document.getElementById("wtr-if-continue-btn");
+          if (continueBtn) {
+            continueBtn.disabled = false;
+          }
           displayResults(appState.runtime.cumulativeResults);
         }
       },
       onerror: function (error) {
         console.error("Inconsistency Finder: Network error:", error);
         utils_log(
-          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
+          `${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
         );
         appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-        updateStatusIndicator("running", "Network Error. Rotating key...");
-        retryCount++;
-        executeIteration();
+
+        scheduleRetriableRetry({
+          operationName,
+          retryCount,
+          maxTotalRetries,
+          startedAt,
+          nextStep: () => {
+            retryCount++;
+            executeIteration();
+          },
+        });
       },
     });
   };
@@ -3151,7 +3822,18 @@ function findInconsistenciesIteration(
 
 
 function displayResults(results) {
-  const resultsContainer = document.getElementById("wtr-if-results");
+  // Ensure we render only into the dedicated results container inside Finder tab.
+  const finderTab = document.getElementById("wtr-if-tab-finder");
+  const resultsContainer =
+    (finderTab && finderTab.querySelector("#wtr-if-results")) ||
+    document.getElementById("wtr-if-results");
+
+  if (!resultsContainer) {
+    utils_log("displayResults: No #wtr-if-results container found; aborting render.");
+    return;
+  }
+
+  // Only clear the dynamic results area, never the entire Finder tab wrapper.
   resultsContainer.innerHTML = "";
   const filterValue =
     document.getElementById("wtr-if-filter-select")?.value || "all";
@@ -3347,9 +4029,29 @@ function displayResults(results) {
       resultsContainer.prepend(errorEl);
     });
 
-  resultsContainer
-    .querySelectorAll(".wtr-if-apply-btn")
-    .forEach((btn) => btn.addEventListener("click", handleApplyClick));
+  // Wire up Apply/Copy buttons for each suggestion group
+  const finderScope =
+    document.getElementById("wtr-if-tab-finder") || resultsContainer;
+
+  if (finderScope) {
+    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach((btn) => {
+      // Ensure per-result buttons are reliably discoverable for mode switching
+      if (!btn.dataset.role) {
+        btn.dataset.role = "wtr-if-apply-action";
+      }
+      if (!btn.dataset.scope) {
+        const action = btn.dataset.action || "";
+        if (action.endsWith("-selected")) {
+          btn.dataset.scope = "selected";
+        } else if (action.endsWith("-all")) {
+          btn.dataset.scope = "all";
+        }
+      }
+      btn.addEventListener("click", handleApplyClick);
+    });
+  }
+
+  // Wire up individual variation copy buttons
   resultsContainer
     .querySelectorAll(".wtr-if-copy-variation-btn")
     .forEach((btn) => btn.addEventListener("click", handleCopyVariationClick));
@@ -3524,7 +4226,12 @@ function handleFileImportAndAnalyze(event) {
 
 function handleRestoreSession() {
   if (appState.session.hasSavedResults) {
+    // 1) Build Finder UI for restored results
     displayResults(appState.runtime.cumulativeResults);
+
+    // 2) Immediately sync Apply/Copy mode on the actual rendered Finder buttons
+    //    This ensures restored sessions respect the current external integration state.
+    updateApplyCopyButtonsMode();
 
     // Hide session restore element if it exists (removed UI section)
     const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
@@ -3574,37 +4281,165 @@ function handleStatusClick() {
     indicator.classList.contains("complete") ||
     indicator.classList.contains("error")
   ) {
+    // Show panel
     togglePanel(true);
-    document.querySelector('.wtr-if-tab-btn[data-tab="finder"]').click();
-    displayResults(appState.runtime.cumulativeResults);
+
+    // Activate Finder tab
+    const finderTabBtn = document.querySelector(
+      '.wtr-if-tab-btn[data-tab="finder"]',
+    );
+    if (finderTabBtn) {
+      finderTabBtn.click();
+    }
+
+    // Re-render results (if any) into Finder tab
+    if (
+      Array.isArray(appState.runtime.cumulativeResults) &&
+      appState.runtime.cumulativeResults.length > 0
+    ) {
+      displayResults(appState.runtime.cumulativeResults);
+    }
+
+    // Ensure status indicator is hidden after navigation
     updateStatusIndicator("hidden");
+
+    // IMPORTANT:
+    // Run after Finder DOM is present so button modes match current detection state.
+    updateApplyCopyButtonsMode();
   }
 }
 
+/**
+ * Single source of truth for Finder Apply/Copy button mode.
+ *
+ * This helper:
+ * - Checks isWTRLabTermReplacerLoaded()
+ * - Updates Finder tab Apply/Copy buttons:
+ *     - #wtr-if-apply-selected
+ *     - #wtr-if-apply-all
+ *   or any matching .wtr-if-apply-action buttons with data-scope attributes.
+ * - When external detected:
+ *     - Labels: "Apply Selected" / "Apply All"
+ *     - data-action: "apply-selected" / "apply-all"
+ * - When external NOT detected:
+ *     - Labels: "Copy Selected" / "Copy All"
+ *     - data-action: "copy-selected" / "copy-all"
+ *
+ * Idempotent, cheap, and safe if elements are missing.
+ */
+function updateApplyCopyButtonsMode() {
+  let externalAvailable = false;
+
+  try {
+    externalAvailable = isWTRLabTermReplacerLoaded();
+  } catch (err) {
+    utils_log(
+      "WTR Lab Term Replacer detection failed in updateApplyCopyButtonsMode; falling back to safe copy mode.",
+      err,
+    );
+    externalAvailable = false;
+  }
+
+  // Scope to the Finder tab content to avoid touching any non-related buttons.
+  const finderTab = document.getElementById("wtr-if-tab-finder");
+  if (!finderTab) {
+    return;
+  }
+
+  // Helper to keep labels/actions in sync for a given scope.
+  function syncButton(btn, scope) {
+    if (!btn) {
+      return;
+    }
+    const isSelected = scope === "selected";
+    const applyLabel = isSelected ? "Apply Selected" : "Apply All";
+    const copyLabel = isSelected ? "Copy Selected" : "Copy All";
+    const applyAction = isSelected ? "apply-selected" : "apply-all";
+    const copyAction = isSelected ? "copy-selected" : "copy-all";
+
+    btn.textContent = externalAvailable ? applyLabel : copyLabel;
+    btn.dataset.action = externalAvailable ? applyAction : copyAction;
+  }
+
+  // Explicit Finder tab buttons.
+  syncButton(finderTab.querySelector("#wtr-if-apply-selected"), "selected");
+  syncButton(finderTab.querySelector("#wtr-if-apply-all"), "all");
+
+  // Also support any dynamically rendered action buttons inside result groups.
+  // Be robust:
+  // - Prefer [data-role='wtr-if-apply-action'] with data-scope.
+  // - Fallback to plain .wtr-if-apply-btn (e.g., from restored sessions) and
+  //   infer scope from existing data.
+  const groupButtons = finderTab.querySelectorAll(
+    "[data-role='wtr-if-apply-action'], .wtr-if-apply-btn",
+  );
+  groupButtons.forEach((btn) => {
+    let scope = btn.dataset.scope || btn.getAttribute("data-scope");
+    if (!scope) {
+      const a = btn.dataset.action || "";
+      if (a.endsWith("-selected")) {
+        scope = "selected";
+      } else if (a.endsWith("-all")) {
+        scope = "all";
+      }
+    }
+    if (scope === "selected" || scope === "all") {
+      syncButton(btn, scope);
+    }
+  });
+}
+
+/**
+ * Handle Apply/Copy actions for a group of variations.
+ *
+ * Behavior is dynamic:
+ * - If WTR Lab Term Replacer is detected:
+ *     - Dispatches "wtr:addTerm" with aggregated term(s) for external script.
+ *     - Buttons represent "Apply Selected"/"Apply All" semantics.
+ * - If not detected (safe mode):
+ *     - Copies variations or suggestion text to clipboard instead.
+ *     - Buttons represent "Copy Selected"/"Copy All" semantics.
+ */
 function handleApplyClick(event) {
   const button = event.currentTarget;
-  const action = button.dataset.action;
+  const action = button.dataset.action || "";
   const replacement = button.dataset.suggestion || "";
   let variationsToApply = [];
 
-  // Enhanced logging for debugging the empty suggestion issue
+  let externalAvailable = false;
+  try {
+    externalAvailable = isWTRLabTermReplacerLoaded();
+  } catch {
+    // If detection explodes for any reason, treat as not available for safety.
+    externalAvailable = false;
+  }
+
   if (appState.config.loggingEnabled) {
-    utils_log("Button click analysis:", {
-      action: action,
+    utils_log("Apply/Copy button click", {
+      action,
       replacementValue: replacement,
       replacementLength: replacement ? replacement.length : "empty",
-      buttonDataset: button.dataset,
+      buttonDataset: { ...button.dataset },
+      externalAvailable,
     });
   }
 
-  if (action === "apply-all") {
-    variationsToApply = JSON.parse(button.dataset.variations);
-  } else if (action === "apply-selected") {
+  // Resolve variations based on the button scope, mirroring existing apply selection semantics.
+  if (action === "apply-all" || action === "copy-all") {
+    try {
+      variationsToApply = JSON.parse(button.dataset.variations || "[]");
+    } catch (e) {
+      utils_log("Failed to parse variations for apply-all/copy-all.", e);
+      variationsToApply = [];
+    }
+  } else if (action === "apply-selected" || action === "copy-selected") {
     const groupEl = button.closest(".wtr-if-result-group");
-    const checkedBoxes = groupEl.querySelectorAll(
-      ".wtr-if-variation-checkbox:checked",
-    );
-    checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+    if (groupEl) {
+      const checkedBoxes = groupEl.querySelectorAll(
+        ".wtr-if-variation-checkbox:checked",
+      );
+      checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+    }
   }
 
   const uniqueVariations = [...new Set(variationsToApply)];
@@ -3618,27 +4453,106 @@ function handleApplyClick(event) {
     return;
   }
 
-  let originalTerm;
-  let isRegex;
-
-  if (uniqueVariations.length > 1) {
-    uniqueVariations.sort((a, b) => b.length - a.length);
-    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
-    isRegex = true;
-    utils_log(
-      `Applying suggestion "${replacement}" via multi-term regex: /${originalTerm}/gi`,
-    );
-  } else {
-    originalTerm = uniqueVariations[0];
-    isRegex = false;
-    utils_log(
-      `Applying suggestion "${replacement}" via simple replacement for: "${originalTerm}"`,
-    );
-  }
-
-  // Enhanced validation to prevent empty suggestions
+  // Helper to compute final replacement text.
   const finalReplacement =
     replacement && replacement.trim() !== "" ? replacement.trim() : null;
+
+  // Handle Copy Selected / Copy All (safe mode semantics) WITHOUT mutating content or dispatching events.
+  if (action === "copy-selected" || action === "copy-all") {
+    // For copy, we reuse the same conceptual resolution:
+    // - uniqueVariations is the set of variations for this concept (no cross-concept mixing).
+    // - finalReplacement is the chosen suggestion (if available).
+    if (!finalReplacement) {
+      // If we somehow lack a valid suggestion, degrade gracefully and use variations only.
+      if (appState.config.loggingEnabled) {
+        utils_log(
+          "Copy action invoked without a valid suggestion; falling back to variations-only output.",
+          { uniqueVariations },
+        );
+      }
+    }
+
+    const termPart = uniqueVariations.join("|");
+    const replacedPart = finalReplacement || "";
+
+    let output = "";
+    if (termPart) {
+      output += `Term: ${termPart}\n`;
+    }
+    if (replacedPart) {
+      output += `Replaced: ${replacedPart}\n`;
+    }
+
+    if (!output) {
+      const originalText = button.textContent;
+      button.textContent = "Nothing to Copy";
+      setTimeout(() => {
+        button.textContent = originalText;
+      }, 1500);
+      return;
+    }
+
+    const writeToClipboard = (text) => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+
+      // Fallback using a temporary textarea for environments without navigator.clipboard
+      return new Promise((resolve, reject) => {
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          const successful = document.execCommand("copy");
+          document.body.removeChild(textarea);
+          if (!successful) {
+            reject(new Error("execCommand copy failed"));
+          } else {
+            resolve();
+          }
+        } catch (err) {
+          reject(err);
+        }
+      });
+    };
+
+    const originalText = button.textContent;
+    writeToClipboard(output.trimEnd())
+      .then(() => {
+        button.textContent = "Copied!";
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 1500);
+      })
+      .catch((err) => {
+        utils_log("Failed to copy terms payload.", err);
+        button.textContent = "Copy Failed";
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 1500);
+      });
+
+    return;
+  }
+
+  // From here on, handle Apply Selected / Apply All semantics.
+  if (action !== "apply-selected" && action !== "apply-all") {
+    // Unknown action; do nothing for safety.
+    return;
+  }
+
+  // Apply actions must only operate when the external replacer is available.
+  if (!externalAvailable) {
+    utils_log(
+      "Apply action attempted while external replacer is not available; ignoring.",
+      { action, uniqueVariations },
+    );
+    return;
+  }
+
   if (!finalReplacement) {
     utils_log(
       "ERROR: Empty or invalid replacement value detected. Aborting term addition.",
@@ -3656,6 +4570,25 @@ function handleApplyClick(event) {
       button.style.backgroundColor = "";
     }, 3000);
     return;
+  }
+
+  // External replacer IS available -> preserve original apply behavior semantics.
+  let originalTerm;
+  let isRegex;
+
+  if (uniqueVariations.length > 1) {
+    uniqueVariations.sort((a, b) => b.length - a.length);
+    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
+    isRegex = true;
+    utils_log(
+      `Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`,
+    );
+  } else {
+    originalTerm = uniqueVariations[0];
+    isRegex = false;
+    utils_log(
+      `Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`,
+    );
   }
 
   const customEvent = new CustomEvent("wtr:addTerm", {
@@ -3870,6 +4803,47 @@ function addEventListeners() {
       panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add("active");
       appState.config.activeTab = targetTab;
       saveConfig();
+
+      // When switching to Finder tab, (re)sync Apply/Copy labels and actions.
+      if (targetTab === "finder") {
+        updateApplyCopyButtonsMode();
+      }
+
+      // When switching to config tab, re-evaluate WTR Lab Term Replacer state
+      if (targetTab === "config") {
+        try {
+          const isExternal = isWTRLabTermReplacerLoaded();
+          const useJsonContainer = document.getElementById(
+            "wtr-if-use-json-container",
+          );
+          const useJsonCheckbox = document.getElementById("wtr-if-use-json");
+          const modeHint = document.getElementById(
+            "wtr-if-term-replacer-mode-hint",
+          );
+
+          if (useJsonContainer && useJsonCheckbox && modeHint) {
+            if (isExternal) {
+              useJsonContainer.style.display = "";
+              useJsonCheckbox.disabled = false;
+              modeHint.textContent =
+                "Detected WTR Lab Term Replacer userscript. You can use JSON mode or direct Apply integration.";
+            } else {
+              useJsonContainer.style.display = "none";
+              useJsonCheckbox.checked = false;
+              if (appState.config.useJson) {
+                appState.config.useJson = false;
+              }
+              modeHint.textContent =
+                "External WTR Lab Term Replacer userscript not detected. JSON integration is disabled; using built-in behavior.";
+            }
+          }
+        } catch (err) {
+          utils_log(
+            "WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.",
+            err,
+          );
+        }
+      }
     });
   });
 
@@ -3887,6 +4861,36 @@ function addEventListeners() {
         }
       }
     });
+
+  // Delayed-load handling: re-check external userscript presence shortly after init.
+  // This is allowed to call updateApplyCopyButtonsMode(), which no-ops if Finder DOM
+  // is not yet present, so it does not create stale wiring.
+  setTimeout(() => {
+    try {
+      const isExternal = isWTRLabTermReplacerLoaded();
+      const modeHint = document.getElementById(
+        "wtr-if-term-replacer-mode-hint",
+      );
+      if (modeHint) {
+        if (isExternal) {
+          modeHint.textContent =
+            "Detected WTR Lab Term Replacer userscript. Apply buttons will send terms directly to the external replacer.";
+        } else if (!modeHint.textContent) {
+          modeHint.textContent =
+            "External WTR Lab Term Replacer userscript not detected yet. Actions will operate in safe (copy/manual) mode unless the userscript loads.";
+        }
+      }
+
+      // Ensure Finder buttons reflect the latest detection state AFTER this delayed check,
+      // but only if the Finder DOM exists (function itself performs this guard).
+      updateApplyCopyButtonsMode();
+    } catch (err) {
+      utils_log(
+        "WTR Lab Term Replacer delayed detection check failed; continuing safely.",
+        err,
+      );
+    }
+  }, 2000);
 }
 
 ;// ./src/modules/ui/panel.js
@@ -4027,12 +5031,28 @@ function createUI() {
                             <h3><i class="wtr-if-icon">⚙️</i> Advanced Settings</h3>
                         </div>
                         <div class="wtr-if-section-content">
-                            <div class="wtr-if-form-group">
-                                <label class="checkbox-label"><input type="checkbox" id="wtr-if-use-json"> Use Term Replacer JSON File</label>
+                            <div class="wtr-if-form-group" id="wtr-if-use-json-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-json">
+                                    Use Term Replacer JSON File
+                                </label>
                             </div>
                             <div class="wtr-if-form-group">
-                                <label class="checkbox-label"><input type="checkbox" id="wtr-if-logging-enabled"> Enable Debug Logging</label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-logging-enabled">
+                                    Enable Debug Logging
+                                </label>
                                 <small class="wtr-if-hint">Outputs detailed script operations to the browser console.</small>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <div class="wtr-if-hint">
+                                    If you do not want to use the original site term replacer, you may use the external userscript from:
+                                    <a href="https://github.com/MasuRii/wtr-lab-term-replacer/tree/main/dist" target="_blank" rel="noopener noreferrer">
+                                        WTR Lab Term Replacer (GitHub)
+                                    </a>.
+                                    Navigate to this URL to install the supported userscript.
+                                </div>
+                                <small id="wtr-if-term-replacer-mode-hint" class="wtr-if-hint"></small>
                             </div>
                         </div>
                     </div>
@@ -4069,6 +5089,11 @@ function createUI() {
   document.body.appendChild(panel);
   const statusIndicator = document.createElement("div");
   statusIndicator.id = "wtr-if-status-indicator";
+  // Base fixed positioning; dynamic system will adjust bottom and keep z-index stable
+  statusIndicator.style.position = "fixed";
+  statusIndicator.style.left = "20px";
+  statusIndicator.style.bottom = POSITION.BASE;
+  statusIndicator.style.zIndex = "1025";
   statusIndicator.innerHTML =
     '<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>';
   document.body.appendChild(statusIndicator);
@@ -4226,13 +5251,56 @@ async function togglePanel(show = null) {
 
     await populateModelSelector();
 
+    // Apply dynamic UI based on WTR Lab Term Replacer detection
+    try {
+      const isExternalReplacerAvailable = isWTRLabTermReplacerLoaded();
+      const useJsonContainer = document.getElementById(
+        "wtr-if-use-json-container",
+      );
+      const useJsonCheckbox = document.getElementById("wtr-if-use-json");
+      const modeHint = document.getElementById(
+        "wtr-if-term-replacer-mode-hint",
+      );
+
+      if (useJsonContainer && useJsonCheckbox && modeHint) {
+        if (isExternalReplacerAvailable) {
+          // External userscript present:
+          // - Show the JSON option so users can integrate with its format.
+          // - Keep current checkbox state (from config).
+          useJsonContainer.style.display = "";
+          useJsonCheckbox.disabled = false;
+          modeHint.textContent =
+            "Detected WTR Lab Term Replacer userscript. You can use the Term Replacer JSON file format or send suggestions directly via the integration buttons.";
+        } else {
+          // Safe mode when external script is not detected:
+          // - Hide JSON option (to avoid confusion with unsupported integration).
+          // - Force config flag off to keep behavior consistent.
+          useJsonContainer.style.display = "none";
+          useJsonCheckbox.checked = false;
+          if (appState.config.useJson) {
+            appState.config.useJson = false;
+          }
+          modeHint.textContent =
+            "External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration.";
+        }
+      }
+    } catch (e) {
+      // Never break panel rendering on detection failure
+      utils_log(
+        "WTR Lab Term Replacer UI integration (togglePanel) failed; continuing in safe mode.",
+        e,
+      );
+    }
+
     // Check for session results and show restore option if available
     const sessionRestore = document.getElementById("wtr-if-session-restore");
     if (
       appState.session.hasSavedResults &&
       appState.preferences.autoRestoreResults
     ) {
-      // Auto-restore if enabled
+      // Auto-restore if enabled:
+      // - Restores results
+      // - Immediately syncs Finder Apply/Copy buttons for restored DOM
       handleRestoreSession();
     } else if (appState.session.hasSavedResults) {
       sessionRestore.style.display = "block";
@@ -4267,8 +5335,8 @@ function updateStatusIndicator(state, message = "") {
 
 // Position constants
 const POSITION = {
-  BASE: "var(--nig-space-xl, 20px)", // Start at NIG widget level
-  NIG_CONFLICT: "80px", // Move up when NIG widget present
+  BASE: "var(--nig-space-xl, 20px)", // Default baseline above page bottom
+  NIG_CONFLICT: "80px", // Move up when conflicting widget present
   SAFE_DEFAULT: "60px", // Fallback position
 };
 
@@ -4277,7 +5345,9 @@ const collisionState = {
   isMonitoringActive: false,
   lastNigWidgetState: null,
   currentPosition: null,
+  lastZIndex: null,
   debounceTimer: null,
+  lastAppliedBottom: null,
 };
 
 /**
@@ -4302,56 +5372,102 @@ function _getElementBottomPosition(element) {
 /**
  * Check if two elements would collide vertically
  */
-function wouldCollide(element1, element2, spacing = 10) {
+function isVisibleElement(el) {
+  if (!el) {
+    return false;
+  }
+  const style = getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0"
+  ) {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * Check if two elements would collide vertically (and generally overlap)
+ * Only considers collisions when both elements are visible in the viewport.
+ */
+function _wouldCollide(element1, element2, spacing = 10) {
   if (!element1 || !element2) {
+    return false;
+  }
+
+  if (!isVisibleElement(element1) || !isVisibleElement(element2)) {
     return false;
   }
 
   const rect1 = element1.getBoundingClientRect();
   const rect2 = element2.getBoundingClientRect();
 
-  // Check if elements overlap vertically
-  const element1Bottom = rect1.bottom;
-  const element2Top = rect2.top;
+  // Basic overlap check: vertical spacing plus horizontal intersection
+  const verticalOverlap = rect1.bottom + spacing > rect2.top;
+  const horizontalOverlap =
+    rect1.right > rect2.left && rect1.left < rect2.right;
 
-  return element1Bottom + spacing > element2Top;
+  return verticalOverlap && horizontalOverlap;
 }
 
 /**
  * Determine optimal position based on current collision state
  */
 function calculateOptimalPosition(nigWidget, indicator) {
-  const isNigVisible =
-    nigWidget && getComputedStyle(nigWidget).display !== "none";
-
-  // Log current state for debugging
+  const isNigVisible = isVisibleElement(nigWidget);
   const nigState = isNigVisible ? "present" : "absent";
-  const _currentPos = collisionState.currentPosition;
 
-  // Position logic
-  let newPosition = POSITION.BASE;
-  let newZIndex = 10000;
+  const conflictStates = {
+    nig: nigState,
+  };
 
-  // Check for NIG widget conflict
-  if (isNigVisible && wouldCollide(indicator, nigWidget)) {
-    newPosition = POSITION.NIG_CONFLICT;
-    newZIndex = 10000;
-    utils_log(
-      `NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`,
-    );
-  } else {
-    // No conflicts - return to base position
-    newPosition = POSITION.BASE;
-    newZIndex = 10000;
-    if (isNigVisible) {
-      utils_log(`No conflicts detected. Returning to base position: ${newPosition}`);
+  const newZIndex = 1025;
+
+  if (!indicator) {
+    return {
+      position: POSITION.BASE,
+      zIndex: newZIndex,
+      states: conflictStates,
+    };
+  }
+
+  let hasNigConflict = false;
+
+  if (isNigVisible && nigWidget) {
+    // Virtually test the indicator at BASE position against the NIG widget
+    const indicatorRect = indicator.getBoundingClientRect();
+    const nigRect = nigWidget.getBoundingClientRect();
+
+    // Construct a virtual rect for the indicator as if it were at BASE (20px)
+    const baseOffsetPx = 20;
+    const viewportHeight =
+      window.innerHeight || document.documentElement.clientHeight;
+    const virtualBottom = baseOffsetPx;
+    const virtualTop = viewportHeight - virtualBottom - indicatorRect.height;
+    const virtualRect = {
+      top: virtualTop,
+      bottom: virtualTop + indicatorRect.height,
+      left: indicatorRect.left,
+      right: indicatorRect.right,
+    };
+
+    const verticalOverlap = virtualRect.bottom > nigRect.top;
+    const horizontalOverlap =
+      virtualRect.right > nigRect.left && virtualRect.left < nigRect.right;
+
+    if (verticalOverlap && horizontalOverlap) {
+      hasNigConflict = true;
     }
   }
 
+  const position = hasNigConflict ? POSITION.NIG_CONFLICT : POSITION.BASE;
+
   return {
-    position: newPosition,
+    position,
     zIndex: newZIndex,
-    states: { nig: nigState },
+    states: conflictStates,
   };
 }
 
@@ -4363,18 +5479,25 @@ function applyPosition(indicator, position, zIndex) {
     return;
   }
 
-  // Only update if position has actually changed
-  if (collisionState.currentPosition === position) {
+  const nextBottom = position;
+  const nextZ = zIndex || 1025;
+
+  // Avoid unnecessary writes to prevent jitter
+  if (
+    collisionState.lastAppliedBottom === nextBottom &&
+    collisionState.lastZIndex === nextZ
+  ) {
     return;
   }
 
-  collisionState.currentPosition = position;
+  collisionState.currentPosition = nextBottom;
+  collisionState.lastAppliedBottom = nextBottom;
+  collisionState.lastZIndex = nextZ;
 
-  // Apply position with smooth transition
-  indicator.style.bottom = position;
-  indicator.style.zIndex = zIndex;
+  indicator.style.bottom = nextBottom;
+  indicator.style.zIndex = String(nextZ);
 
-  utils_log(`Position updated to: ${position}, Z-index: ${zIndex}`);
+  utils_log(`Position updated to: ${nextBottom}, Z-index: ${nextZ}`);
 }
 
 /**
@@ -4386,21 +5509,26 @@ function adjustIndicatorPosition() {
     return;
   }
 
-  // Get relevant elements
+  // Ensure stable fixed positioning; never toggle between fixed/other
+  const computed = getComputedStyle(indicator);
+  if (computed.position !== "fixed") {
+    indicator.style.position = "fixed";
+    if (!indicator.style.left) {
+      indicator.style.left = "20px";
+    }
+  }
+
   const nigWidget = document.querySelector(
     ".nig-status-widget, #nig-status-widget",
   );
 
-  // Calculate optimal position based on current state
   const { position, zIndex, states } = calculateOptimalPosition(
     nigWidget,
     indicator,
   );
 
-  // Apply the calculated position
   applyPosition(indicator, position, zIndex);
 
-  // Update state tracking
   collisionState.lastNigWidgetState = states.nig;
 }
 
@@ -4470,23 +5598,20 @@ function initializeCollisionAvoidance() {
  * Enhanced conflict observer with debounced updates and comprehensive monitoring
  */
 function setupConflictObserver() {
-  // Debounced observer to prevent excessive updates
+  // Debounced observer to prevent excessive updates and oscillation
   const debouncedAdjustPosition = debounce(() => {
     if (collisionState.isMonitoringActive) {
       adjustIndicatorPosition();
     }
-  }, 100);
+  }, 150);
 
   const observer = new MutationObserver((mutations) => {
-    // Check if any relevant mutations occurred
     const relevantMutations = mutations.some((mutation) => {
-      // Monitor for widget appearance/disappearance
       if (mutation.type === "childList") {
         return (
           mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0
         );
       }
-      // Monitor for style/class changes that might affect visibility
       if (mutation.type === "attributes") {
         return ["style", "class", "display"].includes(mutation.attributeName);
       }
@@ -4505,7 +5630,7 @@ function setupConflictObserver() {
     attributeFilter: ["style", "class", "id", "display"],
   });
 
-  // Also observe NIG widget if it exists
+  // Observe key conflict-prone elements directly when present
   const nigWidget = document.querySelector(
     ".nig-status-widget, #nig-status-widget",
   );
@@ -4516,7 +5641,21 @@ function setupConflictObserver() {
     });
   }
 
-  utils_log("Enhanced conflict observer initialized (NIG widget only).");
+  const bottomNav =
+    document.querySelector("nav.bottom-reader-nav") ||
+    document.querySelector(".bottom-reader-nav") ||
+    document.querySelector(".fixed-bottom");
+  if (bottomNav) {
+    observer.observe(bottomNav, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  utils_log(
+    "Enhanced conflict observer initialized (NIG widget, bottom reader nav, and related widgets).",
+  );
 }
 
 /**

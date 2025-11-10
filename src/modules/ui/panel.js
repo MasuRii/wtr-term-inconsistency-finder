@@ -2,7 +2,7 @@
 import { VERSION } from "../../version";
 import { appState, MODELS_CACHE_KEY } from "../state";
 import { getAvailableApiKey } from "../geminiApi";
-import { escapeHtml, log } from "../utils";
+import { escapeHtml, log, isWTRLabTermReplacerLoaded } from "../utils";
 import { addEventListeners, handleRestoreSession } from "./events";
 
 export function createUI() {
@@ -135,12 +135,28 @@ export function createUI() {
                             <h3><i class="wtr-if-icon">⚙️</i> Advanced Settings</h3>
                         </div>
                         <div class="wtr-if-section-content">
-                            <div class="wtr-if-form-group">
-                                <label class="checkbox-label"><input type="checkbox" id="wtr-if-use-json"> Use Term Replacer JSON File</label>
+                            <div class="wtr-if-form-group" id="wtr-if-use-json-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-json">
+                                    Use Term Replacer JSON File
+                                </label>
                             </div>
                             <div class="wtr-if-form-group">
-                                <label class="checkbox-label"><input type="checkbox" id="wtr-if-logging-enabled"> Enable Debug Logging</label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-logging-enabled">
+                                    Enable Debug Logging
+                                </label>
                                 <small class="wtr-if-hint">Outputs detailed script operations to the browser console.</small>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <div class="wtr-if-hint">
+                                    If you do not want to use the original site term replacer, you may use the external userscript from:
+                                    <a href="https://github.com/MasuRii/wtr-lab-term-replacer/tree/main/dist" target="_blank" rel="noopener noreferrer">
+                                        WTR Lab Term Replacer (GitHub)
+                                    </a>.
+                                    Navigate to this URL to install the supported userscript.
+                                </div>
+                                <small id="wtr-if-term-replacer-mode-hint" class="wtr-if-hint"></small>
                             </div>
                         </div>
                     </div>
@@ -177,6 +193,11 @@ export function createUI() {
   document.body.appendChild(panel);
   const statusIndicator = document.createElement("div");
   statusIndicator.id = "wtr-if-status-indicator";
+  // Base fixed positioning; dynamic system will adjust bottom and keep z-index stable
+  statusIndicator.style.position = "fixed";
+  statusIndicator.style.left = "20px";
+  statusIndicator.style.bottom = POSITION.BASE;
+  statusIndicator.style.zIndex = "1025";
   statusIndicator.innerHTML =
     '<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>';
   document.body.appendChild(statusIndicator);
@@ -334,13 +355,56 @@ export async function togglePanel(show = null) {
 
     await populateModelSelector();
 
+    // Apply dynamic UI based on WTR Lab Term Replacer detection
+    try {
+      const isExternalReplacerAvailable = isWTRLabTermReplacerLoaded();
+      const useJsonContainer = document.getElementById(
+        "wtr-if-use-json-container",
+      );
+      const useJsonCheckbox = document.getElementById("wtr-if-use-json");
+      const modeHint = document.getElementById(
+        "wtr-if-term-replacer-mode-hint",
+      );
+
+      if (useJsonContainer && useJsonCheckbox && modeHint) {
+        if (isExternalReplacerAvailable) {
+          // External userscript present:
+          // - Show the JSON option so users can integrate with its format.
+          // - Keep current checkbox state (from config).
+          useJsonContainer.style.display = "";
+          useJsonCheckbox.disabled = false;
+          modeHint.textContent =
+            "Detected WTR Lab Term Replacer userscript. You can use the Term Replacer JSON file format or send suggestions directly via the integration buttons.";
+        } else {
+          // Safe mode when external script is not detected:
+          // - Hide JSON option (to avoid confusion with unsupported integration).
+          // - Force config flag off to keep behavior consistent.
+          useJsonContainer.style.display = "none";
+          useJsonCheckbox.checked = false;
+          if (appState.config.useJson) {
+            appState.config.useJson = false;
+          }
+          modeHint.textContent =
+            "External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration.";
+        }
+      }
+    } catch (e) {
+      // Never break panel rendering on detection failure
+      log(
+        "WTR Lab Term Replacer UI integration (togglePanel) failed; continuing in safe mode.",
+        e,
+      );
+    }
+
     // Check for session results and show restore option if available
     const sessionRestore = document.getElementById("wtr-if-session-restore");
     if (
       appState.session.hasSavedResults &&
       appState.preferences.autoRestoreResults
     ) {
-      // Auto-restore if enabled
+      // Auto-restore if enabled:
+      // - Restores results
+      // - Immediately syncs Finder Apply/Copy buttons for restored DOM
       handleRestoreSession();
     } else if (appState.session.hasSavedResults) {
       sessionRestore.style.display = "block";
@@ -375,8 +439,8 @@ export function updateStatusIndicator(state, message = "") {
 
 // Position constants
 const POSITION = {
-  BASE: "var(--nig-space-xl, 20px)", // Start at NIG widget level
-  NIG_CONFLICT: "80px", // Move up when NIG widget present
+  BASE: "var(--nig-space-xl, 20px)", // Default baseline above page bottom
+  NIG_CONFLICT: "80px", // Move up when conflicting widget present
   SAFE_DEFAULT: "60px", // Fallback position
 };
 
@@ -385,7 +449,9 @@ const collisionState = {
   isMonitoringActive: false,
   lastNigWidgetState: null,
   currentPosition: null,
+  lastZIndex: null,
   debounceTimer: null,
+  lastAppliedBottom: null,
 };
 
 /**
@@ -410,56 +476,102 @@ function _getElementBottomPosition(element) {
 /**
  * Check if two elements would collide vertically
  */
-function wouldCollide(element1, element2, spacing = 10) {
+function isVisibleElement(el) {
+  if (!el) {
+    return false;
+  }
+  const style = getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    style.opacity === "0"
+  ) {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * Check if two elements would collide vertically (and generally overlap)
+ * Only considers collisions when both elements are visible in the viewport.
+ */
+function _wouldCollide(element1, element2, spacing = 10) {
   if (!element1 || !element2) {
+    return false;
+  }
+
+  if (!isVisibleElement(element1) || !isVisibleElement(element2)) {
     return false;
   }
 
   const rect1 = element1.getBoundingClientRect();
   const rect2 = element2.getBoundingClientRect();
 
-  // Check if elements overlap vertically
-  const element1Bottom = rect1.bottom;
-  const element2Top = rect2.top;
+  // Basic overlap check: vertical spacing plus horizontal intersection
+  const verticalOverlap = rect1.bottom + spacing > rect2.top;
+  const horizontalOverlap =
+    rect1.right > rect2.left && rect1.left < rect2.right;
 
-  return element1Bottom + spacing > element2Top;
+  return verticalOverlap && horizontalOverlap;
 }
 
 /**
  * Determine optimal position based on current collision state
  */
 function calculateOptimalPosition(nigWidget, indicator) {
-  const isNigVisible =
-    nigWidget && getComputedStyle(nigWidget).display !== "none";
-
-  // Log current state for debugging
+  const isNigVisible = isVisibleElement(nigWidget);
   const nigState = isNigVisible ? "present" : "absent";
-  const _currentPos = collisionState.currentPosition;
 
-  // Position logic
-  let newPosition = POSITION.BASE;
-  let newZIndex = 10000;
+  const conflictStates = {
+    nig: nigState,
+  };
 
-  // Check for NIG widget conflict
-  if (isNigVisible && wouldCollide(indicator, nigWidget)) {
-    newPosition = POSITION.NIG_CONFLICT;
-    newZIndex = 10000;
-    log(
-      `NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`,
-    );
-  } else {
-    // No conflicts - return to base position
-    newPosition = POSITION.BASE;
-    newZIndex = 10000;
-    if (isNigVisible) {
-      log(`No conflicts detected. Returning to base position: ${newPosition}`);
+  const newZIndex = 1025;
+
+  if (!indicator) {
+    return {
+      position: POSITION.BASE,
+      zIndex: newZIndex,
+      states: conflictStates,
+    };
+  }
+
+  let hasNigConflict = false;
+
+  if (isNigVisible && nigWidget) {
+    // Virtually test the indicator at BASE position against the NIG widget
+    const indicatorRect = indicator.getBoundingClientRect();
+    const nigRect = nigWidget.getBoundingClientRect();
+
+    // Construct a virtual rect for the indicator as if it were at BASE (20px)
+    const baseOffsetPx = 20;
+    const viewportHeight =
+      window.innerHeight || document.documentElement.clientHeight;
+    const virtualBottom = baseOffsetPx;
+    const virtualTop = viewportHeight - virtualBottom - indicatorRect.height;
+    const virtualRect = {
+      top: virtualTop,
+      bottom: virtualTop + indicatorRect.height,
+      left: indicatorRect.left,
+      right: indicatorRect.right,
+    };
+
+    const verticalOverlap = virtualRect.bottom > nigRect.top;
+    const horizontalOverlap =
+      virtualRect.right > nigRect.left && virtualRect.left < nigRect.right;
+
+    if (verticalOverlap && horizontalOverlap) {
+      hasNigConflict = true;
     }
   }
 
+  const position = hasNigConflict ? POSITION.NIG_CONFLICT : POSITION.BASE;
+
   return {
-    position: newPosition,
+    position,
     zIndex: newZIndex,
-    states: { nig: nigState },
+    states: conflictStates,
   };
 }
 
@@ -471,18 +583,25 @@ function applyPosition(indicator, position, zIndex) {
     return;
   }
 
-  // Only update if position has actually changed
-  if (collisionState.currentPosition === position) {
+  const nextBottom = position;
+  const nextZ = zIndex || 1025;
+
+  // Avoid unnecessary writes to prevent jitter
+  if (
+    collisionState.lastAppliedBottom === nextBottom &&
+    collisionState.lastZIndex === nextZ
+  ) {
     return;
   }
 
-  collisionState.currentPosition = position;
+  collisionState.currentPosition = nextBottom;
+  collisionState.lastAppliedBottom = nextBottom;
+  collisionState.lastZIndex = nextZ;
 
-  // Apply position with smooth transition
-  indicator.style.bottom = position;
-  indicator.style.zIndex = zIndex;
+  indicator.style.bottom = nextBottom;
+  indicator.style.zIndex = String(nextZ);
 
-  log(`Position updated to: ${position}, Z-index: ${zIndex}`);
+  log(`Position updated to: ${nextBottom}, Z-index: ${nextZ}`);
 }
 
 /**
@@ -494,21 +613,26 @@ function adjustIndicatorPosition() {
     return;
   }
 
-  // Get relevant elements
+  // Ensure stable fixed positioning; never toggle between fixed/other
+  const computed = getComputedStyle(indicator);
+  if (computed.position !== "fixed") {
+    indicator.style.position = "fixed";
+    if (!indicator.style.left) {
+      indicator.style.left = "20px";
+    }
+  }
+
   const nigWidget = document.querySelector(
     ".nig-status-widget, #nig-status-widget",
   );
 
-  // Calculate optimal position based on current state
   const { position, zIndex, states } = calculateOptimalPosition(
     nigWidget,
     indicator,
   );
 
-  // Apply the calculated position
   applyPosition(indicator, position, zIndex);
 
-  // Update state tracking
   collisionState.lastNigWidgetState = states.nig;
 }
 
@@ -578,23 +702,20 @@ export function initializeCollisionAvoidance() {
  * Enhanced conflict observer with debounced updates and comprehensive monitoring
  */
 export function setupConflictObserver() {
-  // Debounced observer to prevent excessive updates
+  // Debounced observer to prevent excessive updates and oscillation
   const debouncedAdjustPosition = debounce(() => {
     if (collisionState.isMonitoringActive) {
       adjustIndicatorPosition();
     }
-  }, 100);
+  }, 150);
 
   const observer = new MutationObserver((mutations) => {
-    // Check if any relevant mutations occurred
     const relevantMutations = mutations.some((mutation) => {
-      // Monitor for widget appearance/disappearance
       if (mutation.type === "childList") {
         return (
           mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0
         );
       }
-      // Monitor for style/class changes that might affect visibility
       if (mutation.type === "attributes") {
         return ["style", "class", "display"].includes(mutation.attributeName);
       }
@@ -613,7 +734,7 @@ export function setupConflictObserver() {
     attributeFilter: ["style", "class", "id", "display"],
   });
 
-  // Also observe NIG widget if it exists
+  // Observe key conflict-prone elements directly when present
   const nigWidget = document.querySelector(
     ".nig-status-widget, #nig-status-widget",
   );
@@ -624,7 +745,21 @@ export function setupConflictObserver() {
     });
   }
 
-  log("Enhanced conflict observer initialized (NIG widget only).");
+  const bottomNav =
+    document.querySelector("nav.bottom-reader-nav") ||
+    document.querySelector(".bottom-reader-nav") ||
+    document.querySelector(".fixed-bottom");
+  if (bottomNav) {
+    observer.observe(bottomNav, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  log(
+    "Enhanced conflict observer initialized (NIG widget, bottom reader nav, and related widgets).",
+  );
 }
 
 /**

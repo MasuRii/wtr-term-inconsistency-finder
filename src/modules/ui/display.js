@@ -4,7 +4,18 @@ import { escapeHtml, log } from "../utils";
 import { handleApplyClick, handleCopyVariationClick } from "./events";
 
 export function displayResults(results) {
-  const resultsContainer = document.getElementById("wtr-if-results");
+  // Ensure we render only into the dedicated results container inside Finder tab.
+  const finderTab = document.getElementById("wtr-if-tab-finder");
+  const resultsContainer =
+    (finderTab && finderTab.querySelector("#wtr-if-results")) ||
+    document.getElementById("wtr-if-results");
+
+  if (!resultsContainer) {
+    log("displayResults: No #wtr-if-results container found; aborting render.");
+    return;
+  }
+
+  // Only clear the dynamic results area, never the entire Finder tab wrapper.
   resultsContainer.innerHTML = "";
   const filterValue =
     document.getElementById("wtr-if-filter-select")?.value || "all";
@@ -200,9 +211,29 @@ export function displayResults(results) {
       resultsContainer.prepend(errorEl);
     });
 
-  resultsContainer
-    .querySelectorAll(".wtr-if-apply-btn")
-    .forEach((btn) => btn.addEventListener("click", handleApplyClick));
+  // Wire up Apply/Copy buttons for each suggestion group
+  const finderScope =
+    document.getElementById("wtr-if-tab-finder") || resultsContainer;
+
+  if (finderScope) {
+    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach((btn) => {
+      // Ensure per-result buttons are reliably discoverable for mode switching
+      if (!btn.dataset.role) {
+        btn.dataset.role = "wtr-if-apply-action";
+      }
+      if (!btn.dataset.scope) {
+        const action = btn.dataset.action || "";
+        if (action.endsWith("-selected")) {
+          btn.dataset.scope = "selected";
+        } else if (action.endsWith("-all")) {
+          btn.dataset.scope = "all";
+        }
+      }
+      btn.addEventListener("click", handleApplyClick);
+    });
+  }
+
+  // Wire up individual variation copy buttons
   resultsContainer
     .querySelectorAll(".wtr-if-copy-variation-btn")
     .forEach((btn) => btn.addEventListener("click", handleCopyVariationClick));

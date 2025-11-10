@@ -7,12 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.6] - 2025-11-10
 
+### Added
+- **WTR Lab Term Replacer Integration Mode Switcher**:
+  - Introduced runtime detection via [`src/modules/utils.isWTRLabTermReplacerLoaded()`](src/modules/utils.js:982) to differentiate between:
+    - Using the original WTR site term replacer.
+    - Using the external WTR Lab Term Replacer userscript and JSON compatibility mode.
+  - Added clear configuration messaging and link to the supported external userscript, so users can explicitly choose their integration mode.
+
 ### Changed
 - **Gemini Prompt Refinement**: Updated the advanced system prompt in [`src/modules/geminiApi.js`](src/modules/geminiApi.js:20) to explicitly exclude non-user-actionable chapter title numbering discrepancies that originate from WTR Lab site-level or template-level behavior (such as systematic off-by-one chapter title patterns).
+- **Finder Tab Layout Stability**:
+  - Ensured the Finder tab preserves all intended sections:
+    - Primary Analysis Controls
+    - Deep Analysis Configuration
+    - Filter and Display Controls
+    - Results Display Area
+  - Restricted dynamic rendering to the dedicated `#wtr-if-results` container so structural UI elements are never cleared when updating results.
+- **Panel Stacking Order**:
+  - Updated `#wtr-if-panel` to use `z-index: 1040` (via [`src/styles/panel.css`](src/styles/panel.css:11)) so the Inconsistency Finder panel consistently appears above the site’s bottom navigator while remaining independent from status widget stacking.
 
 ### Fixed
-- **False-Positive Reduction**: Ensured systematic chapter-number offset patterns (e.g., text for Chapter 302 containing a title "Chapter 301: ...", consistently across multiple chapters) are treated as structural issues outside user control and are not surfaced as inconsistency findings.
-- **User-Focus Preservation**: Clarified that only isolated, user-editable chapter title or numbering mistakes should be flagged, while preserving detection of other chapter-related issues (misspellings, inconsistent wording, user-fixable title mismatches).
+- **Status Widget Collision and Jitter**:
+  - Refined collision logic in [`src/modules/ui/panel.js`](src/modules/ui/panel.js:441) so the status widget:
+    - Defaults to `bottom: var(--nig-space-xl, 20px)` in normal conditions.
+    - Only moves up to the conflict offset (e.g., `80px`) when a visible NIG status widget (or equivalent external status widget) actually overlaps the default position.
+    - Ignores the site’s bottom reader navigator for vertical repositioning (it no longer causes spurious jumps), while preserving correct z-index ordering.
+- **Dynamic Apply/Copy Behavior for Finder Actions**:
+  - Centralized Apply/Copy mode handling in [`src/modules/ui/events.updateApplyCopyButtonsMode()`](src/modules/ui/events.js:286) so all Finder action buttons (global and per-result, including session-restored ones):
+    - Show and use "Apply Selected"/"Apply All" (with `apply-*` actions) only when the external WTR Lab Term Replacer userscript is detected.
+    - Show and use "Copy Selected"/"Copy All" (with `copy-*` actions) when the external userscript is not detected.
+  - Ensured [`src/modules/ui/events.handleApplyClick()`](src/modules/ui/events.js:347) routes strictly by `data-action`:
+    - `apply-*` → dispatches `wtr:addTerm` to the external replacer (when available).
+    - `copy-*` → produces non-destructive clipboard output in the format:
+      - `Term: variant1|variant2|...`
+      - `Replaced: chosenSuggestion`
+    - Prevents accidental apply attempts when the external replacer is unavailable.
+- **Smart Quotes Safety and Correctness**:
+  - Reworked smart quote handling in [`src/modules/utils.smartenQuotes()`](src/modules/utils.js:54) and [`applySmartQuotesReplacement()`](src/modules/utils.js:186) to:
+    - Be conservative and context-aware for apostrophes and quotes.
+    - Preserve existing smart quotes.
+    - Include anomaly detection to prevent explosive or corrupt transformations (with automatic fallback to original text).
+    - Respect a `smartQuotesEnabled` configuration flag.
+- **API Backoff and Final Failure State**:
+  - Enhanced [`src/modules/geminiApi.js`](src/modules/geminiApi.js:30) with:
+    - Exponential backoff for retriable errors (2s, 4s, 8s, capped, with a global time window).
+    - Clear final failure conditions when all keys/retries are exhausted.
+    - Preservation of existing key rotation and cooldown behavior.
+    - Robust error handling to avoid tight retry loops and silent failures.
+- **Semantic Duplicate Merging Hardening**:
+  - Updated merging and similarity logic in [`src/modules/utils.js`](src/modules/utils.js:558) to:
+    - Incorporate script-aware checks (Latin/CJK/Cyrillic) and proper-name heuristics.
+    - Block cross-script or low-quality merges (e.g., preventing "Rhode" from merging with "雜物").
+    - Ensure replacement regexes are built only from the variations of the selected concept.
 
 ## [5.3.5] - 2025-11-10
 
