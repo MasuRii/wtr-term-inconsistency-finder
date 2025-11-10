@@ -32,6 +32,11 @@ const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translati
 - Do NOT flag anything related to author notes, author commentary, or translator notes - these are intentional additions that may make the text longer but should not be flagged for inconsistencies.
 - Do NOT flag usernames or character references that are clearly aliases, undercovers, or alternate identifications of the same character.
 - CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes “ ” ‘ ’) should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
+- CRITICAL: Do NOT flag systematic chapter title numbering offsets or mismatches that are clearly caused by the source website's structure or template rather than the editable chapter content. In particular:
+    * If multiple consecutive chapters show a consistent pattern where the visible chapter heading (e.g., "--- CHAPTER 302 ---") and the in-title number (e.g., "Chapter 301: Arcane Armor") are offset by the same amount (such as always lagging by one), treat this as a non-user-actionable, site-level issue.
+    * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
+    * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
+    * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
 
 ## Focus On
 - In-text content within the chapter body.
