@@ -1,0 +1,64 @@
+.wtr-if-btn {
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 10px 15px;
+}
+
+.wtr-if-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wtr-if-btn-primary {
+  background-color: var(--bs-primary, #fd7e14);
+}
+
+.wtr-if-btn-secondary {
+  background-color: var(--bs-secondary, #6c757d);
+}
+
+.wtr-if-btn-large {
+  flex: 1;
+  font-size: 16px;
+  min-width: 180px;
+  padding: 12px 20px;
+}
+
+.wtr-if-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wtr-if-apply-btn {
+  background-color: var(--bs-success, #198754);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.wtr-if-apply-btn.sent {
+  background-color: var(--bs-secondary, #6c757d);
+}
+
+.wtr-if-copy-variation-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.7;
+  padding: 2px 4px;
+  transition: opacity 0.2s;
+}
+
+.wtr-if-copy-variation-btn:hover {
+  opacity: 1;
+}

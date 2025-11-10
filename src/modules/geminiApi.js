@@ -180,9 +180,7 @@ function generatePrompt(chapterText, existingResults = []) {
       const isValid = validateResultForContext(result);
       if (!isValid) {
         log(
-          `Filtered out invalid result from context: ${
-            result.concept || "Unknown concept"
-          }`
+          `Filtered out invalid result from context: ${result.concept || "Unknown concept"}`,
         );
       }
       return isValid;
@@ -192,7 +190,7 @@ function generatePrompt(chapterText, existingResults = []) {
       log("All existing results failed validation, proceeding without context");
     } else {
       log(
-        `Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`
+        `Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`,
       );
     }
 
@@ -206,7 +204,7 @@ function generatePrompt(chapterText, existingResults = []) {
         variations,
       })),
       null,
-      2
+      2,
     );
     prompt += `\n\n## Senior Editor Verification & Continuation Task
 You are now operating as a Senior Editor. Your task is to perform a rigorous second-pass verification on a list of potential inconsistencies identified in a previous analysis. The provided text may have been updated or corrected since the initial scan. Your judgment must be strict, and your output must be based *exclusively* on the new text provided.
@@ -326,13 +324,13 @@ export function findInconsistencies(
   chapterData,
   existingResults = [],
   retryCount = 0,
-  parseRetryCount = 0
+  parseRetryCount = 0,
 ) {
   const maxTotalRetries =
     Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
   if (retryCount >= maxTotalRetries) {
     handleApiError(
-      `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`
+      `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
     );
     return;
   }
@@ -340,7 +338,7 @@ export function findInconsistencies(
   const apiKeyInfo = getAvailableApiKey();
   if (!apiKeyInfo) {
     handleApiError(
-      "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+      "All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
     );
     return;
   }
@@ -350,7 +348,7 @@ export function findInconsistencies(
   appState.runtime.isAnalysisRunning = true;
   updateStatusIndicator(
     "running",
-    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`
+    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`,
   );
 
   const combinedText = chapterData
@@ -359,9 +357,7 @@ export function findInconsistencies(
   log(
     `Sending ${
       combinedText.length
-    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
-      retryCount + 1
-    })`
+    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
   );
 
   const prompt = generatePrompt(combinedText, existingResults);
@@ -398,19 +394,19 @@ export function findInconsistencies(
 
         if (isRetriable) {
           log(
-            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
           );
           const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
           appState.runtime.apiKeyCooldowns.set(
             currentKey,
-            Date.now() + cooldownSeconds * 1000
+            Date.now() + cooldownSeconds * 1000,
           );
-          updateStatusIndicator("running", `API Error. Rotating key...`);
+          updateStatusIndicator("running", "API Error. Rotating key...");
           findInconsistencies(
             chapterData,
             existingResults,
             retryCount + 1,
-            parseRetryCount
+            parseRetryCount,
           );
           return;
         } else {
@@ -442,17 +438,17 @@ export function findInconsistencies(
       } catch (e) {
         if (parseRetryCount < 1) {
           log(
-            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
           );
           updateStatusIndicator(
             "running",
-            `AI response malformed. Retrying...`
+            "AI response malformed. Retrying...",
           );
           findInconsistencies(
             chapterData,
             existingResults,
             retryCount + 1,
-            parseRetryCount + 1
+            parseRetryCount + 1,
           );
           return;
         }
@@ -473,7 +469,7 @@ export function findInconsistencies(
           !parsedResponse.new_inconsistencies
         ) {
           handleApiError(
-            "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
+            "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
           );
           return;
         }
@@ -489,13 +485,13 @@ export function findInconsistencies(
           item.isNew = true;
         });
         log(
-          `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`
+          `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
         );
         appState.runtime.cumulativeResults = [...verifiedItems, ...newItems];
       } else {
         if (!Array.isArray(parsedResponse)) {
           handleApiError(
-            "Invalid response format for initial run. Expected a JSON array."
+            "Invalid response format for initial run. Expected a JSON array.",
           );
           return;
         }
@@ -513,15 +509,15 @@ export function findInconsistencies(
     onerror: function (error) {
       console.error("Inconsistency Finder: Network error:", error);
       log(
-        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
       );
       appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-      updateStatusIndicator("running", `Network Error. Rotating key...`);
+      updateStatusIndicator("running", "Network Error. Rotating key...");
       findInconsistencies(
         chapterData,
         existingResults,
         retryCount + 1,
-        parseRetryCount
+        parseRetryCount,
       );
     },
   });
@@ -531,7 +527,7 @@ export function findInconsistenciesDeepAnalysis(
   chapterData,
   existingResults = [],
   targetDepth = 1,
-  currentDepth = 1
+  currentDepth = 1,
 ) {
   if (currentDepth > targetDepth) {
     // Deep analysis complete
@@ -552,14 +548,14 @@ export function findInconsistenciesDeepAnalysis(
   if (targetDepth > 1) {
     updateStatusIndicator(
       "running",
-      `Deep Analysis (${currentDepth}/${targetDepth})...`
+      `Deep Analysis (${currentDepth}/${targetDepth})...`,
     );
   } else {
     updateStatusIndicator(
       "running",
       currentDepth > 1
         ? `Deep Analysis (${currentDepth}/${targetDepth})...`
-        : "Analyzing..."
+        : "Analyzing...",
     );
   }
 
@@ -575,7 +571,7 @@ export function findInconsistenciesDeepAnalysis(
       chapterData,
       contextResults,
       targetDepth,
-      currentDepth
+      currentDepth,
     );
   } else {
     // For normal analysis (depth = 1), use the regular analysis function
@@ -587,7 +583,7 @@ function findInconsistenciesIteration(
   chapterData,
   existingResults,
   targetDepth,
-  currentDepth
+  currentDepth,
 ) {
   const maxTotalRetries =
     Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
@@ -597,7 +593,7 @@ function findInconsistenciesIteration(
   const executeIteration = () => {
     if (retryCount >= maxTotalRetries) {
       handleApiError(
-        `Deep analysis iteration ${currentDepth} failed after ${retryCount} attempts. Please check your API keys or wait a while.`
+        `Deep analysis iteration ${currentDepth} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
       );
       return;
     }
@@ -605,7 +601,7 @@ function findInconsistenciesIteration(
     const apiKeyInfo = getAvailableApiKey();
     if (!apiKeyInfo) {
       handleApiError(
-        "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+        "All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
       );
       return;
     }
@@ -620,7 +616,7 @@ function findInconsistenciesIteration(
         combinedText.length
       } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
         retryCount + 1
-      })`
+      })`,
     );
 
     const prompt = generatePrompt(combinedText, existingResults);
@@ -657,15 +653,15 @@ function findInconsistenciesIteration(
 
           if (isRetriable) {
             log(
-              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
             );
             const cooldownSeconds =
               errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
             appState.runtime.apiKeyCooldowns.set(
               currentKey,
-              Date.now() + cooldownSeconds * 1000
+              Date.now() + cooldownSeconds * 1000,
             );
-            updateStatusIndicator("running", `API Error. Rotating key...`);
+            updateStatusIndicator("running", "API Error. Rotating key...");
             retryCount++;
             executeIteration();
             return;
@@ -698,11 +694,11 @@ function findInconsistenciesIteration(
         } catch (e) {
           if (parseRetryCount < 1) {
             log(
-              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
             );
             updateStatusIndicator(
               "running",
-              `AI response malformed. Retrying...`
+              "AI response malformed. Retrying...",
             );
             retryCount++;
             parseRetryCount++;
@@ -719,7 +715,7 @@ function findInconsistenciesIteration(
           (currentKeyIndex + 1) % appState.config.apiKeys.length;
 
         const isVerificationRun = existingResults.length > 0;
-        const isDeepAnalysis = targetDepth > 1;
+        const _isDeepAnalysis = targetDepth > 1;
 
         if (isVerificationRun) {
           if (
@@ -727,7 +723,7 @@ function findInconsistenciesIteration(
             !parsedResponse.new_inconsistencies
           ) {
             handleApiError(
-              "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
+              "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
             );
             return;
           }
@@ -743,19 +739,19 @@ function findInconsistenciesIteration(
             item.isNew = true;
           });
           log(
-            `Deep Analysis Iteration ${currentDepth}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`
+            `Deep Analysis Iteration ${currentDepth}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
           );
 
           // Standardized result handling for all iterations
           const allNewItems = [...verifiedItems, ...newItems];
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
-            allNewItems
+            allNewItems,
           );
         } else {
           if (!Array.isArray(parsedResponse)) {
             handleApiError(
-              "Invalid response format for initial run. Expected a JSON array."
+              "Invalid response format for initial run. Expected a JSON array.",
             );
             return;
           }
@@ -763,7 +759,7 @@ function findInconsistenciesIteration(
           // Standardized result handling for all iterations
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
-            parsedResponse
+            parsedResponse,
           );
         }
 
@@ -783,7 +779,7 @@ function findInconsistenciesIteration(
               chapterData,
               appState.runtime.cumulativeResults,
               targetDepth,
-              currentDepth + 1
+              currentDepth + 1,
             );
           }, 1000); // Brief pause between iterations
         } else {
@@ -791,7 +787,7 @@ function findInconsistenciesIteration(
           appState.runtime.isAnalysisRunning = false;
           updateStatusIndicator(
             "complete",
-            `Complete! (Deep Analysis: ${targetDepth} iterations)`
+            `Complete! (Deep Analysis: ${targetDepth} iterations)`,
           );
           document.getElementById("wtr-if-continue-btn").disabled = false;
           displayResults(appState.runtime.cumulativeResults);
@@ -800,10 +796,10 @@ function findInconsistenciesIteration(
       onerror: function (error) {
         console.error("Inconsistency Finder: Network error:", error);
         log(
-          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
         );
         appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-        updateStatusIndicator("running", `Network Error. Rotating key...`);
+        updateStatusIndicator("running", "Network Error. Rotating key...");
         retryCount++;
         executeIteration();
       },

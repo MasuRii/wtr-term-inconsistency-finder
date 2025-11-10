@@ -6,10 +6,12 @@ import { escapeHtml, log } from "../utils";
 import { addEventListeners, handleRestoreSession } from "./events";
 
 export function createUI() {
-  if (document.getElementById('wtr-if-panel')) return;
+  if (document.getElementById("wtr-if-panel")) {
+    return;
+  }
 
-  const panel = document.createElement('div');
-  panel.id = 'wtr-if-panel';
+  const panel = document.createElement("div");
+  panel.id = "wtr-if-panel";
   panel.innerHTML = `
             <div class="wtr-if-header"><h2>Term Inconsistency Finder ${VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
             <div class="wtr-if-tabs">
@@ -173,84 +175,97 @@ export function createUI() {
             </div>
         `;
   document.body.appendChild(panel);
-  const statusIndicator = document.createElement('div');
-  statusIndicator.id = 'wtr-if-status-indicator';
-  statusIndicator.innerHTML = `<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>`;
+  const statusIndicator = document.createElement("div");
+  statusIndicator.id = "wtr-if-status-indicator";
+  statusIndicator.innerHTML =
+    '<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>';
   document.body.appendChild(statusIndicator);
-  
+
   // Call addEventListeners instead of defining them inline
   addEventListeners();
 }
 
 export async function populateModelSelector() {
-  const selectEl = document.getElementById('wtr-if-model');
-  selectEl.innerHTML = '<option>Loading from cache...</option>';
+  const selectEl = document.getElementById("wtr-if-model");
+  selectEl.innerHTML = "<option>Loading from cache...</option>";
   selectEl.disabled = true;
   const cachedData = await GM_getValue(MODELS_CACHE_KEY, null);
   if (cachedData && cachedData.models && cachedData.models.length > 0) {
-    selectEl.innerHTML = cachedData.models.map(m => `<option value="${m}">${m.replace('models/', '')}</option>`).join('');
+    selectEl.innerHTML = cachedData.models
+      .map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+      .join("");
     selectEl.value = appState.config.model;
   } else {
-    selectEl.innerHTML = '<option value="">No models cached. Please refresh.</option>';
+    selectEl.innerHTML =
+      '<option value="">No models cached. Please refresh.</option>';
   }
   selectEl.disabled = false;
 }
 
 export async function fetchAndCacheModels() {
   const apiKeyInfo = getAvailableApiKey();
-  const statusEl = document.getElementById('wtr-if-status');
+  const statusEl = document.getElementById("wtr-if-status");
   if (!apiKeyInfo) {
-    statusEl.textContent = 'Error: No available API keys. Add one or wait for cooldowns.';
-    setTimeout(() => (statusEl.textContent = ''), 4000);
+    statusEl.textContent =
+      "Error: No available API keys. Add one or wait for cooldowns.";
+    setTimeout(() => (statusEl.textContent = ""), 4000);
     return;
   }
   const apiKey = apiKeyInfo.key;
-  statusEl.textContent = 'Fetching model list...';
-  document.getElementById('wtr-if-refresh-models-btn').disabled = true;
+  statusEl.textContent = "Fetching model list...";
+  document.getElementById("wtr-if-refresh-models-btn").disabled = true;
   GM_xmlhttpRequest({
-    method: 'GET',
+    method: "GET",
     url: `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
     onload: async function (response) {
       try {
         const data = JSON.parse(response.responseText);
-        if (data.error) throw new Error(data.error.message);
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
         const filteredModels = data.models
-          .filter(m => m.supportedGenerationMethods.includes('generateContent'))
-          .map(m => m.name);
+          .filter((m) =>
+            m.supportedGenerationMethods.includes("generateContent"),
+          )
+          .map((m) => m.name);
         if (filteredModels.length > 0) {
-          await GM_setValue(MODELS_CACHE_KEY, {timestamp: Date.now(), models: filteredModels});
+          await GM_setValue(MODELS_CACHE_KEY, {
+            timestamp: Date.now(),
+            models: filteredModels,
+          });
           statusEl.textContent = `Success! Found ${filteredModels.length} models.`;
           await populateModelSelector();
         } else {
-          statusEl.textContent = 'No compatible models found.';
+          statusEl.textContent = "No compatible models found.";
         }
       } catch (e) {
         statusEl.textContent = `Error: ${e.message}`;
       } finally {
-        setTimeout(() => (statusEl.textContent = ''), 4000);
-        document.getElementById('wtr-if-refresh-models-btn').disabled = false;
+        setTimeout(() => (statusEl.textContent = ""), 4000);
+        document.getElementById("wtr-if-refresh-models-btn").disabled = false;
       }
     },
     onerror: function (error) {
-      console.error('Model fetch error:', error);
-      statusEl.textContent = 'Network error while fetching models.';
-      setTimeout(() => (statusEl.textContent = ''), 4000);
-      document.getElementById('wtr-if-refresh-models-btn').disabled = false;
-    }
+      console.error("Model fetch error:", error);
+      statusEl.textContent = "Network error while fetching models.";
+      setTimeout(() => (statusEl.textContent = ""), 4000);
+      document.getElementById("wtr-if-refresh-models-btn").disabled = false;
+    },
   });
 }
 
 export function renderApiKeysUI() {
-  const container = document.getElementById('wtr-if-api-keys-container');
-  container.innerHTML = ''; // Clear existing
-  const keys = appState.config.apiKeys.length > 0 ? appState.config.apiKeys : ['']; // Show at least one empty input
+  const container = document.getElementById("wtr-if-api-keys-container");
+  container.innerHTML = ""; // Clear existing
+  const keys =
+    appState.config.apiKeys.length > 0 ? appState.config.apiKeys : [""]; // Show at least one empty input
 
-  keys.forEach(key => {
-    const keyRow = document.createElement('div');
-    keyRow.className = 'wtr-if-key-row';
+  keys.forEach((key) => {
+    const keyRow = document.createElement("div");
+    keyRow.className = "wtr-if-key-row";
     keyRow.innerHTML = `
             <input type="password" class="wtr-if-api-key-input" value="${escapeHtml(
-              key
+              key,
             )}" placeholder="Enter your API key">
             <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
         `;
@@ -259,73 +274,95 @@ export function renderApiKeysUI() {
 }
 
 export function addApiKeyRow() {
-  const container = document.getElementById('wtr-if-api-keys-container');
-  const keyRow = document.createElement('div');
-  keyRow.className = 'wtr-if-key-row';
+  const container = document.getElementById("wtr-if-api-keys-container");
+  const keyRow = document.createElement("div");
+  keyRow.className = "wtr-if-key-row";
   keyRow.innerHTML = `
         <input type="password" class="wtr-if-api-key-input" placeholder="Enter your API key">
         <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
     `;
   container.appendChild(keyRow);
-  keyRow.querySelector('input').focus();
+  keyRow.querySelector("input").focus();
 }
 
 export async function togglePanel(show = null) {
-  const panel = document.getElementById('wtr-if-panel');
-  const isVisible = panel.style.display === 'flex';
+  const panel = document.getElementById("wtr-if-panel");
+  const isVisible = panel.style.display === "flex";
   const shouldShow = show !== null ? show : !isVisible;
-  panel.style.display = shouldShow ? 'flex' : 'none';
+  panel.style.display = shouldShow ? "flex" : "none";
   if (shouldShow) {
     // Restore UI state from config
     renderApiKeysUI();
-    document.getElementById('wtr-if-use-json').checked = appState.config.useJson;
-    document.getElementById('wtr-if-logging-enabled').checked = appState.config.loggingEnabled;
-    document.getElementById('wtr-if-auto-restore').checked = appState.preferences.autoRestoreResults;
-    const tempSlider = document.getElementById('wtr-if-temperature');
-    const tempValue = document.getElementById('wtr-if-temp-value');
+    document.getElementById("wtr-if-use-json").checked =
+      appState.config.useJson;
+    document.getElementById("wtr-if-logging-enabled").checked =
+      appState.config.loggingEnabled;
+    document.getElementById("wtr-if-auto-restore").checked =
+      appState.preferences.autoRestoreResults;
+    const tempSlider = document.getElementById("wtr-if-temperature");
+    const tempValue = document.getElementById("wtr-if-temp-value");
     tempSlider.value = appState.config.temperature;
     tempValue.textContent = appState.config.temperature;
 
     // Restore tab
-    panel.querySelectorAll('.wtr-if-tab-btn').forEach(b => b.classList.remove('active'));
-    panel.querySelectorAll('.wtr-if-tab-content').forEach(c => c.classList.remove('active'));
-    const activeTabBtn = panel.querySelector(`.wtr-if-tab-btn[data-tab="${appState.config.activeTab}"]`);
-    const activeTabContent = panel.querySelector(`#wtr-if-tab-${appState.config.activeTab}`);
-    if (activeTabBtn) activeTabBtn.classList.add('active');
-    if (activeTabContent) activeTabContent.classList.add('active');
+    panel
+      .querySelectorAll(".wtr-if-tab-btn")
+      .forEach((b) => b.classList.remove("active"));
+    panel
+      .querySelectorAll(".wtr-if-tab-content")
+      .forEach((c) => c.classList.remove("active"));
+    const activeTabBtn = panel.querySelector(
+      `.wtr-if-tab-btn[data-tab="${appState.config.activeTab}"]`,
+    );
+    const activeTabContent = panel.querySelector(
+      `#wtr-if-tab-${appState.config.activeTab}`,
+    );
+    if (activeTabBtn) {
+      activeTabBtn.classList.add("active");
+    }
+    if (activeTabContent) {
+      activeTabContent.classList.add("active");
+    }
 
     // Restore deep analysis depth
-    document.getElementById('wtr-if-deep-analysis-depth').value = appState.config.deepAnalysisDepth.toString();
+    document.getElementById("wtr-if-deep-analysis-depth").value =
+      appState.config.deepAnalysisDepth.toString();
 
     // Restore filter
-    document.getElementById('wtr-if-filter-select').value = appState.config.activeFilter;
+    document.getElementById("wtr-if-filter-select").value =
+      appState.config.activeFilter;
 
     await populateModelSelector();
 
     // Check for session results and show restore option if available
-    const sessionRestore = document.getElementById('wtr-if-session-restore');
-    if (appState.session.hasSavedResults && appState.preferences.autoRestoreResults) {
+    const sessionRestore = document.getElementById("wtr-if-session-restore");
+    if (
+      appState.session.hasSavedResults &&
+      appState.preferences.autoRestoreResults
+    ) {
       // Auto-restore if enabled
       handleRestoreSession();
     } else if (appState.session.hasSavedResults) {
-      sessionRestore.style.display = 'block';
+      sessionRestore.style.display = "block";
     } else {
-      sessionRestore.style.display = 'none';
+      sessionRestore.style.display = "none";
     }
   }
 }
 
-export function updateStatusIndicator(state, message = '') {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  if (!indicator) return;
-  const iconEl = indicator.querySelector('.wtr-if-status-icon');
-  const textEl = indicator.querySelector('.wtr-if-status-text');
+export function updateStatusIndicator(state, message = "") {
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  if (!indicator) {
+    return;
+  }
+  const iconEl = indicator.querySelector(".wtr-if-status-icon");
+  const textEl = indicator.querySelector(".wtr-if-status-text");
 
   indicator.className = state;
   textEl.textContent = message;
-  iconEl.textContent = ''; // Clear any previous icon content
+  iconEl.textContent = ""; // Clear any previous icon content
 
-  indicator.style.display = state === 'hidden' ? 'none' : 'flex';
+  indicator.style.display = state === "hidden" ? "none" : "flex";
   adjustIndicatorPosition();
 }
 
@@ -338,33 +375,35 @@ export function updateStatusIndicator(state, message = '') {
 
 // Position constants
 const POSITION = {
-  BASE: 'var(--nig-space-xl, 20px)',        // Start at NIG widget level
-  NIG_CONFLICT: '80px',                     // Move up when NIG widget present
-  SAFE_DEFAULT: '60px'                      // Fallback position
+  BASE: "var(--nig-space-xl, 20px)", // Start at NIG widget level
+  NIG_CONFLICT: "80px", // Move up when NIG widget present
+  SAFE_DEFAULT: "60px", // Fallback position
 };
 
 // Collision detection state
-let collisionState = {
+const collisionState = {
   isMonitoringActive: false,
   lastNigWidgetState: null,
   currentPosition: null,
-  debounceTimer: null
+  debounceTimer: null,
 };
 
 /**
  * Get the current computed bottom position of an element
  */
-function getElementBottomPosition(element) {
-  if (!element) return null;
-  
+function _getElementBottomPosition(element) {
+  if (!element) {
+    return null;
+  }
+
   const computed = getComputedStyle(element);
   const bottom = computed.bottom;
-  
+
   // Extract numeric value from bottom position
-  if (bottom && bottom !== 'auto') {
-    return parseFloat(bottom.replace('px', '')) || 0;
+  if (bottom && bottom !== "auto") {
+    return parseFloat(bottom.replace("px", "")) || 0;
   }
-  
+
   return 0;
 }
 
@@ -372,67 +411,77 @@ function getElementBottomPosition(element) {
  * Check if two elements would collide vertically
  */
 function wouldCollide(element1, element2, spacing = 10) {
-  if (!element1 || !element2) return false;
-  
+  if (!element1 || !element2) {
+    return false;
+  }
+
   const rect1 = element1.getBoundingClientRect();
   const rect2 = element2.getBoundingClientRect();
-  
+
   // Check if elements overlap vertically
   const element1Bottom = rect1.bottom;
   const element2Top = rect2.top;
-  
-  return (element1Bottom + spacing) > element2Top;
+
+  return element1Bottom + spacing > element2Top;
 }
 
 /**
  * Determine optimal position based on current collision state
  */
 function calculateOptimalPosition(nigWidget, indicator) {
-  const isNigVisible = nigWidget && getComputedStyle(nigWidget).display !== 'none';
-  
+  const isNigVisible =
+    nigWidget && getComputedStyle(nigWidget).display !== "none";
+
   // Log current state for debugging
-  const nigState = isNigVisible ? 'present' : 'absent';
-  const currentPos = collisionState.currentPosition;
-  
+  const nigState = isNigVisible ? "present" : "absent";
+  const _currentPos = collisionState.currentPosition;
+
   // Position logic
   let newPosition = POSITION.BASE;
   let newZIndex = 10000;
-  
+
   // Check for NIG widget conflict
   if (isNigVisible && wouldCollide(indicator, nigWidget)) {
     newPosition = POSITION.NIG_CONFLICT;
     newZIndex = 10000;
-    log(`NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`);
-  }
-  // No conflicts - return to base position
-  else {
+    log(
+      `NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`,
+    );
+  } else {
+    // No conflicts - return to base position
     newPosition = POSITION.BASE;
     newZIndex = 10000;
     if (isNigVisible) {
       log(`No conflicts detected. Returning to base position: ${newPosition}`);
     }
   }
-  
-  return { position: newPosition, zIndex: newZIndex, states: { nig: nigState } };
+
+  return {
+    position: newPosition,
+    zIndex: newZIndex,
+    states: { nig: nigState },
+  };
 }
 
 /**
  * Apply position changes with smooth transitions
  */
 function applyPosition(indicator, position, zIndex) {
-  if (!indicator) return;
-  
+  if (!indicator) {
+    return;
+  }
+
   // Only update if position has actually changed
   if (collisionState.currentPosition === position) {
     return;
   }
-  
+
   collisionState.currentPosition = position;
-  
+
   // Apply position with smooth transition
   indicator.style.bottom = position;
   indicator.style.zIndex = zIndex;
-  
+
   log(`Position updated to: ${position}, Z-index: ${zIndex}`);
 }
 
@@ -440,60 +489,71 @@ function applyPosition(indicator, position, zIndex) {
  * Main collision detection function - dynamically monitors and adjusts position
  */
 function adjustIndicatorPosition() {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  if (!indicator) return;
-  
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  if (!indicator) {
+    return;
+  }
+
   // Get relevant elements
-  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
-  
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
+
   // Calculate optimal position based on current state
-  const { position, zIndex, states } = calculateOptimalPosition(nigWidget, indicator);
-  
+  const { position, zIndex, states } = calculateOptimalPosition(
+    nigWidget,
+    indicator,
+  );
+
   // Apply the calculated position
   applyPosition(indicator, position, zIndex);
-  
+
   // Update state tracking
   collisionState.lastNigWidgetState = states.nig;
 }
 
 export function injectControlButton() {
   const mainObserver = new MutationObserver((mutations, mainObs) => {
-    const navBar = document.querySelector('nav.bottom-reader-nav');
+    const navBar = document.querySelector("nav.bottom-reader-nav");
     if (navBar) {
-      log('Bottom navigation bar found. Attaching persistent observer.');
+      log("Bottom navigation bar found. Attaching persistent observer.");
       mainObs.disconnect();
 
       const navObserver = new MutationObserver(() => {
-        const targetContainer = navBar.querySelector('div[role="group"].btn-group');
-        if (targetContainer && !document.getElementById('wtr-if-analyze-btn')) {
-          log('Button container found. Injecting button.');
-          const analyzeButton = document.createElement('button');
-          analyzeButton.id = 'wtr-if-analyze-btn';
-          analyzeButton.className = 'wtr btn btn-outline-dark btn-sm';
-          analyzeButton.type = 'button';
-          analyzeButton.title = 'Analyze Inconsistencies';
-          analyzeButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>`;
-          analyzeButton.addEventListener('click', () => togglePanel(true));
+        const targetContainer = navBar.querySelector(
+          'div[role="group"].btn-group',
+        );
+        if (targetContainer && !document.getElementById("wtr-if-analyze-btn")) {
+          log("Button container found. Injecting button.");
+          const analyzeButton = document.createElement("button");
+          analyzeButton.id = "wtr-if-analyze-btn";
+          analyzeButton.className = "wtr btn btn-outline-dark btn-sm";
+          analyzeButton.type = "button";
+          analyzeButton.title = "Analyze Inconsistencies";
+          analyzeButton.innerHTML =
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>';
+          analyzeButton.addEventListener("click", () => togglePanel(true));
           targetContainer.appendChild(analyzeButton);
         }
       });
 
-      navObserver.observe(navBar, {childList: true, subtree: true});
+      navObserver.observe(navBar, { childList: true, subtree: true });
       // Initial check
       const initialTarget = navBar.querySelector('div[role="group"].btn-group');
-      if (initialTarget && !document.getElementById('wtr-if-analyze-btn')) {
-        const analyzeButton = document.createElement('button');
-        analyzeButton.id = 'wtr-if-analyze-btn';
-        analyzeButton.className = 'wtr btn btn-outline-dark btn-sm';
-        analyzeButton.type = 'button';
-        analyzeButton.title = 'Analyze Inconsistencies';
-        analyzeButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>`;
-        analyzeButton.addEventListener('click', () => togglePanel(true));
+      if (initialTarget && !document.getElementById("wtr-if-analyze-btn")) {
+        const analyzeButton = document.createElement("button");
+        analyzeButton.id = "wtr-if-analyze-btn";
+        analyzeButton.className = "wtr btn btn-outline-dark btn-sm";
+        analyzeButton.type = "button";
+        analyzeButton.title = "Analyze Inconsistencies";
+        analyzeButton.innerHTML =
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>';
+        analyzeButton.addEventListener("click", () => togglePanel(true));
         initialTarget.appendChild(analyzeButton);
       }
     }
   });
-  mainObserver.observe(document.body, {childList: true, subtree: true});
+  mainObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 /**
@@ -502,16 +562,16 @@ export function injectControlButton() {
 export function initializeCollisionAvoidance() {
   // Start monitoring
   collisionState.isMonitoringActive = true;
-  
+
   // Initial position check
   adjustIndicatorPosition();
-  
+
   // Set up comprehensive observers for dynamic collision detection
   setupConflictObserver();
   setupScrollListener();
   setupResizeListener();
-  
-  log('Dynamic collision avoidance system initialized.');
+
+  log("Dynamic collision avoidance system initialized.");
 }
 
 /**
@@ -524,43 +584,47 @@ export function setupConflictObserver() {
       adjustIndicatorPosition();
     }
   }, 100);
-  
+
   const observer = new MutationObserver((mutations) => {
     // Check if any relevant mutations occurred
-    const relevantMutations = mutations.some(mutation => {
+    const relevantMutations = mutations.some((mutation) => {
       // Monitor for widget appearance/disappearance
-      if (mutation.type === 'childList') {
-        return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+      if (mutation.type === "childList") {
+        return (
+          mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0
+        );
       }
       // Monitor for style/class changes that might affect visibility
-      if (mutation.type === 'attributes') {
-        return ['style', 'class', 'display'].includes(mutation.attributeName);
+      if (mutation.type === "attributes") {
+        return ["style", "class", "display"].includes(mutation.attributeName);
       }
       return false;
     });
-    
+
     if (relevantMutations) {
       debouncedAdjustPosition();
     }
   });
-  
+
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['style', 'class', 'id', 'display']
+    attributeFilter: ["style", "class", "id", "display"],
   });
-  
+
   // Also observe NIG widget if it exists
-  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
   if (nigWidget) {
     observer.observe(nigWidget, {
       attributes: true,
-      attributeFilter: ['style', 'class', 'display']
+      attributeFilter: ["style", "class", "display"],
     });
   }
-  
-  log('Enhanced conflict observer initialized (NIG widget only).');
+
+  log("Enhanced conflict observer initialized (NIG widget only).");
 }
 
 /**
@@ -569,16 +633,18 @@ export function setupConflictObserver() {
 function setupScrollListener() {
   let scrollTimeout;
   const handleScroll = () => {
-    if (!collisionState.isMonitoringActive) return;
-    
+    if (!collisionState.isMonitoringActive) {
+      return;
+    }
+
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
       adjustIndicatorPosition();
     }, 150); // Debounce scroll events
   };
-  
-  window.addEventListener('scroll', handleScroll, { passive: true });
-  log('Scroll listener initialized for collision detection.');
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  log("Scroll listener initialized for collision detection.");
 }
 
 /**
@@ -587,16 +653,18 @@ function setupScrollListener() {
 function setupResizeListener() {
   let resizeTimeout;
   const handleResize = () => {
-    if (!collisionState.isMonitoringActive) return;
-    
+    if (!collisionState.isMonitoringActive) {
+      return;
+    }
+
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
       adjustIndicatorPosition();
     }, 250); // Debounce resize events
   };
-  
-  window.addEventListener('resize', handleResize);
-  log('Resize listener initialized for collision detection.');
+
+  window.addEventListener("resize", handleResize);
+  log("Resize listener initialized for collision detection.");
 }
 
 /**
@@ -619,8 +687,8 @@ function debounce(func, wait) {
  */
 export function setCollisionMonitoring(enabled) {
   collisionState.isMonitoringActive = enabled;
-  log(`Collision monitoring ${enabled ? 'enabled' : 'disabled'}.`);
-  
+  log(`Collision monitoring ${enabled ? "enabled" : "disabled"}.`);
+
   if (enabled) {
     adjustIndicatorPosition(); // Immediate update when re-enabling
   }
@@ -630,14 +698,18 @@ export function setCollisionMonitoring(enabled) {
  * Get current collision avoidance status for debugging
  */
 export function getCollisionAvoidanceStatus() {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  const nigWidget = document.querySelector('.nig-status-widget, #nig-status-widget');
-  
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
+
   return {
     isMonitoring: collisionState.isMonitoringActive,
     currentPosition: collisionState.currentPosition,
     lastNigState: collisionState.lastNigWidgetState,
     indicatorRect: indicator ? indicator.getBoundingClientRect() : null,
-    nigWidgetVisible: nigWidget ? getComputedStyle(nigWidget).display !== 'none' : false
+    nigWidgetVisible: nigWidget
+      ? getComputedStyle(nigWidget).display !== "none"
+      : false,
   };
 }

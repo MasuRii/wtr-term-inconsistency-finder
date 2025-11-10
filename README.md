@@ -3,7 +3,7 @@
 A sophisticated userscript for finding translation inconsistencies in WTR Lab chapters using the Gemini AI API. Built with a modern, modular architecture for maintainability and advanced features.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-5.3.3.svg)](https://github.com/MasuRii/wtr-term-inconsistency-finder)
+[![Version](https://img.shields.io/badge/version-5.3.3-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-Install-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
 ## 🚀 Quick Install (Recommended)

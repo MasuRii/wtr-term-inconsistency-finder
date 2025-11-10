@@ -1,12 +1,11 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
-// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI.
+// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
 // @version 5.3.3
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
 // @connect generativelanguage.googleapis.com
-// @downloadURL https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js
 // @grant GM_setValue
 // @grant GM_getValue
 // @grant GM_addStyle
@@ -16,17 +15,16 @@
 // @license MIT
 // @namespace http://tampermonkey.net/
 // @run-at document-idle
-// @updateURL https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js
 // @website https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==
 
 /******/ (() => { // webpackBootstrap
-/******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
 /***/ 56:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
+"use strict";
 
 
 /* istanbul ignore next  */
@@ -43,6 +41,7 @@ module.exports = setAttributesWithoutAttributes;
 /***/ 72:
 /***/ ((module) => {
 
+"use strict";
 
 
 var stylesInDOM = [];
@@ -130,9 +129,187 @@ module.exports = function (list, options) {
 
 /***/ }),
 
+/***/ 92:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+// Imports
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
+.wtr-if-status {
+  font-size: 14px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.wtr-if-session-restore {
+  background-color: var(--bs-info-bg-subtle, #cff4fc);
+  border: 1px solid var(--bs-info-border-subtle, #9eeaf9);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  padding: 10px;
+}
+
+.wtr-if-session-restore button {
+  margin-right: 8px;
+}
+
+.wtr-if-priority {
+  border-radius: 12px;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 3px 8px;
+}
+
+.wtr-if-priority-critical {
+  background-color: var(--bs-danger, #dc3545);
+}
+
+.wtr-if-priority-high {
+  background-color: var(--bs-warning, #ffc107);
+  color: #000;
+}
+
+.wtr-if-priority-medium {
+  background-color: var(--bs-info, #0dcaf0);
+}
+
+.wtr-if-priority-low {
+  background-color: var(--bs-secondary, #6c757d);
+}
+
+.wtr-if-priority-stylistic,
+.wtr-if-priority-info {
+  background-color: var(--bs-light, #f8f9fa);
+  border: 1px solid #ccc;
+  color: #000;
+}
+
+.wtr-if-concept {
+  color: var(--bs-link-color, #0d6efd);
+  font-weight: bold;
+}
+
+.wtr-if-chapter {
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-radius: 4px;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 12px;
+  font-weight: bold;
+  padding: 3px 6px;
+}
+
+.wtr-if-error {
+  background-color: var(--bs-danger-bg-subtle, #f8d7da);
+  border: 1px solid var(--bs-danger, #dc3545);
+  border-radius: 4px;
+  color: var(--bs-danger-text-emphasis, #58151c);
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.wtr-if-no-results {
+  padding: 10px;
+  text-align: center;
+}
+
+.wtr-if-verified-badge {
+  background-color: var(--bs-success, #198754);
+  border-radius: 12px;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 8px;
+  padding: 3px 8px;
+}
+
+.wtr-if-recommended-badge {
+  background-color: var(--bs-info, #0dcaf0);
+  border-radius: 12px;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 8px;
+  padding: 3px 8px;
+  vertical-align: middle;
+}
+
+/* Status Indicator */
+#wtr-if-status-indicator {
+  align-items: center;
+  background-color: #2c2c2e;
+  border-radius: 8px;
+  bottom: var(--nig-space-xl, 20px);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 30%);
+  color: #f0f0f0;
+  display: none;
+  font-family: sans-serif;
+  font-size: 14px;
+  gap: 10px;
+  left: 20px;
+  padding: 10px 15px;
+  position: fixed;
+  transition:
+    background-color 0.3s ease,
+    bottom 0.3s ease;
+  z-index: 10000;
+}
+
+.wtr-if-status-icon {
+  align-items: center;
+  display: flex;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+#wtr-if-status-indicator.running .wtr-if-status-icon {
+  animation: wtr-if-spin 1s linear infinite;
+  border: 3px solid #555;
+  border-radius: 50%;
+  border-top-color: #4285f4;
+  box-sizing: border-box;
+}
+
+#wtr-if-status-indicator.complete {
+  background-color: #4caf50;
+  cursor: pointer;
+}
+
+#wtr-if-status-indicator.complete .wtr-if-status-icon::before {
+  content: "✅";
+}
+
+#wtr-if-status-indicator.error {
+  background-color: #f44336;
+  cursor: pointer;
+}
+
+#wtr-if-status-indicator.error .wtr-if-status-icon::before {
+  content: "❌";
+}
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
 /***/ 113:
 /***/ ((module) => {
 
+"use strict";
 
 
 /* istanbul ignore next  */
@@ -150,9 +327,10 @@ module.exports = styleTagTransform;
 
 /***/ }),
 
-/***/ 249:
+/***/ 131:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
+"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -165,430 +343,300 @@ module.exports = styleTagTransform;
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            #wtr-if-panel {
-                background-color: var(--wtr-bg, #f2f3f4); color: var(--bs-body-color, #212529); border: 1px solid var(--bs-border-color, #dee2e6); font-family: var(--bs-body-font-family, sans-serif);
-                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 800px; max-height: 85vh; z-index: 10001; display: none; flex-direction: column; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            }
-            .wtr-if-header { padding: 12px 16px; border-bottom: 1px solid var(--bs-border-color, #dee2e6); display: flex; justify-content: space-between; align-items: center; background-color: var(--bs-tertiary-bg, #f8f9fa); }
-            .wtr-if-header h2 { margin: 0; font-size: 18px; }
-            .wtr-if-close-btn { background: none; border: none; font-size: 24px; cursor: pointer; line-height: 1; padding: 0 4px; color: var(--bs-body-color, #212529); }
-            .wtr-if-tabs { display: flex; border-bottom: 1px solid var(--bs-border-color, #dee2e6); background-color: var(--bs-tertiary-bg, #f8f9fa); }
-            .wtr-if-tab-btn { background: none; border: none; padding: 10px 15px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; color: var(--bs-secondary-color, #6c757d); }
-            .wtr-if-tab-btn.active { font-weight: bold; border-bottom-color: var(--bs-primary, #fd7e14); color: var(--bs-body-color, #212529); }
-            .wtr-if-content { padding: 16px; overflow-y: auto; flex-grow: 1; }
-            .wtr-if-tab-content { display: none; } .wtr-if-tab-content.active { display: block; }
-            
-            /* Section-based Finder layout improvements */
-            .wtr-if-section {
-                margin-bottom: 20px;
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                border-radius: 8px;
-                overflow: hidden;
-                background-color: var(--bs-body-bg, #fff);
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }
-            
-            .wtr-if-section-header {
-                background-color: var(--bs-tertiary-bg, #f8f9fa);
-                padding: 12px 16px;
-                border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-            }
-            
-            .wtr-if-section-header h3 {
-                margin: 0;
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--bs-body-color, #212529);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .wtr-if-icon {
-                font-size: 18px;
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .wtr-if-section-content {
-                padding: 16px;
-            }
-            
-            .wtr-if-finder-controls {
-                display: flex;
-                gap: 12px;
-                flex-wrap: wrap;
-            }
-            
-            .wtr-if-btn-large {
-                padding: 12px 20px;
-                font-size: 16px;
-                flex: 1;
-                min-width: 180px;
-            }
-            
-            .wtr-if-action-buttons {
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-            }
-            
-            .wtr-if-form-row {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-bottom: 8px;
-                flex-wrap: wrap;
-            }
-            
-            .wtr-if-form-label {
-                font-weight: 600;
-                color: var(--bs-body-color, #212529);
-                white-space: nowrap;
-                min-width: 120px;
-            }
-            
-            .wtr-if-form-select {
-                padding: 8px 12px;
-                border-radius: 6px;
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                background-color: var(--bs-secondary-bg, #e9ecef);
-                color: var(--bs-body-color, #212529);
-                min-width: 200px;
-                flex: 1;
-                max-width: 100%;
-            }
-            
-            .wtr-if-deep-analysis-controls, .wtr-if-filter-controls {
-                width: 100%;
-            }
-            
-            /* Configuration Tab Responsive Design */
-            @media (max-width: 768px) {
-                .wtr-if-finder-controls {
-                    flex-direction: column;
-                }
-                
-                .wtr-if-btn-large {
-                    min-width: auto;
-                    width: 100%;
-                }
-                
-                .wtr-if-form-row {
-                    flex-direction: column;
-                    align-items: stretch;
-                }
-                
-                .wtr-if-form-label {
-                    min-width: auto;
-                }
-                
-                .wtr-if-form-select {
-                    min-width: auto;
-                    width: 100%;
-                }
-                
-                .wtr-if-action-buttons {
-                    flex-direction: column;
-                }
-                
-                .wtr-if-action-buttons button {
-                    width: 100%;
-                }
+___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 10px 15px;
+}
 
-                /* Configuration Tab Specific Responsive */
-                .wtr-if-section {
-                    margin-bottom: 16px;
-                }
+.wtr-if-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 
-                .wtr-if-section-header h3 {
-                    font-size: 15px;
-                    flex-direction: column;
-                    align-items: flex-start;
-                    gap: 6px;
-                }
+.wtr-if-btn-primary {
+  background-color: var(--bs-primary, #fd7e14);
+}
 
-                .wtr-if-model-controls {
-                    flex-direction: column;
-                    gap: 8px;
-                }
+.wtr-if-btn-secondary {
+  background-color: var(--bs-secondary, #6c757d);
+}
 
-                .wtr-if-model-controls select,
-                .wtr-if-model-controls button {
-                    width: 100%;
-                }
+.wtr-if-btn-large {
+  flex: 1;
+  font-size: 16px;
+  min-width: 180px;
+  padding: 12px 20px;
+}
 
-                .wtr-if-import-export .wtr-if-form-row {
-                    flex-direction: column;
-                    gap: 8px;
-                }
+.wtr-if-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 
-                .wtr-if-import-export button {
-                    width: 100%;
-                }
+.wtr-if-apply-btn {
+  background-color: var(--bs-success, #198754);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
 
-                .wtr-if-section-content {
-                    padding: 12px;
-                }
+.wtr-if-apply-btn.sent {
+  background-color: var(--bs-secondary, #6c757d);
+}
 
-                .wtr-if-api-keys-container-wrapper {
-                    max-height: 150px;
-                }
-            }
-            
-            /* Configuration Tab Specific Enhancements */
-            .wtr-if-section {
-                margin-bottom: 20px;
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                border-radius: 8px;
-                overflow: hidden;
-                background-color: var(--bs-body-bg, #fff);
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }
-            
-            .wtr-if-section-header {
-                background-color: var(--bs-tertiary-bg, #f8f9fa);
-                padding: 12px 16px;
-                border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-            }
-            
-            .wtr-if-section-header h3 {
-                margin: 0;
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--bs-body-color, #212529);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .wtr-if-icon {
-                font-size: 18px;
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .wtr-if-section-content {
-                padding: 16px;
-            }
+.wtr-if-copy-variation-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.7;
+  padding: 2px 4px;
+  transition: opacity 0.2s;
+}
 
-            /* Enhanced Form Styling for Configuration */
-            .wtr-if-form-group {
-                margin-bottom: 16px;
-                padding: 12px;
-                background-color: var(--bs-body-bg, #fff);
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                border-radius: 6px;
-            }
-            
-            .wtr-if-form-group label {
-                display: block;
-                margin-bottom: 8px;
-                font-weight: 600;
-                font-size: 14px;
-                color: var(--bs-body-color, #212529);
-            }
-            
-            .wtr-if-form-group label.checkbox-label {
-                display: flex;
-                align-items: center;
-                font-weight: normal;
-                margin-bottom: 0;
-            }
-            
-            .wtr-if-form-group label.checkbox-label input {
-                width: auto;
-                margin-right: 10px;
-                margin-bottom: 0;
-            }
-            
-            .wtr-if-form-group input,
-            .wtr-if-form-group select {
-                width: 100%;
-                padding: 10px 12px;
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                border-radius: 6px;
-                box-sizing: border-box;
-                background-color: var(--bs-secondary-bg, #e9ecef);
-                color: var(--bs-body-color, #212529);
-                font-size: 14px;
-                transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-            }
-            
-            .wtr-if-form-group input:focus,
-            .wtr-if-form-group select:focus {
-                outline: none;
-                border-color: var(--bs-primary, #fd7e14);
-                box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
-            }
-            
-            .wtr-if-form-group input[type="range"] {
-                padding: 0;
-                background: transparent;
-            }
-            
-            .wtr-if-hint {
-                font-size: 12px;
-                color: var(--bs-secondary-color, #6c757d);
-                font-weight: normal;
-                margin-top: 6px;
-                display: block;
-            }
-            
-            .wtr-if-model-controls {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-top: 8px;
-            }
-            
-            .wtr-if-model-controls select {
-                flex-grow: 1;
-            }
-            
-            .wtr-if-model-controls button {
-                flex-shrink: 0;
-                white-space: nowrap;
-            }
-            
-            .wtr-if-api-keys-container-wrapper {
-                max-height: 200px;
-                overflow-y: auto;
-                border: 1px solid var(--bs-border-color, #dee2e6);
-                border-radius: 6px;
-                padding: 12px;
-                background-color: var(--bs-secondary-bg, #e9ecef);
-                margin-bottom: 8px;
-            }
-            
-            .wtr-if-key-row {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 8px;
-            }
-            
-            .wtr-if-key-row input {
-                flex-grow: 1;
-            }
-            
-            .wtr-if-remove-key-btn {
-                background: var(--bs-danger, #dc3545);
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
-                font-size: 16px;
-                line-height: 1;
-                cursor: pointer;
-                flex-shrink: 0;
-                transition: background-color 0.15s ease-in-out;
-            }
-            
-            .wtr-if-remove-key-btn:hover {
-                background: #c82333;
-            }
-            .wtr-if-btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
-            .wtr-if-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-            .wtr-if-btn-primary { background-color: var(--bs-primary, #fd7e14); }
-            .wtr-if-btn-secondary { background-color: var(--bs-secondary, #6c757d); }
-            .wtr-if-status { margin-top: 10px; font-size: 14px; text-align: center; }
-            .wtr-if-session-restore {
-                background-color: var(--bs-info-bg-subtle, #cff4fc);
-                border: 1px solid var(--bs-info-border-subtle, #9eeaf9);
-                border-radius: 4px;
-                padding: 10px;
-                margin-bottom: 16px;
-            }
-            .wtr-if-session-restore button { margin-right: 8px; }
-            .wtr-if-import-export {
-                border-top: 1px solid var(--bs-border-color, #dee2e6);
-                padding-top: 15px;
-                margin-top: 15px;
-            }
-            .wtr-if-import-export h4 {
-                margin-top: 0;
-                margin-bottom: 10px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            #wtr-if-results { margin-top: 10px; }
-            .wtr-if-result-group { border: 1px solid var(--bs-border-color, #dee2e6); border-radius: 6px; margin-bottom: 16px; background-color: var(--bs-body-bg, #fff); }
-            .wtr-if-group-header { padding: 12px; border-bottom: 1px solid var(--bs-border-color, #dee2e6); background-color: var(--bs-tertiary-bg, #f8f9fa); position: relative; }
-            .wtr-if-group-header h3 { margin: 0 0 8px 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 16px; }
-            .wtr-if-explanation { margin: 0; font-style: italic; opacity: 0.9; font-size: 14px; }
-            .wtr-if-group-actions {
-                position: absolute;
-                top: 12px;
-                right: 12px;
-            }
-            .wtr-if-details-section { padding: 12px; }
-            .wtr-if-details-section h4 { margin-top: 0; margin-bottom: 8px; font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6); padding-bottom: 4px; }
-            .wtr-if-variations, .wtr-if-suggestions { display: flex; flex-direction: column; gap: 8px; }
-            .wtr-if-variation-item { border: 1px solid var(--bs-border-color-translucent, #dee2e6); border-radius: 4px; }
-            .wtr-if-variation-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background-color: var(--bs-secondary-bg, #e9ecef); gap: 8px; }
-            .wtr-if-variation-header .wtr-if-incorrect { flex-grow: 1; }
-            .wtr-if-variation-checkbox { margin: 0; flex-shrink: 0; }
-            .wtr-if-copy-variation-btn { background: none; border: none; cursor: pointer; padding: 2px 4px; font-size: 16px; line-height: 1; opacity: 0.7; transition: opacity 0.2s; }
-            .wtr-if-copy-variation-btn:hover { opacity: 1; }
-            .wtr-if-context { padding: 6px 8px; margin: 0; font-size: 13px; }
-            .wtr-if-suggestion-item { border: 1px solid var(--bs-border-color-translucent, #dee2e6); border-radius: 4px; overflow: hidden; }
-            .wtr-if-suggestion-header { display: flex; justify-content: space-between; align-items: center; padding: 8px; background-color: var(--bs-success-bg-subtle, #d1e7dd); }
-            .wtr-if-suggestion-header .wtr-if-correct { flex-grow: 1; }
-            .wtr-if-suggestion-actions { display: flex; gap: 8px; }
-            .wtr-if-replacement-info { padding: 6px 8px; margin: 0; font-size: 13px; background-color: var(--bs-tertiary-bg, #f8f9fa); border-top: 1px solid var(--bs-border-color-translucent, #dee2e6); }
-            .wtr-if-replacement-info code { background-color: var(--bs-body-bg, #fff); padding: 2px 5px; border-radius: 4px; border: 1px solid var(--bs-border-color, #dee2e6); font-family: var(--bs-font-monospace, monospace); }
-            .wtr-if-reasoning { padding: 6px 8px; margin: 0; font-size: 13px; }
-            .wtr-if-apply-btn { padding: 4px 10px; font-size: 12px; background-color: var(--bs-success, #198754); color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
-            .wtr-if-apply-btn.sent { background-color: var(--bs-secondary, #6c757d); }
-            .wtr-if-priority { padding: 3px 8px; border-radius: 12px; font-size: 12px; color: white; font-weight: bold; }
-            .wtr-if-priority-critical { background-color: var(--bs-danger, #dc3545); }
-            .wtr-if-priority-high { background-color: var(--bs-warning, #ffc107); color: #000; }
-            .wtr-if-priority-medium { background-color: var(--bs-info, #0dcaf0); }
-            .wtr-if-priority-low { background-color: var(--bs-secondary, #6c757d); }
-            .wtr-if-priority-stylistic, .wtr-if-priority-info { background-color: var(--bs-light, #f8f9fa); color: #000; border: 1px solid #ccc; }
-            .wtr-if-concept { color: var(--bs-link-color, #0d6efd); font-weight: bold; }
-            .wtr-if-incorrect { color: var(--bs-danger-text-emphasis, #58151c); font-weight: bold; }
-            .wtr-if-correct { color: var(--bs-success-text-emphasis, #0a3622); font-weight: bold; }
-            .wtr-if-chapter { font-size: 12px; font-weight: bold; padding: 3px 6px; border-radius: 4px; background-color: var(--bs-tertiary-bg, #f8f9fa); color: var(--bs-secondary-color, #6c757d); }
-            .wtr-if-error { padding: 10px; border: 1px solid var(--bs-danger, #dc3545); background-color: var(--bs-danger-bg-subtle, #f8d7da); color: var(--bs-danger-text-emphasis, #58151c); border-radius: 4px; margin-bottom: 10px; }
-            .wtr-if-no-results { padding: 10px; text-align: center; }
-            .wtr-if-verified-badge { background-color: var(--bs-success, #198754); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; }
-            .wtr-if-recommended-badge { background-color: var(--bs-info, #0dcaf0); color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 12px; margin-left: 8px; vertical-align: middle; }
-            #wtr-if-status-indicator {
-                position: fixed; bottom: 120px; left: 20px; z-index: 10000;
-                background-color: #2c2c2e; color: #f0f0f0; padding: 10px 15px;
-                border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-                display: none; align-items: center; gap: 10px; font-family: sans-serif;
-                font-size: 14px; transition: background-color 0.3s ease, bottom 0.3s ease;
-            }
-            .wtr-if-status-icon {
-                width: 20px; height: 20px;
-                display: flex; align-items: center; justify-content: center;
-            }
-            #wtr-if-status-indicator.running .wtr-if-status-icon {
-                box-sizing: border-box;
-                border: 3px solid #555;
-                border-top-color: #4285F4;
-                border-radius: 50%;
-                animation: wtr-if-spin 1s linear infinite;
-            }
-            #wtr-if-status-indicator.complete {
-                background-color: #4CAF50; cursor: pointer;
-            }
-            #wtr-if-status-indicator.complete .wtr-if-status-icon::before { content: '✅'; }
-            #wtr-if-status-indicator.error {
-                background-color: #f44336; cursor: pointer;
-            }
-            #wtr-if-status-indicator.error .wtr-if-status-icon::before { content: '❌'; }`, ""]);
+.wtr-if-copy-variation-btn:hover {
+  opacity: 1;
+}
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
+/***/ 198:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+// Imports
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
+#wtr-if-results {
+  margin-top: 10px;
+}
+
+.wtr-if-result-group {
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.wtr-if-group-header {
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  padding: 12px;
+  position: relative;
+}
+
+.wtr-if-group-header h3 {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 16px;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.wtr-if-explanation {
+  font-size: 14px;
+  font-style: italic;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.wtr-if-group-actions {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+
+.wtr-if-details-section {
+  padding: 12px;
+}
+
+.wtr-if-details-section h4 {
+  border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  margin-top: 0;
+  padding-bottom: 4px;
+}
+
+.wtr-if-variations,
+.wtr-if-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wtr-if-variation-item {
+  border: 1px solid var(--bs-border-color-translucent, #dee2e6);
+  border-radius: 4px;
+}
+
+.wtr-if-variation-header {
+  align-items: center;
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+
+.wtr-if-incorrect {
+  color: var(--bs-danger-text-emphasis, #58151c);
+  font-weight: bold;
+}
+
+.wtr-if-variation-header .wtr-if-incorrect {
+  flex-grow: 1;
+  color: var(--bs-danger-text-emphasis, #58151c);
+  font-weight: bold;
+}
+
+.wtr-if-variation-checkbox {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.wtr-if-context {
+  font-size: 13px;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.wtr-if-suggestion-item {
+  border: 1px solid var(--bs-border-color-translucent, #dee2e6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.wtr-if-suggestion-header {
+  align-items: center;
+  background-color: var(--bs-success-bg-subtle, #d1e7dd);
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+}
+
+.wtr-if-correct {
+  color: var(--bs-success-text-emphasis, #0a3622);
+  font-weight: bold;
+}
+
+.wtr-if-suggestion-header .wtr-if-correct {
+  flex-grow: 1;
+  color: var(--bs-success-text-emphasis, #0a3622);
+  font-weight: bold;
+}
+
+.wtr-if-suggestion-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wtr-if-replacement-info {
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-top: 1px solid var(--bs-border-color-translucent, #dee2e6);
+  font-size: 13px;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.wtr-if-replacement-info code {
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 4px;
+  font-family: var(--bs-font-monospace, monospace);
+  padding: 2px 5px;
+}
+
+.wtr-if-reasoning {
+  font-size: 13px;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+/* Base color classes for text highlighting */
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
+/***/ 249:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_panel_css__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(974);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_layout_css__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(784);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_forms_css__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(421);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_buttons_css__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(131);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_results_css__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(198);
+/* harmony import */ var _node_modules_css_loader_dist_cjs_js_utilities_css__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(92);
+// Imports
+
+
+
+
+
+
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_panel_css__WEBPACK_IMPORTED_MODULE_2__/* ["default"] */ .A);
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_layout_css__WEBPACK_IMPORTED_MODULE_3__/* ["default"] */ .A);
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_forms_css__WEBPACK_IMPORTED_MODULE_4__/* ["default"] */ .A);
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_buttons_css__WEBPACK_IMPORTED_MODULE_5__/* ["default"] */ .A);
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_results_css__WEBPACK_IMPORTED_MODULE_6__/* ["default"] */ .A);
+___CSS_LOADER_EXPORT___.i(_node_modules_css_loader_dist_cjs_js_utilities_css__WEBPACK_IMPORTED_MODULE_7__/* ["default"] */ .A);
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder - Modular CSS */
+
+/* Import all component styles */
+
+/* 1. Panel and core layout */
+
+/* 2. Layout and responsive design */
+
+/* 3. Form controls and inputs */
+
+/* 4. Buttons and actions */
+
+/* 5. Results display */
+
+/* 6. Utilities, status, and indicators */
+`, ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
@@ -598,6 +646,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin { 0% { transfor
 /***/ 314:
 /***/ ((module) => {
 
+"use strict";
 
 
 /*
@@ -686,9 +735,277 @@ module.exports = function (cssWithMappingToString) {
 
 /***/ }),
 
+/***/ 387:
+/***/ ((module) => {
+
+// config/versions.js
+// Centralized version management for WTR Term Inconsistency Finder
+
+// Environment variable overrides with fallbacks
+const envVersion = process.env.WTR_VERSION || process.env.APP_VERSION;
+const buildEnv = process.env.WTR_BUILD_ENV || process.env.BUILD_ENV || "production";
+const buildDate = process.env.WTR_BUILD_DATE || process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
+
+// Current semantic version (from package.json)
+const BASE_VERSION = "5.3.3";
+
+const VERSION_INFO = {
+  SEMANTIC: envVersion || BASE_VERSION,           // Semantic version
+  DISPLAY: `v${envVersion || BASE_VERSION}`,      // Display version
+  BUILD_ENV: buildEnv || "production",            // Build environment
+  BUILD_DATE: buildDate,                          // Build date
+  GREASYFORK: envVersion || BASE_VERSION,         // GreasyFork version
+  NPM: envVersion || BASE_VERSION,                // NPM version
+  BADGE: envVersion || BASE_VERSION,              // Badge version
+  CHANGELOG: envVersion || BASE_VERSION,          // Changelog version
+};
+
+// Export version info and utility functions
+module.exports = {
+  VERSION_INFO,
+  
+  // Utility functions
+  getVersion: (type = "semantic") => {
+    switch (type.toLowerCase()) {
+      case "semantic":
+      case "semver":
+        return VERSION_INFO.SEMANTIC;
+      case "display":
+        return VERSION_INFO.DISPLAY;
+      case "build":
+        return `${VERSION_INFO.SEMANTIC}-${VERSION_INFO.BUILD_ENV}`;
+      case "dev":
+        return `${VERSION_INFO.SEMANTIC}-dev.${Date.now()}`;
+      default:
+        return VERSION_INFO.SEMANTIC;
+    }
+  },
+  
+  getBuildTime: () => new Date().toISOString(),
+  getBuildDate: () => VERSION_INFO.BUILD_DATE,
+  isProduction: () => VERSION_INFO.BUILD_ENV === "production",
+  isDevelopment: () => VERSION_INFO.BUILD_ENV === "development"
+};
+
+/***/ }),
+
+/***/ 421:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+// Imports
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `/* Enhanced Form Styling for Configuration */
+.wtr-if-form-group {
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  padding: 12px;
+}
+
+.wtr-if-form-group input,
+.wtr-if-form-group select {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--bs-body-color, #212529);
+  font-size: 14px;
+  padding: 10px 12px;
+  transition:
+    border-color 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out;
+  width: 100%;
+}
+
+.wtr-if-model-controls select {
+  flex-grow: 1;
+}
+
+.wtr-if-key-row input {
+  flex-grow: 1;
+}
+
+.wtr-if-key-row input:focus,
+.wtr-if-form-group input:focus,
+.wtr-if-form-group select:focus {
+  border-color: var(--bs-primary, #fd7e14);
+  box-shadow: 0 0 0 0.2rem rgb(253 126 20 / 25%);
+  outline: none;
+}
+
+.wtr-if-form-group input[type="range"] {
+  background: transparent;
+  padding: 0;
+}
+
+.wtr-if-form-group label {
+  color: var(--bs-body-color, #212529);
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.wtr-if-form-group label.checkbox-label {
+  align-items: center;
+  display: flex;
+  font-weight: normal;
+  margin-bottom: 0;
+}
+
+.wtr-if-form-group label.checkbox-label input {
+  margin-bottom: 0;
+  margin-right: 10px;
+  width: auto;
+}
+
+.wtr-if-hint {
+  color: var(--bs-secondary-color, #6c757d);
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+  margin-top: 6px;
+}
+
+.wtr-if-form-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.wtr-if-form-label {
+  color: var(--bs-body-color, #212529);
+  font-weight: 600;
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.wtr-if-form-select {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 6px;
+  color: var(--bs-body-color, #212529);
+  flex: 1;
+  max-width: 100%;
+  min-width: 200px;
+  padding: 8px 12px;
+}
+
+.wtr-if-model-controls {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.wtr-if-key-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.wtr-if-model-controls button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.wtr-if-api-keys-container-wrapper {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.wtr-if-remove-key-btn {
+  background: var(--bs-danger, #dc3545);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 16px;
+  height: 24px;
+  line-height: 1;
+  transition: background-color 0.15s ease-in-out;
+  width: 24px;
+}
+
+.wtr-if-remove-key-btn:hover {
+  background: #c82333;
+}
+
+.wtr-if-deep-analysis-controls,
+.wtr-if-filter-controls {
+  width: 100%;
+}
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
+/***/ 424:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// src/version.js
+// Backward compatibility layer for version information
+// This file will be replaced by the build banner system in production
+
+// Support both Node.js and browser environments
+let VERSION_INFO;
+try {
+  const versionModule = __webpack_require__(387);
+  VERSION_INFO = versionModule.VERSION_INFO;
+} catch {
+  // Fallback for browser environment or when config is not available
+  VERSION_INFO = {
+    SEMANTIC: "5.3.5",
+    DISPLAY: "v5.3.5",
+    BUILD_ENV: "production",
+    BUILD_DATE: "2025-11-10",
+  };
+}
+
+// Export VERSION constant for backward compatibility
+const VERSION = VERSION_INFO.SEMANTIC;
+
+if ( true && module.exports) {
+  module.exports = {
+    VERSION,
+    VERSION_INFO,
+  };
+} else {
+  // Browser environment
+  window.WTR_VERSION = VERSION;
+  window.WTR_VERSION_INFO = VERSION_INFO;
+}
+
+
+/***/ }),
+
 /***/ 540:
 /***/ ((module) => {
 
+"use strict";
 
 
 /* istanbul ignore next  */
@@ -705,6 +1022,7 @@ module.exports = insertStyleElement;
 /***/ 601:
 /***/ ((module) => {
 
+"use strict";
 
 
 module.exports = function (i) {
@@ -716,6 +1034,7 @@ module.exports = function (i) {
 /***/ 659:
 /***/ ((module) => {
 
+"use strict";
 
 
 var memo = {};
@@ -753,9 +1072,164 @@ module.exports = insertBySelector;
 
 /***/ }),
 
+/***/ 784:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+// Imports
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `/* Section-based Finder layout improvements */
+.wtr-if-section {
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 5%);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.wtr-if-section-header {
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  padding: 12px 16px;
+}
+
+.wtr-if-section-header h3 {
+  align-items: center;
+  color: var(--bs-body-color, #212529);
+  display: flex;
+  font-size: 16px;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0;
+}
+
+.wtr-if-icon {
+  align-items: center;
+  display: flex;
+  font-size: 18px;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.wtr-if-section-content {
+  padding: 16px;
+}
+
+.wtr-if-finder-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Configuration Tab Responsive Design */
+@media (width <= 768px) {
+  .wtr-if-finder-controls {
+    flex-direction: column;
+  }
+
+  .wtr-if-btn-large {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .wtr-if-form-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wtr-if-form-label {
+    min-width: auto;
+  }
+
+  .wtr-if-form-select {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .wtr-if-action-buttons {
+    flex-direction: column;
+  }
+
+  .wtr-if-action-buttons button {
+    width: 100%;
+  }
+
+  /* Configuration Tab Specific Responsive */
+  .wtr-if-section {
+    margin-bottom: 16px;
+  }
+
+  .wtr-if-section-header h3 {
+    align-items: flex-start;
+    flex-direction: column;
+    font-size: 15px;
+    gap: 6px;
+  }
+
+  .wtr-if-model-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .wtr-if-model-controls select,
+  .wtr-if-model-controls button {
+    width: 100%;
+  }
+
+  .wtr-if-import-export .wtr-if-form-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .wtr-if-import-export button {
+    width: 100%;
+  }
+
+  .wtr-if-section-content {
+    padding: 12px;
+  }
+
+  .wtr-if-api-keys-container-wrapper {
+    max-height: 150px;
+  }
+}
+
+/* Configuration Tab Specific Enhancements */
+.wtr-if-import-export {
+  border-top: 1px solid var(--bs-border-color, #dee2e6);
+  margin-top: 15px;
+  padding-top: 15px;
+}
+
+.wtr-if-import-export h4 {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  margin-top: 0;
+}
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
 /***/ 825:
 /***/ ((module) => {
 
+"use strict";
 
 
 /* istanbul ignore next  */
@@ -817,6 +1291,117 @@ function domAPI(options) {
   };
 }
 module.exports = domAPI;
+
+/***/ }),
+
+/***/ 974:
+/***/ ((module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(601);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(314);
+/* harmony import */ var _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1__);
+// Imports
+
+
+var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
+// Module
+___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+#wtr-if-panel {
+  background-color: var(--wtr-bg, #f2f3f4);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+  color: var(--bs-body-color, #212529);
+  display: none;
+  flex-direction: column;
+  font-family: var(--bs-body-font-family, sans-serif);
+  left: 50%;
+  max-height: 85vh;
+  max-width: 800px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  z-index: 10001;
+}
+
+.wtr-if-header {
+  align-items: center;
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.wtr-if-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.wtr-if-close-btn {
+  background: none;
+  border: none;
+  color: var(--bs-body-color, #212529);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.wtr-if-tabs {
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  display: flex;
+}
+
+.wtr-if-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--bs-secondary-color, #6c757d);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 10px 15px;
+}
+
+.wtr-if-tab-btn.active {
+  border-bottom-color: var(--bs-primary, #fd7e14);
+  color: var(--bs-body-color, #212529);
+  font-weight: bold;
+}
+
+.wtr-if-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.wtr-if-tab-content {
+  display: none;
+}
+
+.wtr-if-tab-content.active {
+  display: block;
+}
+`, ""]);
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
 
 /***/ })
 
@@ -883,6 +1468,9 @@ module.exports = domAPI;
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
+// This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
+(() => {
+"use strict";
 
 // EXTERNAL MODULE: ./node_modules/style-loader/dist/runtime/injectStylesIntoStyleTag.js
 var injectStylesIntoStyleTag = __webpack_require__(72);
@@ -931,55 +1519,17 @@ var update = injectStylesIntoStyleTag_default()(main/* default */.A, options);
 
        /* harmony default export */ const styles_main = (main/* default */.A && main/* default */.A.locals ? main/* default */.A.locals : undefined);
 
-;// ./src/version.js
-// src/version.js
-// Centralized version configuration for the WTR Lab Term Inconsistency Finder
-// This is the SINGLE SOURCE OF TRUTH for all version information
-
-const VERSION = "5.3.3";
-const VERSION_INFO = {
-  major: 5,
-  minor: 3,
-  patch: 3,
-  build: null, // Set to number for build versions, null for release
-  channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
-};
-
-// Webpack build variants
-const BUILD_VARIANTS = {
-  standard: {
-    version: VERSION,
-    suffix: "",
-    description: "Standard build for Tampermonkey",
-  },
-  development: {
-    version: `${VERSION}-build.[buildNo]`,
-    suffix: "-build",
-    description: "Development build with hot reload",
-  },
-  greasyfork: {
-    version: `${VERSION}-greasyfork`,
-    suffix: "-greasyfork",
-    description: "GreasyFork compliant build",
-  },
-  performance: {
-    version: `${VERSION}-perf`,
-    suffix: "-perf",
-    description: "Performance optimized build",
-  },
-};
-
-// For runtime version display
-const DISPLAY_VERSION = (/* unused pure expression or super */ null && (`v${VERSION}`));
-
+// EXTERNAL MODULE: ./src/version.js
+var version = __webpack_require__(424);
 ;// ./src/modules/utils.js
 // src/modules/utils.js
 
 
 // --- UTILITY FUNCTIONS ---
-function log(...args) {
-  if (appState.config.loggingEnabled)
+function utils_log(...args) {
+  if (appState.config.loggingEnabled) {
     console.log("Inconsistency Finder:", ...args);
+  }
 }
 
 function getNovelSlug() {
@@ -988,20 +1538,28 @@ function getNovelSlug() {
 }
 
 function crawlChapterData() {
-  const chapterTrackers = document.querySelectorAll('.chapter-tracker');
-  log(`Found ${chapterTrackers.length} potential chapter elements.`);
+  const chapterTrackers = document.querySelectorAll(".chapter-tracker");
+  utils_log(`Found ${chapterTrackers.length} potential chapter elements.`);
   const chapterData = [];
   chapterTrackers.forEach((tracker, index) => {
-    const chapterBody = tracker.querySelector('.chapter-body');
+    const chapterBody = tracker.querySelector(".chapter-body");
     const chapterNo = tracker.dataset.chapterNo;
     if (chapterBody && chapterNo) {
-      log(`Processing chapter #${chapterNo}...`);
-      chapterData.push({chapter: chapterNo, text: chapterBody.innerText, tracker: tracker});
+      utils_log(`Processing chapter #${chapterNo}...`);
+      chapterData.push({
+        chapter: chapterNo,
+        text: chapterBody.innerText,
+        tracker: tracker,
+      });
     } else {
-      log(`Skipping element at index ${index}: missing chapter number or body. Chapter No: ${chapterNo || 'not found'}`);
+      utils_log(
+        `Skipping element at index ${index}: missing chapter number or body. Chapter No: ${chapterNo || "not found"}`,
+      );
     }
   });
-  log(`Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(', ')}]`);
+  utils_log(
+    `Successfully collected data for ${chapterData.length} chapters: [${chapterData.map((d) => d.chapter).join(", ")}]`,
+  );
   return chapterData;
 }
 
@@ -1012,22 +1570,26 @@ function crawlChapterData() {
  * @returns {string} The processed string with smart typography.
  */
 function smartenQuotes(text) {
-  if (!text) return '';
+  if (!text) {
+    return "";
+  }
 
   // The order of these replacements is important.
-  return text
-    // Special case for apostrophes in years like '70s
-    .replace(/'(\d+s)/g, '\u2019$1')
-    // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
-    .replace(/(^|[-\u2014\s(\[【"“])'/g, '$1\u2018')
-    // All remaining single quotes are closing quotes or apostrophes.
-    .replace(/'/g, '\u2019')
-    // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
-    .replace(/(^|[-\u2014\s(\[【'‘])"/g, '$1\u201c')
-    // All remaining double quotes are closing quotes.
-    .replace(/"/g, '\u201d')
-    // Em-dashes
-    .replace(/--/g, '\u2014');
+  return (
+    text
+      // Special case for apostrophes in years like '70s
+      .replace(/'(\d+s)/g, "\u2019$1")
+      // Opening single quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+      .replace(/(^|[-\u2014\s([【"'])/g, "$1\u2018")
+      // All remaining single quotes are closing quotes or apostrophes.
+      .replace(/'/g, "\u2019")
+      // Opening double quotes: at the start of a line, or after a space, dash, or opening bracket/quote.
+      .replace(/(^|[-\u2014\s([【"'])/g, "$1\u201c")
+      // All remaining double quotes are closing quotes.
+      .replace(/"/g, "\u201d")
+      // Em-dashes
+      .replace(/--/g, "\u2014")
+  );
 }
 
 /**
@@ -1037,65 +1599,87 @@ function smartenQuotes(text) {
  * @returns {Array} Chapter data with smart quotes applied (where applicable)
  */
 function applySmartQuotesReplacement(chapterData) {
-  log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
-  
+  utils_log(`Applying smart quotes replacement to ${chapterData.length} chapters...`);
+
   let totalConversions = 0;
   let skippedChapters = 0;
-  
-  return chapterData.map(data => {
+
+  const processedData = chapterData.map((data) => {
     // Skip processing if this is the active chapter
-    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
-      log(`Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`);
+    if (
+      data.tracker &&
+      data.tracker.classList.contains("chapter-tracker active")
+    ) {
+      utils_log(
+        `Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`,
+      );
       skippedChapters++;
       return data;
     }
-    
+
     // Store original text for comparison
     const originalText = data.text;
     const originalStraightQuotes = (originalText.match(/["']/g) || []).length;
     const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length;
-    
+
     // Apply smart quotes to the text
     const smartenedText = smartenQuotes(data.text);
-    
+
     // Count conversions
     const newStraightQuotes = (smartenedText.match(/["']/g) || []).length;
     const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length;
     const quotesConverted = newSmartQuotes - originalSmartQuotes;
-    
+
     if (smartenedText !== originalText) {
       totalConversions++;
-      
+
       // Show detailed conversion information
-      log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
-      log(`  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`);
-      log(`  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`);
-      log(`  Converted: ${quotesConverted} quotes to smart format`);
-      
+      utils_log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`);
+      utils_log(
+        `  Original: ${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes`,
+      );
+      utils_log(
+        `  After: ${newStraightQuotes} straight quotes, ${newSmartQuotes} smart quotes`,
+      );
+      utils_log(`  Converted: ${quotesConverted} quotes to smart format`);
+
       // Show a sample of the conversion
       const sampleLength = Math.min(100, originalText.length);
-      const originalSample = originalText.substring(0, sampleLength).replace(/\n/g, '\\n');
-      const convertedSample = smartenedText.substring(0, sampleLength).replace(/\n/g, '\\n');
-      log(`  Sample before: "${originalSample}${originalText.length > sampleLength ? '...' : ''}"`);
-      log(`  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? '...' : ''}"`);
+      const originalSample = originalText
+        .substring(0, sampleLength)
+        .replace(/\n/g, "\\n");
+      const convertedSample = smartenedText
+        .substring(0, sampleLength)
+        .replace(/\n/g, "\\n");
+      utils_log(
+        `  Sample before: "${originalSample}${originalText.length > sampleLength ? "..." : ""}"`,
+      );
+      utils_log(
+        `  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? "..." : ""}"`,
+      );
     } else {
-      log(`No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`);
+      utils_log(
+        `No changes needed for chapter #${data.chapter} (${originalStraightQuotes} straight quotes, ${originalSmartQuotes} smart quotes already present)`,
+      );
     }
-    
-    return {...data, text: smartenedText};
-  });
-  
-  // Summary log
-  // removed by dead control flow
 
+    return { ...data, text: smartenedText };
+  });
+
+  // Summary log
+  utils_log(
+    `SMART QUOTES SUMMARY: Processed ${chapterData.length} chapters, skipped ${skippedChapters} active chapters, converted quotes in ${totalConversions} chapters`,
+  );
+
+  return processedData;
 }
 
 function applyTermReplacements(chapterData, terms = []) {
   if (!terms || terms.length === 0) {
-    log('No terms provided. Skipping replacement step.');
+    utils_log("No terms provided. Skipping replacement step.");
     return chapterData;
   }
-  log(`Applying ${terms.length} replacement terms using advanced logic.`);
+  utils_log(`Applying ${terms.length} replacement terms using advanced logic.`);
 
   // 1. Categorize and compile terms ONCE for efficiency.
   const simple_cs_partial = new Map();
@@ -1105,27 +1689,40 @@ function applyTermReplacements(chapterData, terms = []) {
   const regex_terms = [];
 
   for (const term of terms) {
-    if (!term.original) continue;
+    if (!term.original) {
+      continue;
+    }
     term.wholeWord = term.wholeWord ?? false;
     if (term.isRegex) {
       try {
-        const flags = term.caseSensitive ? 'g' : 'gi';
+        const flags = term.caseSensitive ? "g" : "gi";
         regex_terms.push({
           pattern: new RegExp(term.original, flags),
-          replacement: term.replacement
+          replacement: term.replacement,
         });
       } catch (e) {
-        console.error(`Inconsistency Finder: Skipping invalid regex for term "${term.original}":`, e);
+        console.error(
+          `Inconsistency Finder: Skipping invalid regex for term "${term.original}":`,
+          e,
+        );
       }
     } else {
-      const key = term.caseSensitive ? term.original : term.original.toLowerCase();
+      const key = term.caseSensitive
+        ? term.original
+        : term.original.toLowerCase();
       const value = term.replacement;
       if (term.caseSensitive) {
-        if (term.wholeWord) simple_cs_whole.set(key, value);
-        else simple_cs_partial.set(key, value);
+        if (term.wholeWord) {
+          simple_cs_whole.set(key, value);
+        } else {
+          simple_cs_partial.set(key, value);
+        }
       } else {
-        if (term.wholeWord) simple_ci_whole.set(key, value);
-        else simple_ci_partial.set(key, value);
+        if (term.wholeWord) {
+          simple_ci_whole.set(key, value);
+        } else {
+          simple_ci_partial.set(key, value);
+        }
       }
     }
   }
@@ -1134,40 +1731,47 @@ function applyTermReplacements(chapterData, terms = []) {
   const addSimpleGroup = (map, flags, wholeWord, caseSensitive) => {
     if (map.size > 0) {
       const sortedKeys = [...map.keys()].sort((a, b) => b.length - a.length);
-      const patterns = sortedKeys.map(k => {
+      const patterns = sortedKeys.map((k) => {
         const escaped = escapeRegExp(k);
         return wholeWord ? `\\b${escaped}\\b` : escaped;
       });
-      const combined = patterns.join('|');
+      const combined = patterns.join("|");
       compiledTerms.push({
         pattern: new RegExp(combined, flags),
         replacement_map: map,
         is_simple: true,
-        case_sensitive: caseSensitive
+        case_sensitive: caseSensitive,
       });
     }
   };
 
-  addSimpleGroup(simple_cs_partial, 'g', false, true);
-  addSimpleGroup(simple_cs_whole, 'g', true, true);
-  addSimpleGroup(simple_ci_partial, 'gi', false, false);
-  addSimpleGroup(simple_ci_whole, 'gi', true, false);
+  addSimpleGroup(simple_cs_partial, "g", false, true);
+  addSimpleGroup(simple_cs_whole, "g", true, true);
+  addSimpleGroup(simple_ci_partial, "gi", false, false);
+  addSimpleGroup(simple_ci_whole, "gi", true, false);
 
   // 2. Process each chapter's text.
-  return chapterData.map(data => {
+  return chapterData.map((data) => {
     // Skip processing if this is the active chapter
-    if (data.tracker && data.tracker.classList.contains('chapter-tracker active')) {
-      log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`);
+    if (
+      data.tracker &&
+      data.tracker.classList.contains("chapter-tracker active")
+    ) {
+      utils_log(
+        `Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`,
+      );
       return data;
     }
 
     let fullText = data.text;
 
     // 3. Find ALL possible matches from all compiled terms.
-    let allMatches = [];
+    const allMatches = [];
     for (const comp of compiledTerms) {
       for (const match of fullText.matchAll(comp.pattern)) {
-        if (match[0].length === 0) continue; // Skip zero-length matches
+        if (match[0].length === 0) {
+          continue;
+        } // Skip zero-length matches
 
         let replacementText;
         if (comp.is_simple) {
@@ -1181,7 +1785,7 @@ function applyTermReplacements(chapterData, terms = []) {
           allMatches.push({
             start: match.index,
             end: match.index + match[0].length,
-            replacement: replacementText
+            replacement: replacementText,
           });
         }
       }
@@ -1208,10 +1812,13 @@ function applyTermReplacements(chapterData, terms = []) {
     // 6. Apply winning matches to the string, from last to first to avoid index issues.
     for (let i = winningMatches.length - 1; i >= 0; i--) {
       const match = winningMatches[i];
-      fullText = fullText.substring(0, match.start) + match.replacement + fullText.substring(match.end);
+      fullText =
+        fullText.substring(0, match.start) +
+        match.replacement +
+        fullText.substring(match.end);
     }
 
-    return {...data, text: fullText};
+    return { ...data, text: fullText };
   });
 }
 
@@ -1223,9 +1830,9 @@ function summarizeContextResults(existingResults, maxItems = 50) {
 
   // Sort by quality score (highest first)
   const sortedResults = existingResults
-    .map(result => ({
+    .map((result) => ({
       ...result,
-      qualityScore: calculateResultQuality(result)
+      qualityScore: calculateResultQuality(result),
     }))
     .sort((a, b) => b.qualityScore - a.qualityScore);
 
@@ -1236,44 +1843,69 @@ function summarizeContextResults(existingResults, maxItems = 50) {
   const summarizedCount = existingResults.length - maxItems;
   const summarizedOverview = {
     concept: `[${summarizedCount} Additional Items Summarized]`,
-    priority: 'INFO',
+    priority: "INFO",
     explanation: `Additional ${summarizedCount} items from previous analysis are summarized. Focus verification on the detailed items below.`,
     suggestions: [],
-    variations: []
+    variations: [],
   };
 
-  log(`Context summarization: ${existingResults.length} items reduced to ${maxItems} detailed + 1 summarized`);
+  utils_log(
+    `Context summarization: ${existingResults.length} items reduced to ${maxItems} detailed + 1 summarized`,
+  );
   return [...topResults, summarizedOverview];
 }
 
 function validateResultForContext(result) {
   // Validate individual result before including in context
-  if (!result || typeof result !== 'object') {
+  if (!result || typeof result !== "object") {
     return false;
   }
 
   // Check required fields
-  if (!result.concept || typeof result.concept !== 'string' || result.concept.trim() === '') {
+  if (
+    !result.concept ||
+    typeof result.concept !== "string" ||
+    result.concept.trim() === ""
+  ) {
     return false;
   }
 
-  if (!result.explanation || typeof result.explanation !== 'string' || result.explanation.trim() === '') {
+  if (
+    !result.explanation ||
+    typeof result.explanation !== "string" ||
+    result.explanation.trim() === ""
+  ) {
     return false;
   }
 
-  if (!result.variations || !Array.isArray(result.variations) || result.variations.length === 0) {
+  if (
+    !result.variations ||
+    !Array.isArray(result.variations) ||
+    result.variations.length === 0
+  ) {
     return false;
   }
 
   // Validate variations structure
   for (const variation of result.variations) {
-    if (!variation.phrase || typeof variation.phrase !== 'string' || variation.phrase.trim() === '') {
+    if (
+      !variation.phrase ||
+      typeof variation.phrase !== "string" ||
+      variation.phrase.trim() === ""
+    ) {
       return false;
     }
-    if (!variation.chapter || typeof variation.chapter !== 'string' || variation.chapter.trim() === '') {
+    if (
+      !variation.chapter ||
+      typeof variation.chapter !== "string" ||
+      variation.chapter.trim() === ""
+    ) {
       return false;
     }
-    if (!variation.context_snippet || typeof variation.context_snippet !== 'string') {
+    if (
+      !variation.context_snippet ||
+      typeof variation.context_snippet !== "string"
+    ) {
       return false;
     }
   }
@@ -1286,7 +1918,14 @@ function calculateResultQuality(result) {
   let quality = 0;
 
   // Priority-based scoring (higher priority = higher quality)
-  const priorityScores = {CRITICAL: 100, HIGH: 80, MEDIUM: 60, LOW: 40, STYLISTIC: 20, INFO: 10};
+  const priorityScores = {
+    CRITICAL: 100,
+    HIGH: 80,
+    MEDIUM: 60,
+    LOW: 40,
+    STYLISTIC: 20,
+    INFO: 10,
+  };
   quality += priorityScores[result.priority] || 10;
 
   // Variation count bonus (more variations = more thorough analysis)
@@ -1296,35 +1935,46 @@ function calculateResultQuality(result) {
   quality += (result.suggestions?.length || 0) * 3;
 
   // Verified status bonus (verified items are more reliable)
-  if (result.status === 'Verified') quality += 20;
+  if (result.status === "Verified") {
+    quality += 20;
+  }
 
   // New item penalty (new items need verification)
-  if (result.isNew) quality -= 10;
+  if (result.isNew) {
+    quality -= 10;
+  }
 
   return quality;
 }
 
 function areSemanticallySimilar(concept1, concept2) {
   // Basic semantic similarity check for concept names
-  const normalize = str =>
+  const normalize = (str) =>
     str
       .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/[^a-z0-9\s]/g, "")
       .trim();
   const norm1 = normalize(concept1);
   const norm2 = normalize(concept2);
 
   // Exact match
-  if (norm1 === norm2) return true;
+  if (norm1 === norm2) {
+    return true;
+  }
 
   // Check if one is contained in the other (for partial matches)
-  if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
+  if (norm1.includes(norm2) || norm2.includes(norm1)) {
+    return true;
+  }
 
   // Check for common words (for compound names)
   const words1 = norm1.split(/\s+/);
   const words2 = norm2.split(/\s+/);
-  const commonWords = words1.filter(word => words2.includes(word));
-  if (commonWords.length > 0 && commonWords.length / Math.max(words1.length, words2.length) > 0.5) {
+  const commonWords = words1.filter((word) => words2.includes(word));
+  if (
+    commonWords.length > 0 &&
+    commonWords.length / Math.max(words1.length, words2.length) > 0.5
+  ) {
     return true;
   }
 
@@ -1335,9 +1985,11 @@ function mergeAnalysisResults(existingResults, newResults) {
   // Enhanced merge strategy with semantic duplicate detection and quality-based conflict resolution
   const merged = [...existingResults];
 
-  newResults.forEach(newResult => {
+  newResults.forEach((newResult) => {
     // Find potential semantic duplicates
-    const duplicateIndex = merged.findIndex(existing => areSemanticallySimilar(existing.concept, newResult.concept));
+    const duplicateIndex = merged.findIndex((existing) =>
+      areSemanticallySimilar(existing.concept, newResult.concept),
+    );
 
     if (duplicateIndex === -1) {
       // No duplicate found, add as new entry
@@ -1348,14 +2000,14 @@ function mergeAnalysisResults(existingResults, newResults) {
       const existingQuality = calculateResultQuality(existing);
       const newQuality = calculateResultQuality(newResult);
 
-      log(
-        `Semantic duplicate detected: "${existing.concept}" vs "${newResult.concept}". Quality scores: ${existingQuality} vs ${newQuality}`
+      utils_log(
+        `Semantic duplicate detected: "${existing.concept}" vs "${newResult.concept}". Quality scores: ${existingQuality} vs ${newQuality}`,
       );
 
       if (newQuality > existingQuality) {
         // New result has higher quality, replace existing
         merged[duplicateIndex] = newResult;
-        log(`Replaced lower quality result with higher quality version`);
+        utils_log("Replaced lower quality result with higher quality version");
       } else {
         // Existing result has equal or higher quality, merge intelligently
         const mergedResult = {
@@ -1365,21 +2017,33 @@ function mergeAnalysisResults(existingResults, newResults) {
           priority: existing.priority, // Keep original priority
           explanation: existing.explanation, // Keep original explanation
           // Merge variations (avoid duplicates)
-          variations: [...(existing.variations || []), ...(newResult.variations || [])].filter(
+          variations: [
+            ...(existing.variations || []),
+            ...(newResult.variations || []),
+          ].filter(
             (variation, index, arr) =>
-              arr.findIndex(v => v.phrase === variation.phrase && v.chapter === variation.chapter) === index
+              arr.findIndex(
+                (v) =>
+                  v.phrase === variation.phrase &&
+                  v.chapter === variation.chapter,
+              ) === index,
           ),
           // Merge suggestions (avoid duplicates)
-          suggestions: [...(existing.suggestions || []), ...(newResult.suggestions || [])].filter(
-            (suggestion, index, arr) => arr.findIndex(s => s.suggestion === suggestion.suggestion) === index
+          suggestions: [
+            ...(existing.suggestions || []),
+            ...(newResult.suggestions || []),
+          ].filter(
+            (suggestion, index, arr) =>
+              arr.findIndex((s) => s.suggestion === suggestion.suggestion) ===
+              index,
           ),
           // Preserve status flags from higher quality result
           status: existing.status || newResult.status,
-          isNew: existing.isNew && newResult.isNew // Only mark as new if both are new
+          isNew: existing.isNew && newResult.isNew, // Only mark as new if both are new
         };
 
         merged[duplicateIndex] = mergedResult;
-        log(`Merged duplicate results, preserving higher quality data`);
+        utils_log("Merged duplicate results, preserving higher quality data");
       }
     }
   });
@@ -1391,13 +2055,13 @@ function extractJsonFromString(text) {
   // First, try to find a JSON markdown block
   const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (markdownMatch && markdownMatch[1]) {
-    log('Extracted JSON from markdown block.');
+    utils_log("Extracted JSON from markdown block.");
     return markdownMatch[1];
   }
 
   // Fallback: find the first '{' or '[' and the last '}' or ']'
-  const firstBrace = text.indexOf('{');
-  const firstBracket = text.indexOf('[');
+  const firstBrace = text.indexOf("{");
+  const firstBracket = text.indexOf("[");
   let startIndex = -1;
 
   if (firstBrace === -1) {
@@ -1409,33 +2073,36 @@ function extractJsonFromString(text) {
   }
 
   if (startIndex !== -1) {
-    const lastBrace = text.lastIndexOf('}');
-    const lastBracket = text.lastIndexOf(']');
+    const lastBrace = text.lastIndexOf("}");
+    const lastBracket = text.lastIndexOf("]");
     const endIndex = Math.max(lastBrace, lastBracket);
 
     if (endIndex > startIndex) {
-      log('Extracted JSON using fallback brace/bracket matching.');
+      utils_log("Extracted JSON using fallback brace/bracket matching.");
       return text.substring(startIndex, endIndex + 1);
     }
   }
 
-  log('No JSON structure found, returning raw text.');
+  utils_log("No JSON structure found, returning raw text.");
   return text;
 }
 
 function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeHtml(unsafe) {
-  if (typeof unsafe !== 'string') return '';
+  if (typeof unsafe !== "string") {
+    return "";
+  }
   return unsafe
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
     .replace(/"/g, '"')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, "&#039;");
 }
+
 ;// ./src/modules/state.js
 // src/modules/state.js
 
@@ -1445,17 +2112,17 @@ const CONFIG_KEY = `${SCRIPT_PREFIX}config`;
 const MODELS_CACHE_KEY = `${SCRIPT_PREFIX}models_cache`;
 const SESSION_RESULTS_KEY = `${SCRIPT_PREFIX}session_results`;
 
-let appState = {
+const appState = {
   // Configuration
   config: {
     apiKeys: [],
-    model: '',
+    model: "",
     useJson: false,
     loggingEnabled: false,
     temperature: 0.5,
-    activeTab: 'finder',
-    activeFilter: 'all',
-    deepAnalysisDepth: 1
+    activeTab: "finder",
+    activeFilter: "all",
+    deepAnalysisDepth: 1,
   },
   // Runtime state
   runtime: {
@@ -1464,32 +2131,39 @@ let appState = {
     currentApiKeyIndex: 0,
     apiKeyCooldowns: new Map(),
     currentIteration: 1,
-    totalIterations: 1
+    totalIterations: 1,
   },
   // Session data
   session: {
     hasSavedResults: false,
-    lastAnalysisTime: null
+    lastAnalysisTime: null,
   },
   // User preferences
   preferences: {
-    autoRestoreResults: true
-  }
+    autoRestoreResults: true,
+  },
 };
 
 // --- DATA SANITIZATION ---
 function sanitizeSuggestionData(suggestion) {
   // Enhanced suggestion sanitization with multiple fallback strategies
-  const sanitized = {...suggestion};
+  const sanitized = { ...suggestion };
 
   // Fix missing or invalid suggestion field
-  if (!sanitized.suggestion || typeof sanitized.suggestion !== 'string' || sanitized.suggestion.trim() === '') {
+  if (
+    !sanitized.suggestion ||
+    typeof sanitized.suggestion !== "string" ||
+    sanitized.suggestion.trim() === ""
+  ) {
     // Try to extract from display_text
-    if (sanitized.display_text && typeof sanitized.display_text === 'string') {
+    if (sanitized.display_text && typeof sanitized.display_text === "string") {
       // Remove common prefixes and extract the actual suggestion
       const cleaned = sanitized.display_text
-        .replace(/^(standardize to|use|change to|replace with|update to)\s*/i, '')
-        .replace(/^['"`]|['"`]$/g, '') // Remove surrounding quotes
+        .replace(
+          /^(standardize to|use|change to|replace with|update to)\s*/i,
+          "",
+        )
+        .replace(/^['"`]|['"`]$/g, "") // Remove surrounding quotes
         .trim();
 
       if (cleaned && cleaned !== sanitized.display_text) {
@@ -1501,28 +2175,33 @@ function sanitizeSuggestionData(suggestion) {
   }
 
   // Ensure suggestion field is valid
-  if (!sanitized.suggestion || typeof sanitized.suggestion !== 'string' || sanitized.suggestion.trim() === '') {
+  if (
+    !sanitized.suggestion ||
+    typeof sanitized.suggestion !== "string" ||
+    sanitized.suggestion.trim() === ""
+  ) {
     // Last resort: use concept name or mark as non-actionable
-    sanitized.suggestion = sanitized.display_text || '[Informational]';
+    sanitized.suggestion = sanitized.display_text || "[Informational]";
   }
 
   // Clean up other fields
-  sanitized.display_text = sanitized.display_text || `Use "${sanitized.suggestion}"`;
-  sanitized.reasoning = sanitized.reasoning || 'AI-generated suggestion';
+  sanitized.display_text =
+    sanitized.display_text || `Use "${sanitized.suggestion}"`;
+  sanitized.reasoning = sanitized.reasoning || "AI-generated suggestion";
 
   return sanitized;
 }
 
 function sanitizeResultsData(results) {
   // Sanitize all results to fix corrupted suggestion data from restored sessions
-  return results.map(result => {
+  return results.map((result) => {
     if (!result.suggestions || !Array.isArray(result.suggestions)) {
       return result;
     }
 
     return {
       ...result,
-      suggestions: result.suggestions.map(sanitizeSuggestionData)
+      suggestions: result.suggestions.map(sanitizeSuggestionData),
     };
   });
 }
@@ -1533,7 +2212,7 @@ async function loadConfig() {
 
   // --- Migration for single API key to multiple ---
   if (savedConfig.apiKey && !savedConfig.apiKeys) {
-    log('Migrating legacy single API key to new array format.');
+    utils_log("Migrating legacy single API key to new array format.");
     savedConfig.apiKeys = [savedConfig.apiKey];
     delete savedConfig.apiKey;
   }
@@ -1541,11 +2220,14 @@ async function loadConfig() {
 
   // Load preferences from saved config if they exist
   if (savedConfig.preferences) {
-    appState.preferences = {...appState.preferences, ...savedConfig.preferences};
-    log('Loaded preferences from config:', appState.preferences);
+    appState.preferences = {
+      ...appState.preferences,
+      ...savedConfig.preferences,
+    };
+    utils_log("Loaded preferences from config:", appState.preferences);
   }
 
-  appState.config = {...appState.config, ...savedConfig};
+  appState.config = { ...appState.config, ...savedConfig };
 
   // Load session results if available
   const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY);
@@ -1560,11 +2242,15 @@ async function loadConfig() {
       appState.runtime.cumulativeResults = sanitizedResults;
       appState.session.hasSavedResults = true;
       appState.session.lastAnalysisTime = parsed.timestamp;
-      log('Session results loaded and sanitized:', appState.runtime.cumulativeResults.length, 'items');
+      utils_log(
+        "Session results loaded and sanitized:",
+        appState.runtime.cumulativeResults.length,
+        "items",
+      );
 
       // Log any sanitization that was performed
       if (sanitizedResults.length !== rawResults.length) {
-        log('🔧 Data sanitization: Results count changed during cleanup');
+        utils_log("🔧 Data sanitization: Results count changed during cleanup");
       } else {
         // Check if any suggestions were modified
         let modifiedSuggestions = 0;
@@ -1573,18 +2259,23 @@ async function loadConfig() {
           const sanitized = sanitizedResults[i];
           if (original.suggestions && sanitized.suggestions) {
             for (let j = 0; j < sanitized.suggestions.length; j++) {
-              if (original.suggestions[j]?.suggestion !== sanitized.suggestions[j]?.suggestion) {
+              if (
+                original.suggestions[j]?.suggestion !==
+                sanitized.suggestions[j]?.suggestion
+              ) {
                 modifiedSuggestions++;
               }
             }
           }
         }
         if (modifiedSuggestions > 0) {
-          log(`🔧 Data sanitization: Fixed ${modifiedSuggestions} corrupted suggestion fields`);
+          utils_log(
+            `🔧 Data sanitization: Fixed ${modifiedSuggestions} corrupted suggestion fields`,
+          );
         }
       }
     } catch (e) {
-      log('Failed to parse session results:', e);
+      utils_log("Failed to parse session results:", e);
     }
   }
 }
@@ -1593,12 +2284,12 @@ async function saveConfig() {
   try {
     const configToSave = {
       ...appState.config,
-      preferences: appState.preferences
+      preferences: appState.preferences,
     };
     await GM_setValue(CONFIG_KEY, configToSave);
     return true;
   } catch (e) {
-    console.error('Inconsistency Finder: Error saving config:', e);
+    console.error("Inconsistency Finder: Error saving config:", e);
     return false;
   }
 }
@@ -1610,15 +2301,15 @@ function saveSessionResults() {
       timestamp: Date.now(),
       config: {
         model: appState.config.model,
-        temperature: appState.config.temperature
-      }
+        temperature: appState.config.temperature,
+      },
     };
     sessionStorage.setItem(SESSION_RESULTS_KEY, JSON.stringify(sessionData));
     appState.session.hasSavedResults = true;
     appState.session.lastAnalysisTime = sessionData.timestamp;
-    log('Session results saved');
+    utils_log("Session results saved");
   } catch (e) {
-    console.error('Inconsistency Finder: Error saving session results:', e);
+    console.error("Inconsistency Finder: Error saving session results:", e);
   }
 }
 
@@ -1627,11 +2318,12 @@ function clearSessionResults() {
     sessionStorage.removeItem(SESSION_RESULTS_KEY);
     appState.session.hasSavedResults = false;
     appState.session.lastAnalysisTime = null;
-    log('Session results cleared');
+    utils_log("Session results cleared");
   } catch (e) {
-    console.error('Inconsistency Finder: Error clearing session results:', e);
+    console.error("Inconsistency Finder: Error clearing session results:", e);
   }
 }
+
 ;// ./src/modules/geminiApi.js
 // src/modules/geminiApi.js
 
@@ -1808,20 +2500,18 @@ function generatePrompt(chapterText, existingResults = []) {
     const validResults = existingResults.filter((result) => {
       const isValid = validateResultForContext(result);
       if (!isValid) {
-        log(
-          `Filtered out invalid result from context: ${
-            result.concept || "Unknown concept"
-          }`
+        utils_log(
+          `Filtered out invalid result from context: ${result.concept || "Unknown concept"}`,
         );
       }
       return isValid;
     });
 
     if (validResults.length === 0) {
-      log("All existing results failed validation, proceeding without context");
+      utils_log("All existing results failed validation, proceeding without context");
     } else {
-      log(
-        `Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`
+      utils_log(
+        `Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`,
       );
     }
 
@@ -1835,7 +2525,7 @@ function generatePrompt(chapterText, existingResults = []) {
         variations,
       })),
       null,
-      2
+      2,
     );
     prompt += `\n\n## Senior Editor Verification & Continuation Task
 You are now operating as a Senior Editor. Your task is to perform a rigorous second-pass verification on a list of potential inconsistencies identified in a previous analysis. The provided text may have been updated or corrected since the initial scan. Your judgment must be strict, and your output must be based *exclusively* on the new text provided.
@@ -1927,10 +2617,10 @@ function getAvailableApiKey() {
     if (appState.runtime.apiKeyCooldowns.has(key)) {
       const cooldownEnd = appState.runtime.apiKeyCooldowns.get(key);
       if (Date.now() < cooldownEnd) {
-        log(`Key at index ${keyIndex} is on cooldown. Skipping.`);
+        utils_log(`Key at index ${keyIndex} is on cooldown. Skipping.`);
         continue; // Key is still on cooldown
       } else {
-        log(`Cooldown for key at index ${keyIndex} has expired.`);
+        utils_log(`Cooldown for key at index ${keyIndex} has expired.`);
         appState.runtime.apiKeyCooldowns.delete(key); // Cooldown expired
       }
     }
@@ -1938,7 +2628,7 @@ function getAvailableApiKey() {
     appState.runtime.currentApiKeyIndex = keyIndex; // Update index to the one we are returning
     return { key: key, index: keyIndex };
   }
-  log("All available API keys are currently on cooldown.");
+  utils_log("All available API keys are currently on cooldown.");
   return null; // All keys are on cooldown
 }
 
@@ -1955,13 +2645,13 @@ function findInconsistencies(
   chapterData,
   existingResults = [],
   retryCount = 0,
-  parseRetryCount = 0
+  parseRetryCount = 0,
 ) {
   const maxTotalRetries =
     Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
   if (retryCount >= maxTotalRetries) {
     handleApiError(
-      `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`
+      `Analysis failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
     );
     return;
   }
@@ -1969,7 +2659,7 @@ function findInconsistencies(
   const apiKeyInfo = getAvailableApiKey();
   if (!apiKeyInfo) {
     handleApiError(
-      "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+      "All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
     );
     return;
   }
@@ -1979,18 +2669,16 @@ function findInconsistencies(
   appState.runtime.isAnalysisRunning = true;
   updateStatusIndicator(
     "running",
-    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`
+    `Analyzing (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`,
   );
 
   const combinedText = chapterData
     .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
     .join("\n\n");
-  log(
+  utils_log(
     `Sending ${
       combinedText.length
-    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
-      retryCount + 1
-    })`
+    } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
   );
 
   const prompt = generatePrompt(combinedText, existingResults);
@@ -2007,7 +2695,7 @@ function findInconsistencies(
     headers: { "Content-Type": "application/json" },
     data: JSON.stringify(requestData),
     onload: function (response) {
-      log("Received raw response from API:", response.responseText);
+      utils_log("Received raw response from API:", response.responseText);
       let apiResponse, parsedResponse, error;
 
       try {
@@ -2026,20 +2714,20 @@ function findInconsistencies(
           errorMessage.includes("The model is overloaded");
 
         if (isRetriable) {
-          log(
-            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+          utils_log(
+            `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
           );
           const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
           appState.runtime.apiKeyCooldowns.set(
             currentKey,
-            Date.now() + cooldownSeconds * 1000
+            Date.now() + cooldownSeconds * 1000,
           );
-          updateStatusIndicator("running", `API Error. Rotating key...`);
+          updateStatusIndicator("running", "API Error. Rotating key...");
           findInconsistencies(
             chapterData,
             existingResults,
             retryCount + 1,
-            parseRetryCount
+            parseRetryCount,
           );
           return;
         } else {
@@ -2067,21 +2755,21 @@ function findInconsistencies(
         const resultText = candidate.content.parts[0].text;
         const cleanedJsonString = extractJsonFromString(resultText);
         parsedResponse = JSON.parse(cleanedJsonString);
-        log("Successfully parsed API response content.", parsedResponse);
+        utils_log("Successfully parsed API response content.", parsedResponse);
       } catch (e) {
         if (parseRetryCount < 1) {
-          log(
-            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+          utils_log(
+            `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
           );
           updateStatusIndicator(
             "running",
-            `AI response malformed. Retrying...`
+            "AI response malformed. Retrying...",
           );
           findInconsistencies(
             chapterData,
             existingResults,
             retryCount + 1,
-            parseRetryCount + 1
+            parseRetryCount + 1,
           );
           return;
         }
@@ -2102,7 +2790,7 @@ function findInconsistencies(
           !parsedResponse.new_inconsistencies
         ) {
           handleApiError(
-            "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
+            "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
           );
           return;
         }
@@ -2117,14 +2805,14 @@ function findInconsistencies(
         newItems.forEach((item) => {
           item.isNew = true;
         });
-        log(
-          `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`
+        utils_log(
+          `Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
         );
         appState.runtime.cumulativeResults = [...verifiedItems, ...newItems];
       } else {
         if (!Array.isArray(parsedResponse)) {
           handleApiError(
-            "Invalid response format for initial run. Expected a JSON array."
+            "Invalid response format for initial run. Expected a JSON array.",
           );
           return;
         }
@@ -2141,16 +2829,16 @@ function findInconsistencies(
     },
     onerror: function (error) {
       console.error("Inconsistency Finder: Network error:", error);
-      log(
-        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+      utils_log(
+        `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
       );
       appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-      updateStatusIndicator("running", `Network Error. Rotating key...`);
+      updateStatusIndicator("running", "Network Error. Rotating key...");
       findInconsistencies(
         chapterData,
         existingResults,
         retryCount + 1,
-        parseRetryCount
+        parseRetryCount,
       );
     },
   });
@@ -2160,7 +2848,7 @@ function findInconsistenciesDeepAnalysis(
   chapterData,
   existingResults = [],
   targetDepth = 1,
-  currentDepth = 1
+  currentDepth = 1,
 ) {
   if (currentDepth > targetDepth) {
     // Deep analysis complete
@@ -2175,20 +2863,20 @@ function findInconsistenciesDeepAnalysis(
     return;
   }
 
-  log(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`);
+  utils_log(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`);
 
   // Update status to show iteration progress
   if (targetDepth > 1) {
     updateStatusIndicator(
       "running",
-      `Deep Analysis (${currentDepth}/${targetDepth})...`
+      `Deep Analysis (${currentDepth}/${targetDepth})...`,
     );
   } else {
     updateStatusIndicator(
       "running",
       currentDepth > 1
         ? `Deep Analysis (${currentDepth}/${targetDepth})...`
-        : "Analyzing..."
+        : "Analyzing...",
     );
   }
 
@@ -2204,7 +2892,7 @@ function findInconsistenciesDeepAnalysis(
       chapterData,
       contextResults,
       targetDepth,
-      currentDepth
+      currentDepth,
     );
   } else {
     // For normal analysis (depth = 1), use the regular analysis function
@@ -2216,7 +2904,7 @@ function findInconsistenciesIteration(
   chapterData,
   existingResults,
   targetDepth,
-  currentDepth
+  currentDepth,
 ) {
   const maxTotalRetries =
     Math.max(1, appState.config.apiKeys.length) * MAX_RETRIES_PER_KEY;
@@ -2226,7 +2914,7 @@ function findInconsistenciesIteration(
   const executeIteration = () => {
     if (retryCount >= maxTotalRetries) {
       handleApiError(
-        `Deep analysis iteration ${currentDepth} failed after ${retryCount} attempts. Please check your API keys or wait a while.`
+        `Deep analysis iteration ${currentDepth} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
       );
       return;
     }
@@ -2234,7 +2922,7 @@ function findInconsistenciesIteration(
     const apiKeyInfo = getAvailableApiKey();
     if (!apiKeyInfo) {
       handleApiError(
-        "All API keys are currently rate-limited or failing. Please wait a moment before trying again."
+        "All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
       );
       return;
     }
@@ -2244,12 +2932,12 @@ function findInconsistenciesIteration(
     const combinedText = chapterData
       .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
       .join("\n\n");
-    log(
+    utils_log(
       `Deep Analysis Iteration ${currentDepth}/${targetDepth}: Sending ${
         combinedText.length
       } characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${
         retryCount + 1
-      })`
+      })`,
     );
 
     const prompt = generatePrompt(combinedText, existingResults);
@@ -2266,7 +2954,7 @@ function findInconsistenciesIteration(
       headers: { "Content-Type": "application/json" },
       data: JSON.stringify(requestData),
       onload: function (response) {
-        log("Received raw response from API:", response.responseText);
+        utils_log("Received raw response from API:", response.responseText);
         let apiResponse, parsedResponse, error;
 
         try {
@@ -2285,16 +2973,16 @@ function findInconsistenciesIteration(
             errorMessage.includes("The model is overloaded");
 
           if (isRetriable) {
-            log(
-              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`
+            utils_log(
+              `Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and retrying.`,
             );
             const cooldownSeconds =
               errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1;
             appState.runtime.apiKeyCooldowns.set(
               currentKey,
-              Date.now() + cooldownSeconds * 1000
+              Date.now() + cooldownSeconds * 1000,
             );
-            updateStatusIndicator("running", `API Error. Rotating key...`);
+            updateStatusIndicator("running", "API Error. Rotating key...");
             retryCount++;
             executeIteration();
             return;
@@ -2323,15 +3011,15 @@ function findInconsistenciesIteration(
           const resultText = candidate.content.parts[0].text;
           const cleanedJsonString = extractJsonFromString(resultText);
           parsedResponse = JSON.parse(cleanedJsonString);
-          log("Successfully parsed API response content.", parsedResponse);
+          utils_log("Successfully parsed API response content.", parsedResponse);
         } catch (e) {
           if (parseRetryCount < 1) {
-            log(
-              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`
+            utils_log(
+              `Failed to parse AI response content, retrying API call once. Error: ${e.message}`,
             );
             updateStatusIndicator(
               "running",
-              `AI response malformed. Retrying...`
+              "AI response malformed. Retrying...",
             );
             retryCount++;
             parseRetryCount++;
@@ -2348,7 +3036,7 @@ function findInconsistenciesIteration(
           (currentKeyIndex + 1) % appState.config.apiKeys.length;
 
         const isVerificationRun = existingResults.length > 0;
-        const isDeepAnalysis = targetDepth > 1;
+        const _isDeepAnalysis = targetDepth > 1;
 
         if (isVerificationRun) {
           if (
@@ -2356,7 +3044,7 @@ function findInconsistenciesIteration(
             !parsedResponse.new_inconsistencies
           ) {
             handleApiError(
-              "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys."
+              "Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
             );
             return;
           }
@@ -2371,20 +3059,20 @@ function findInconsistenciesIteration(
           newItems.forEach((item) => {
             item.isNew = true;
           });
-          log(
-            `Deep Analysis Iteration ${currentDepth}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`
+          utils_log(
+            `Deep Analysis Iteration ${currentDepth}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
           );
 
           // Standardized result handling for all iterations
           const allNewItems = [...verifiedItems, ...newItems];
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
-            allNewItems
+            allNewItems,
           );
         } else {
           if (!Array.isArray(parsedResponse)) {
             handleApiError(
-              "Invalid response format for initial run. Expected a JSON array."
+              "Invalid response format for initial run. Expected a JSON array.",
             );
             return;
           }
@@ -2392,7 +3080,7 @@ function findInconsistenciesIteration(
           // Standardized result handling for all iterations
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
-            parsedResponse
+            parsedResponse,
           );
         }
 
@@ -2412,7 +3100,7 @@ function findInconsistenciesIteration(
               chapterData,
               appState.runtime.cumulativeResults,
               targetDepth,
-              currentDepth + 1
+              currentDepth + 1,
             );
           }, 1000); // Brief pause between iterations
         } else {
@@ -2420,7 +3108,7 @@ function findInconsistenciesIteration(
           appState.runtime.isAnalysisRunning = false;
           updateStatusIndicator(
             "complete",
-            `Complete! (Deep Analysis: ${targetDepth} iterations)`
+            `Complete! (Deep Analysis: ${targetDepth} iterations)`,
           );
           document.getElementById("wtr-if-continue-btn").disabled = false;
           displayResults(appState.runtime.cumulativeResults);
@@ -2428,11 +3116,11 @@ function findInconsistenciesIteration(
       },
       onerror: function (error) {
         console.error("Inconsistency Finder: Network error:", error);
-        log(
-          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`
+        utils_log(
+          `Network error with key index ${currentKeyIndex}. Rotating key and retrying.`,
         );
         appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000); // 1-second cooldown
-        updateStatusIndicator("running", `Network Error. Rotating key...`);
+        updateStatusIndicator("running", "Network Error. Rotating key...");
         retryCount++;
         executeIteration();
       },
@@ -2449,21 +3137,26 @@ function findInconsistenciesIteration(
 
 
 function displayResults(results) {
-  const resultsContainer = document.getElementById('wtr-if-results');
-  resultsContainer.innerHTML = '';
-  const filterValue = document.getElementById('wtr-if-filter-select')?.value || 'all';
+  const resultsContainer = document.getElementById("wtr-if-results");
+  resultsContainer.innerHTML = "";
+  const filterValue =
+    document.getElementById("wtr-if-filter-select")?.value || "all";
 
-  let displayedResults = results.filter(r => !r.error && r.concept);
-  const errors = results.filter(r => r.error);
+  let displayedResults = results.filter((r) => !r.error && r.concept);
+  const errors = results.filter((r) => r.error);
 
-  if (filterValue === 'new') {
-    displayedResults = displayedResults.filter(r => r.isNew);
-  } else if (filterValue === 'verified') {
+  if (filterValue === "new") {
+    displayedResults = displayedResults.filter((r) => r.isNew);
+  } else if (filterValue === "verified") {
     displayedResults = displayedResults.filter(
-      r => r.status === 'Verified' || (r.isNew === false && r.status !== 'Verified')
+      (r) =>
+        r.status === "Verified" ||
+        (r.isNew === false && r.status !== "Verified"),
     );
-  } else if (filterValue !== 'all') {
-    displayedResults = displayedResults.filter(r => r.priority === filterValue);
+  } else if (filterValue !== "all") {
+    displayedResults = displayedResults.filter(
+      (r) => r.priority === filterValue,
+    );
   }
 
   if (displayedResults.length === 0 && errors.length === 0) {
@@ -2472,15 +3165,27 @@ function displayResults(results) {
     return;
   }
 
-  const priorityOrder = {CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4, STYLISTIC: 5, INFO: 6};
-  displayedResults.sort((a, b) => (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99));
+  const priorityOrder = {
+    CRITICAL: 1,
+    HIGH: 2,
+    MEDIUM: 3,
+    LOW: 4,
+    STYLISTIC: 5,
+    INFO: 6,
+  };
+  displayedResults.sort(
+    (a, b) =>
+      (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99),
+  );
 
   // Append successful results first
   const successFragment = document.createDocumentFragment();
-  displayedResults.forEach(group => {
-    const groupEl = document.createElement('div');
-    groupEl.className = 'wtr-if-result-group';
-    const uniqueVariations = [...new Set(group.variations.map(v => v.phrase))];
+  displayedResults.forEach((group) => {
+    const groupEl = document.createElement("div");
+    groupEl.className = "wtr-if-result-group";
+    const uniqueVariations = [
+      ...new Set(group.variations.map((v) => v.phrase)),
+    ];
     const variationsJson = JSON.stringify(uniqueVariations);
 
     const suggestionsHtml = (group.suggestions || [])
@@ -2488,10 +3193,13 @@ function displayResults(results) {
         // ENHANCED VALIDATION & FALLBACK LOGIC
         const rawSuggestion = sugg.suggestion;
         const suggestionType = typeof rawSuggestion;
-        const isValidSuggestion = suggestionType === 'string' && rawSuggestion && rawSuggestion.trim() !== '';
+        const isValidSuggestion =
+          suggestionType === "string" &&
+          rawSuggestion &&
+          rawSuggestion.trim() !== "";
 
         // FALLBACK HIERARCHY: suggestion -> cleaned display_text -> skip
-        let finalSuggestionValue = '';
+        let finalSuggestionValue = "";
         let isActionable = false;
 
         if (isValidSuggestion) {
@@ -2501,8 +3209,11 @@ function displayResults(results) {
         } else if (sugg.display_text && sugg.display_text.trim()) {
           // Secondary: Extract actionable text from display_text
           const cleanedDisplayText = sugg.display_text
-            .replace(/^(standardize to|use|change to|replace with|update to)\s*/i, '')
-            .replace(/^['"`]|['"`]$/g, '') // Remove surrounding quotes
+            .replace(
+              /^(standardize to|use|change to|replace with|update to)\s*/i,
+              "",
+            )
+            .replace(/^['"`]|['"`]$/g, "") // Remove surrounding quotes
             .trim();
 
           if (cleanedDisplayText && cleanedDisplayText !== sugg.display_text) {
@@ -2513,36 +3224,42 @@ function displayResults(results) {
 
         // Debug logging for suggestion validation (only if enabled)
         if (appState.config.loggingEnabled && !isActionable) {
-          log(`Suggestion validation for "${group.concept}" #${suggIndex}:`, {
+          utils_log(`Suggestion validation for "${group.concept}" #${suggIndex}:`, {
             originalSuggestion: rawSuggestion,
             displayText: sugg.display_text,
             finalSuggestionValue: finalSuggestionValue,
-            isActionable: isActionable
+            isActionable: isActionable,
           });
         }
 
         const replacementText = isActionable
           ? `<code>${escapeHtml(finalSuggestionValue)}</code>`
-          : `<em>(Informational, no replacement)</em>`;
-        const buttonState = isActionable ? '' : 'disabled';
-        const applyTitle = isActionable ? `Apply '${escapeHtml(finalSuggestionValue)}'` : 'No direct replacement';
-        const recommendedBadge = sugg.is_recommended ? '<span class="wtr-if-recommended-badge">Recommended</span>' : '';
+          : "<em>(Informational, no replacement)</em>";
+        const buttonState = isActionable ? "" : "disabled";
+        const applyTitle = isActionable
+          ? `Apply '${escapeHtml(finalSuggestionValue)}'`
+          : "No direct replacement";
+        const recommendedBadge = sugg.is_recommended
+          ? '<span class="wtr-if-recommended-badge">Recommended</span>'
+          : "";
 
         return `
              <div class="wtr-if-suggestion-item">
                  <div class="wtr-if-suggestion-header">
                      <span class="wtr-if-correct">${escapeHtml(
-                       sugg.display_text || rawSuggestion || 'No suggestion available'
+                       sugg.display_text ||
+                         rawSuggestion ||
+                         "No suggestion available",
                      )} ${recommendedBadge}</span>
                      <div class="wtr-if-suggestion-actions">
                          <button class="wtr-if-apply-btn" data-action="apply-selected" data-suggestion="${escapeHtml(
-                           finalSuggestionValue
+                           finalSuggestionValue,
                          )}" title="${applyTitle} to selected variations" ${buttonState}>Apply Selected</button>
                          <button class="wtr-if-apply-btn" data-action="apply-all" data-suggestion="${escapeHtml(
-                           finalSuggestionValue
+                           finalSuggestionValue,
                          )}" data-variations='${escapeHtml(
-            variationsJson
-          )}' title="${applyTitle} to all variations" ${buttonState}>Apply All</button>
+                           variationsJson,
+                         )}' title="${applyTitle} to all variations" ${buttonState}>Apply All</button>
                      </div>
                  </div>
                  <p class="wtr-if-replacement-info"><strong>Replacement:</strong> ${replacementText}</p>
@@ -2550,19 +3267,20 @@ function displayResults(results) {
              </div>
              `;
       })
-      .join('');
+      .join("");
 
     groupEl.innerHTML = `
                 <div class="wtr-if-group-header">
                     <h3>
-                        <span class="wtr-if-priority wtr-if-priority-${
-                          (group.priority || 'info').toLowerCase()
-                        }">${escapeHtml(group.priority || 'INFO')}</span>
+                        <span class="wtr-if-priority wtr-if-priority-${(
+                          group.priority || "info"
+                        ).toLowerCase()}">${escapeHtml(group.priority || "INFO")}</span>
                         Concept: <span class="wtr-if-concept">${escapeHtml(group.concept)}</span>
                         ${
-                          group.status === 'Verified' || (group.isNew === false && group.status !== 'Verified')
+                          group.status === "Verified" ||
+                          (group.isNew === false && group.status !== "Verified")
                             ? '<span class="wtr-if-verified-badge">Verified</span>'
-                            : ''
+                            : ""
                         }
                     </h3>
                     <p class="wtr-if-explanation">${escapeHtml(group.explanation)}</p>
@@ -2572,25 +3290,25 @@ function displayResults(results) {
                     <div class="wtr-if-variations">
                         ${(group.variations || [])
                           .map(
-                            item => `
+                            (item) => `
                         <div class="wtr-if-variation-item">
                             <div class="wtr-if-variation-header">
                                 <input type="checkbox" class="wtr-if-variation-checkbox" value="${escapeHtml(
-                                  item.phrase
+                                  item.phrase,
                                 )}" title="Select this variation">
                                 <button class="wtr-if-copy-variation-btn" data-text="${escapeHtml(
-                                  item.phrase
+                                  item.phrase,
                                 )}" title="Copy variation text">📋</button>
                                 <span class="wtr-if-incorrect">"${escapeHtml(item.phrase)}"</span>
                                 <span class="wtr-if-chapter">Chapter ${escapeHtml(item.chapter)}</span>
                             </div>
                             <p class="wtr-if-context"><strong>Context:</strong> <em>"...${escapeHtml(
-                              item.context_snippet
+                              item.context_snippet,
                             )}..."</em></p>
                         </div>
-                        `
+                        `,
                           )
-                          .join('')}
+                          .join("")}
                     </div>
                 </div>
                 <div class="wtr-if-details-section">
@@ -2608,18 +3326,21 @@ function displayResults(results) {
   errors
     .slice()
     .reverse()
-    .forEach(err => {
-      const errorEl = document.createElement('div');
-      errorEl.className = 'wtr-if-error';
+    .forEach((err) => {
+      const errorEl = document.createElement("div");
+      errorEl.className = "wtr-if-error";
       errorEl.textContent = err.error;
       resultsContainer.prepend(errorEl);
     });
 
-  resultsContainer.querySelectorAll('.wtr-if-apply-btn').forEach(btn => btn.addEventListener('click', handleApplyClick));
   resultsContainer
-    .querySelectorAll('.wtr-if-copy-variation-btn')
-    .forEach(btn => btn.addEventListener('click', handleCopyVariationClick));
+    .querySelectorAll(".wtr-if-apply-btn")
+    .forEach((btn) => btn.addEventListener("click", handleApplyClick));
+  resultsContainer
+    .querySelectorAll(".wtr-if-copy-variation-btn")
+    .forEach((btn) => btn.addEventListener("click", handleCopyVariationClick));
 }
+
 ;// ./src/modules/ui/events.js
 // src/modules/ui/events.js
 
@@ -2630,17 +3351,26 @@ function displayResults(results) {
 
 function startAnalysis(isContinuation = false) {
   if (appState.runtime.isAnalysisRunning) {
-    alert('An analysis is already in progress.');
+    alert("An analysis is already in progress.");
     return;
   }
-  if (!appState.config.apiKeys || appState.config.apiKeys.length === 0 || !appState.config.model) {
-    alert('Please add at least one API key and select a model in the Configuration tab first.');
+  if (
+    !appState.config.apiKeys ||
+    appState.config.apiKeys.length === 0 ||
+    !appState.config.model
+  ) {
+    alert(
+      "Please add at least one API key and select a model in the Configuration tab first.",
+    );
     document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click();
     togglePanel(true);
     return;
   }
 
-  const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1);
+  const deepAnalysisDepth = Math.max(
+    1,
+    parseInt(appState.config.deepAnalysisDepth) || 1,
+  );
 
   if (!isContinuation) {
     appState.runtime.cumulativeResults = [];
@@ -2648,20 +3378,21 @@ function startAnalysis(isContinuation = false) {
     appState.runtime.currentApiKeyIndex = 0;
     appState.runtime.currentIteration = 1;
     appState.runtime.totalIterations = deepAnalysisDepth;
-    document.getElementById('wtr-if-results').innerHTML = '';
-    document.getElementById('wtr-if-continue-btn').disabled = true;
-    document.getElementById('wtr-if-filter-select').value = 'all';
+    document.getElementById("wtr-if-results").innerHTML = "";
+    document.getElementById("wtr-if-continue-btn").disabled = true;
+    document.getElementById("wtr-if-filter-select").value = "all";
     // Clear session results only when starting a completely new analysis
     clearSessionResults();
   }
   // For continuation analysis, keep the continue button enabled if results exist
   if (isContinuation && appState.session.hasSavedResults) {
-    document.getElementById('wtr-if-continue-btn').disabled = false;
+    document.getElementById("wtr-if-continue-btn").disabled = false;
   }
 
   if (appState.config.useJson) {
-    document.getElementById('wtr-if-file-input').dataset.continuation = isContinuation;
-    document.getElementById('wtr-if-file-input').click();
+    document.getElementById("wtr-if-file-input").dataset.continuation =
+      isContinuation;
+    document.getElementById("wtr-if-file-input").click();
   } else {
     const chapterData = crawlChapterData();
     // Apply smart quotes replacement first, then term replacements
@@ -2670,29 +3401,37 @@ function startAnalysis(isContinuation = false) {
     findInconsistenciesDeepAnalysis(
       processedData,
       isContinuation ? appState.runtime.cumulativeResults : [],
-      deepAnalysisDepth
+      deepAnalysisDepth,
     );
     togglePanel(false);
   }
 }
 
 function handleSaveConfig() {
-  const keyInputs = document.querySelectorAll('.wtr-if-api-key-input');
+  const keyInputs = document.querySelectorAll(".wtr-if-api-key-input");
   const newApiKeys = [];
-  keyInputs.forEach(input => {
+  keyInputs.forEach((input) => {
     const key = input.value.trim();
-    if (key) newApiKeys.push(key);
+    if (key) {
+      newApiKeys.push(key);
+    }
   });
   appState.config.apiKeys = newApiKeys;
-  appState.config.model = document.getElementById('wtr-if-model').value;
-  appState.config.useJson = document.getElementById('wtr-if-use-json').checked;
-  appState.config.loggingEnabled = document.getElementById('wtr-if-logging-enabled').checked;
-  appState.config.temperature = parseFloat(document.getElementById('wtr-if-temperature').value);
-  const statusEl = document.getElementById('wtr-if-status');
-  statusEl.textContent = 'Saving...';
+  appState.config.model = document.getElementById("wtr-if-model").value;
+  appState.config.useJson = document.getElementById("wtr-if-use-json").checked;
+  appState.config.loggingEnabled = document.getElementById(
+    "wtr-if-logging-enabled",
+  ).checked;
+  appState.config.temperature = parseFloat(
+    document.getElementById("wtr-if-temperature").value,
+  );
+  const statusEl = document.getElementById("wtr-if-status");
+  statusEl.textContent = "Saving...";
   const success = saveConfig();
-  statusEl.textContent = success ? 'Configuration saved successfully!' : 'Failed to save configuration.';
-  setTimeout(() => (statusEl.textContent = ''), 3000);
+  statusEl.textContent = success
+    ? "Configuration saved successfully!"
+    : "Failed to save configuration.";
+  setTimeout(() => (statusEl.textContent = ""), 3000);
 }
 
 function handleFindInconsistencies() {
@@ -2705,32 +3444,44 @@ function handleContinueAnalysis() {
 
 function handleFileImportAndAnalyze(event) {
   const file = event.target.files[0];
-  if (!file) return;
-  const isContinuation = event.target.dataset.continuation === 'true';
+  if (!file) {
+    return;
+  }
+  const isContinuation = event.target.dataset.continuation === "true";
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
       const novelSlug = getNovelSlug();
-      log(`Detected novel slug: "${novelSlug}"`);
+      utils_log(`Detected novel slug: "${novelSlug}"`);
 
       // --- JSON Validation ---
-      if (!data || typeof data !== 'object') {
-        throw new Error('File is not a valid JSON object.');
+      if (!data || typeof data !== "object") {
+        throw new Error("File is not a valid JSON object.");
       }
-      if (!data.terms || typeof data.terms !== 'object') {
+      if (!data.terms || typeof data.terms !== "object") {
         throw new Error("JSON must contain a top-level 'terms' object.");
       }
       const terms = data.terms[novelSlug];
       if (terms === undefined) {
-        log(`No replacement terms found for novel slug "${novelSlug}" in the JSON file.`);
+        utils_log(
+          `No replacement terms found for novel slug "${novelSlug}" in the JSON file.`,
+        );
         alert(
-          `No terms found for the current novel ("${novelSlug}") in this file. Analysis will proceed without replacements.`
+          `No terms found for the current novel ("${novelSlug}") in this file. Analysis will proceed without replacements.`,
         );
       } else if (!Array.isArray(terms)) {
-        throw new Error(`The entry for "${novelSlug}" must be an array of term objects.`);
-      } else if (terms.length > 0 && (!terms[0].hasOwnProperty('original') || !terms[0].hasOwnProperty('replacement'))) {
-        throw new Error(`Term objects for "${novelSlug}" must contain 'original' and 'replacement' properties.`);
+        throw new Error(
+          `The entry for "${novelSlug}" must be an array of term objects.`,
+        );
+      } else if (
+        terms.length > 0 &&
+        (!Object.prototype.hasOwnProperty.call(terms[0], "original") ||
+          !Object.prototype.hasOwnProperty.call(terms[0], "replacement"))
+      ) {
+        throw new Error(
+          `Term objects for "${novelSlug}" must contain 'original' and 'replacement' properties.`,
+        );
       }
       // --- End Validation ---
 
@@ -2738,17 +3489,20 @@ function handleFileImportAndAnalyze(event) {
       // Apply smart quotes replacement first, then term replacements
       const smartQuotesData = applySmartQuotesReplacement(chapterData);
       const processedData = applyTermReplacements(smartQuotesData, terms || []);
-      const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1);
+      const deepAnalysisDepth = Math.max(
+        1,
+        parseInt(appState.config.deepAnalysisDepth) || 1,
+      );
       findInconsistenciesDeepAnalysis(
         processedData,
         isContinuation ? appState.runtime.cumulativeResults : [],
-        deepAnalysisDepth
+        deepAnalysisDepth,
       );
       togglePanel(false);
     } catch (err) {
-      alert('Failed to read or parse the JSON file. Error: ' + err.message);
+      alert("Failed to read or parse the JSON file. Error: " + err.message);
     } finally {
-      event.target.value = '';
+      event.target.value = "";
     }
   };
   reader.readAsText(file);
@@ -2757,88 +3511,93 @@ function handleFileImportAndAnalyze(event) {
 function handleRestoreSession() {
   if (appState.session.hasSavedResults) {
     displayResults(appState.runtime.cumulativeResults);
-      
+
     // Hide session restore element if it exists (removed UI section)
-    const sessionRestoreEl = document.getElementById('wtr-if-session-restore');
+    const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
     if (sessionRestoreEl) {
-      sessionRestoreEl.style.display = 'none';
+      sessionRestoreEl.style.display = "none";
     }
 
     // Enable continue button after restoring results
-    const continueBtn = document.getElementById('wtr-if-continue-btn');
+    const continueBtn = document.getElementById("wtr-if-continue-btn");
     if (continueBtn) {
       continueBtn.disabled = false;
     }
 
-    const statusEl = document.getElementById('wtr-if-status');
+    const statusEl = document.getElementById("wtr-if-status");
     if (statusEl) {
       statusEl.textContent = `Restored ${appState.runtime.cumulativeResults.length} results from previous session`;
-      setTimeout(() => (statusEl.textContent = ''), 3000);
+      setTimeout(() => (statusEl.textContent = ""), 3000);
     }
   }
 }
 
 function handleClearSession() {
   clearSessionResults();
-    
+
   // Hide session restore element if it exists (removed UI section)
-  const sessionRestoreEl = document.getElementById('wtr-if-session-restore');
+  const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
   if (sessionRestoreEl) {
-    sessionRestoreEl.style.display = 'none';
+    sessionRestoreEl.style.display = "none";
   }
 
   // Disable continue button when clearing results
-  const continueBtn = document.getElementById('wtr-if-continue-btn');
+  const continueBtn = document.getElementById("wtr-if-continue-btn");
   if (continueBtn) {
     continueBtn.disabled = true;
   }
 
-  const statusEl = document.getElementById('wtr-if-status');
+  const statusEl = document.getElementById("wtr-if-status");
   if (statusEl) {
-    statusEl.textContent = 'Saved session results cleared';
-    setTimeout(() => (statusEl.textContent = ''), 3000);
+    statusEl.textContent = "Saved session results cleared";
+    setTimeout(() => (statusEl.textContent = ""), 3000);
   }
 }
 
 function handleStatusClick() {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  if (indicator.classList.contains('complete') || indicator.classList.contains('error')) {
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  if (
+    indicator.classList.contains("complete") ||
+    indicator.classList.contains("error")
+  ) {
     togglePanel(true);
     document.querySelector('.wtr-if-tab-btn[data-tab="finder"]').click();
     displayResults(appState.runtime.cumulativeResults);
-    updateStatusIndicator('hidden');
+    updateStatusIndicator("hidden");
   }
 }
 
 function handleApplyClick(event) {
   const button = event.currentTarget;
   const action = button.dataset.action;
-  const replacement = button.dataset.suggestion || '';
+  const replacement = button.dataset.suggestion || "";
   let variationsToApply = [];
 
   // Enhanced logging for debugging the empty suggestion issue
   if (appState.config.loggingEnabled) {
-    log('Button click analysis:', {
+    utils_log("Button click analysis:", {
       action: action,
       replacementValue: replacement,
-      replacementLength: replacement ? replacement.length : 'empty',
-      buttonDataset: button.dataset
+      replacementLength: replacement ? replacement.length : "empty",
+      buttonDataset: button.dataset,
     });
   }
 
-  if (action === 'apply-all') {
+  if (action === "apply-all") {
     variationsToApply = JSON.parse(button.dataset.variations);
-  } else if (action === 'apply-selected') {
-    const groupEl = button.closest('.wtr-if-result-group');
-    const checkedBoxes = groupEl.querySelectorAll('.wtr-if-variation-checkbox:checked');
-    checkedBoxes.forEach(box => variationsToApply.push(box.value));
+  } else if (action === "apply-selected") {
+    const groupEl = button.closest(".wtr-if-result-group");
+    const checkedBoxes = groupEl.querySelectorAll(
+      ".wtr-if-variation-checkbox:checked",
+    );
+    checkedBoxes.forEach((box) => variationsToApply.push(box.value));
   }
 
   const uniqueVariations = [...new Set(variationsToApply)];
 
   if (uniqueVariations.length === 0) {
     const originalText = button.textContent;
-    button.textContent = 'None Selected!';
+    button.textContent = "None Selected!";
     setTimeout(() => {
       button.textContent = originalText;
     }, 2000);
@@ -2850,47 +3609,55 @@ function handleApplyClick(event) {
 
   if (uniqueVariations.length > 1) {
     uniqueVariations.sort((a, b) => b.length - a.length);
-    originalTerm = uniqueVariations.map(v => escapeRegExp(v)).join('|');
+    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
     isRegex = true;
-    log(`Applying suggestion "${replacement}" via multi-term regex: /${originalTerm}/gi`);
+    utils_log(
+      `Applying suggestion "${replacement}" via multi-term regex: /${originalTerm}/gi`,
+    );
   } else {
     originalTerm = uniqueVariations[0];
     isRegex = false;
-    log(`Applying suggestion "${replacement}" via simple replacement for: "${originalTerm}"`);
+    utils_log(
+      `Applying suggestion "${replacement}" via simple replacement for: "${originalTerm}"`,
+    );
   }
 
   // Enhanced validation to prevent empty suggestions
-  const finalReplacement = replacement && replacement.trim() !== '' ? replacement.trim() : null;
+  const finalReplacement =
+    replacement && replacement.trim() !== "" ? replacement.trim() : null;
   if (!finalReplacement) {
-    log(`ERROR: Empty or invalid replacement value detected. Aborting term addition.`, {
-      originalReplacement: replacement,
-      variations: uniqueVariations
-    });
+    utils_log(
+      "ERROR: Empty or invalid replacement value detected. Aborting term addition.",
+      {
+        originalReplacement: replacement,
+        variations: uniqueVariations,
+      },
+    );
 
     const originalText = button.textContent;
-    button.textContent = 'Invalid Suggestion!';
-    button.style.backgroundColor = '#dc3545';
+    button.textContent = "Invalid Suggestion!";
+    button.style.backgroundColor = "#dc3545";
     setTimeout(() => {
       button.textContent = originalText;
-      button.style.backgroundColor = '';
+      button.style.backgroundColor = "";
     }, 3000);
     return;
   }
 
-  const customEvent = new CustomEvent('wtr:addTerm', {
+  const customEvent = new CustomEvent("wtr:addTerm", {
     detail: {
       original: originalTerm,
       replacement: finalReplacement,
-      isRegex: isRegex
-    }
+      isRegex: isRegex,
+    },
   });
   window.dispatchEvent(customEvent);
 
   const originalText = button.textContent;
-  button.classList.add('sent');
-  button.textContent = 'Applied!';
+  button.classList.add("sent");
+  button.textContent = "Applied!";
   setTimeout(() => {
-    button.classList.remove('sent');
+    button.classList.remove("sent");
     button.textContent = originalText;
   }, 2000);
 }
@@ -2898,23 +3665,25 @@ function handleApplyClick(event) {
 function handleCopyVariationClick(event) {
   const button = event.currentTarget;
   const textToCopy = button.dataset.text;
-  if (!textToCopy) return;
+  if (!textToCopy) {
+    return;
+  }
 
   navigator.clipboard
     .writeText(textToCopy)
     .then(() => {
       const originalContent = button.innerHTML;
-      button.innerHTML = '✅';
+      button.innerHTML = "✅";
       button.disabled = true;
       setTimeout(() => {
         button.innerHTML = originalContent;
         button.disabled = false;
       }, 1500);
     })
-    .catch(err => {
-      console.error('Inconsistency Finder: Failed to copy text:', err);
+    .catch((err) => {
+      console.error("Inconsistency Finder: Failed to copy text:", err);
       const originalContent = button.innerHTML;
-      button.innerHTML = '❌';
+      button.innerHTML = "❌";
       setTimeout(() => {
         button.innerHTML = originalContent;
       }, 1500);
@@ -2923,53 +3692,60 @@ function handleCopyVariationClick(event) {
 
 function exportConfiguration() {
   const configData = {
-    version: '5.2',
+    version: "5.2",
     timestamp: new Date().toISOString(),
     config: appState.config,
     preferences: {
-      autoRestoreResults: appState.preferences.autoRestoreResults
-    }
+      autoRestoreResults: appState.preferences.autoRestoreResults,
+    },
   };
 
-  const blob = new Blob([JSON.stringify(configData, null, 2)], {type: 'application/json'});
+  const blob = new Blob([JSON.stringify(configData, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = `WTR Lab Term Inconsistency Finder-5.2-config-${new Date().toISOString().split('T')[0]}.json`;
+  a.download = `WTR Lab Term Inconsistency Finder-5.2-config-${new Date().toISOString().split("T")[0]}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  const statusEl = document.getElementById('wtr-if-status');
-  statusEl.textContent = 'Configuration exported successfully';
-  setTimeout(() => (statusEl.textContent = ''), 3000);
+  const statusEl = document.getElementById("wtr-if-status");
+  statusEl.textContent = "Configuration exported successfully";
+  setTimeout(() => (statusEl.textContent = ""), 3000);
 }
 
 function importConfiguration() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = e => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target.result);
 
         if (!data.config || !data.version) {
-          throw new Error('Invalid configuration file format');
+          throw new Error("Invalid configuration file format");
         }
 
         // Backup current config
-        const backup = {...appState.config};
+        const _backup = { ...appState.config };
 
         // Import new config
-        appState.config = {...appState.config, ...data.config};
+        appState.config = { ...appState.config, ...data.config };
         if (data.preferences) {
-          appState.preferences = {...appState.preferences, ...data.preferences};
+          appState.preferences = {
+            ...appState.preferences,
+            ...data.preferences,
+          };
         }
 
         saveConfig();
@@ -2979,17 +3755,22 @@ function importConfiguration() {
         populateModelSelector();
 
         // Update form fields
-        document.getElementById('wtr-if-use-json').checked = appState.config.useJson;
-        document.getElementById('wtr-if-logging-enabled').checked = appState.config.loggingEnabled;
-        document.getElementById('wtr-if-auto-restore').checked = appState.preferences.autoRestoreResults;
-        document.getElementById('wtr-if-temperature').value = appState.config.temperature;
-        document.getElementById('wtr-if-temp-value').textContent = appState.config.temperature;
+        document.getElementById("wtr-if-use-json").checked =
+          appState.config.useJson;
+        document.getElementById("wtr-if-logging-enabled").checked =
+          appState.config.loggingEnabled;
+        document.getElementById("wtr-if-auto-restore").checked =
+          appState.preferences.autoRestoreResults;
+        document.getElementById("wtr-if-temperature").value =
+          appState.config.temperature;
+        document.getElementById("wtr-if-temp-value").textContent =
+          appState.config.temperature;
 
-        const statusEl = document.getElementById('wtr-if-status');
-        statusEl.textContent = 'Configuration imported successfully';
-        setTimeout(() => (statusEl.textContent = ''), 3000);
+        const statusEl = document.getElementById("wtr-if-status");
+        statusEl.textContent = "Configuration imported successfully";
+        setTimeout(() => (statusEl.textContent = ""), 3000);
       } catch (err) {
-        alert('Failed to import configuration: ' + err.message);
+        alert("Failed to import configuration: " + err.message);
       }
     };
     reader.readAsText(file);
@@ -2998,65 +3779,102 @@ function importConfiguration() {
 }
 
 function addEventListeners() {
-  const panel = document.getElementById('wtr-if-panel');
-  if (!panel) return;
-  
-  panel.querySelector('.wtr-if-close-btn').addEventListener('click', () => togglePanel(false));
-  panel.querySelector('#wtr-if-save-config-btn').addEventListener('click', handleSaveConfig);
-  panel.querySelector('#wtr-if-find-btn').addEventListener('click', handleFindInconsistencies);
-  panel.querySelector('#wtr-if-continue-btn').addEventListener('click', handleContinueAnalysis);
-  panel.querySelector('#wtr-if-refresh-models-btn').addEventListener('click', fetchAndCacheModels);
-  panel.querySelector('#wtr-if-file-input').addEventListener('change', handleFileImportAndAnalyze);
-  panel.querySelector('#wtr-if-export-config-btn').addEventListener('click', exportConfiguration);
-  panel.querySelector('#wtr-if-import-config-btn').addEventListener('click', importConfiguration);
-  panel.querySelector('#wtr-if-restore-btn')?.addEventListener('click', handleRestoreSession);
-  panel.querySelector('#wtr-if-clear-session-btn')?.addEventListener('click', handleClearSession);
+  const panel = document.getElementById("wtr-if-panel");
+  if (!panel) {
+    return;
+  }
 
-  const filterSelect = panel.querySelector('#wtr-if-filter-select');
-  filterSelect.addEventListener('change', () => {
+  panel
+    .querySelector(".wtr-if-close-btn")
+    .addEventListener("click", () => togglePanel(false));
+  panel
+    .querySelector("#wtr-if-save-config-btn")
+    .addEventListener("click", handleSaveConfig);
+  panel
+    .querySelector("#wtr-if-find-btn")
+    .addEventListener("click", handleFindInconsistencies);
+  panel
+    .querySelector("#wtr-if-continue-btn")
+    .addEventListener("click", handleContinueAnalysis);
+  panel
+    .querySelector("#wtr-if-refresh-models-btn")
+    .addEventListener("click", fetchAndCacheModels);
+  panel
+    .querySelector("#wtr-if-file-input")
+    .addEventListener("change", handleFileImportAndAnalyze);
+  panel
+    .querySelector("#wtr-if-export-config-btn")
+    .addEventListener("click", exportConfiguration);
+  panel
+    .querySelector("#wtr-if-import-config-btn")
+    .addEventListener("click", importConfiguration);
+  panel
+    .querySelector("#wtr-if-restore-btn")
+    ?.addEventListener("click", handleRestoreSession);
+  panel
+    .querySelector("#wtr-if-clear-session-btn")
+    ?.addEventListener("click", handleClearSession);
+
+  const filterSelect = panel.querySelector("#wtr-if-filter-select");
+  filterSelect.addEventListener("change", () => {
     displayResults(appState.runtime.cumulativeResults);
     appState.config.activeFilter = filterSelect.value;
     saveConfig();
   });
 
-  document.getElementById('wtr-if-status-indicator').addEventListener('click', handleStatusClick);
-  panel.querySelector('#wtr-if-temperature').addEventListener('input', e => {
-    document.getElementById('wtr-if-temp-value').textContent = e.target.value;
+  document
+    .getElementById("wtr-if-status-indicator")
+    .addEventListener("click", handleStatusClick);
+  panel.querySelector("#wtr-if-temperature").addEventListener("input", (e) => {
+    document.getElementById("wtr-if-temp-value").textContent = e.target.value;
   });
 
-  panel.querySelector('#wtr-if-auto-restore').addEventListener('change', e => {
-    appState.preferences.autoRestoreResults = e.target.checked;
-    saveConfig();
-  });
+  panel
+    .querySelector("#wtr-if-auto-restore")
+    .addEventListener("change", (e) => {
+      appState.preferences.autoRestoreResults = e.target.checked;
+      saveConfig();
+    });
 
-  panel.querySelector('#wtr-if-deep-analysis-depth').addEventListener('change', e => {
-    appState.config.deepAnalysisDepth = parseInt(e.target.value) || 1;
-    saveConfig();
-  });
+  panel
+    .querySelector("#wtr-if-deep-analysis-depth")
+    .addEventListener("change", (e) => {
+      appState.config.deepAnalysisDepth = parseInt(e.target.value) || 1;
+      saveConfig();
+    });
 
-  panel.querySelectorAll('.wtr-if-tab-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+  panel.querySelectorAll(".wtr-if-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
       const targetTab = e.target.dataset.tab;
-      panel.querySelectorAll('.wtr-if-tab-btn').forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
-      panel.querySelectorAll('.wtr-if-tab-content').forEach(c => c.classList.remove('active'));
-      panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add('active');
+      panel
+        .querySelectorAll(".wtr-if-tab-btn")
+        .forEach((b) => b.classList.remove("active"));
+      e.target.classList.add("active");
+      panel
+        .querySelectorAll(".wtr-if-tab-content")
+        .forEach((c) => c.classList.remove("active"));
+      panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add("active");
       appState.config.activeTab = targetTab;
       saveConfig();
     });
   });
 
-  panel.querySelector('#wtr-if-add-key-btn').addEventListener('click', addApiKeyRow);
-  panel.querySelector('#wtr-if-api-keys-container').addEventListener('click', e => {
-    if (e.target.classList.contains('wtr-if-remove-key-btn')) {
-      if (panel.querySelectorAll('.wtr-if-key-row').length > 1) {
-        e.target.closest('.wtr-if-key-row').remove();
-      } else {
-        e.target.closest('.wtr-if-key-row').querySelector('input').value = '';
+  panel
+    .querySelector("#wtr-if-add-key-btn")
+    .addEventListener("click", addApiKeyRow);
+  panel
+    .querySelector("#wtr-if-api-keys-container")
+    .addEventListener("click", (e) => {
+      if (e.target.classList.contains("wtr-if-remove-key-btn")) {
+        if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {
+          e.target.closest(".wtr-if-key-row").remove();
+        } else {
+          e.target.closest(".wtr-if-key-row").querySelector("input").value = "";
+        }
       }
-    }
-  });
+    });
 }
+
 ;// ./src/modules/ui/panel.js
 // src/modules/ui/panel.js
 
@@ -3066,12 +3884,14 @@ function addEventListeners() {
 
 
 function createUI() {
-  if (document.getElementById('wtr-if-panel')) return;
+  if (document.getElementById("wtr-if-panel")) {
+    return;
+  }
 
-  const panel = document.createElement('div');
-  panel.id = 'wtr-if-panel';
+  const panel = document.createElement("div");
+  panel.id = "wtr-if-panel";
   panel.innerHTML = `
-            <div class="wtr-if-header"><h2>Term Inconsistency Finder ${VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
+            <div class="wtr-if-header"><h2>Term Inconsistency Finder ${version.VERSION}</h2><button class="wtr-if-close-btn">&times;</button></div>
             <div class="wtr-if-tabs">
                 <button class="wtr-if-tab-btn" data-tab="finder">Finder</button>
                 <button class="wtr-if-tab-btn" data-tab="config">Configuration</button>
@@ -3233,84 +4053,97 @@ function createUI() {
             </div>
         `;
   document.body.appendChild(panel);
-  const statusIndicator = document.createElement('div');
-  statusIndicator.id = 'wtr-if-status-indicator';
-  statusIndicator.innerHTML = `<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>`;
+  const statusIndicator = document.createElement("div");
+  statusIndicator.id = "wtr-if-status-indicator";
+  statusIndicator.innerHTML =
+    '<div class="wtr-if-status-icon"></div><span class="wtr-if-status-text"></span>';
   document.body.appendChild(statusIndicator);
-  
+
   // Call addEventListeners instead of defining them inline
   addEventListeners();
 }
 
 async function populateModelSelector() {
-  const selectEl = document.getElementById('wtr-if-model');
-  selectEl.innerHTML = '<option>Loading from cache...</option>';
+  const selectEl = document.getElementById("wtr-if-model");
+  selectEl.innerHTML = "<option>Loading from cache...</option>";
   selectEl.disabled = true;
   const cachedData = await GM_getValue(MODELS_CACHE_KEY, null);
   if (cachedData && cachedData.models && cachedData.models.length > 0) {
-    selectEl.innerHTML = cachedData.models.map(m => `<option value="${m}">${m.replace('models/', '')}</option>`).join('');
+    selectEl.innerHTML = cachedData.models
+      .map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+      .join("");
     selectEl.value = appState.config.model;
   } else {
-    selectEl.innerHTML = '<option value="">No models cached. Please refresh.</option>';
+    selectEl.innerHTML =
+      '<option value="">No models cached. Please refresh.</option>';
   }
   selectEl.disabled = false;
 }
 
 async function fetchAndCacheModels() {
   const apiKeyInfo = getAvailableApiKey();
-  const statusEl = document.getElementById('wtr-if-status');
+  const statusEl = document.getElementById("wtr-if-status");
   if (!apiKeyInfo) {
-    statusEl.textContent = 'Error: No available API keys. Add one or wait for cooldowns.';
-    setTimeout(() => (statusEl.textContent = ''), 4000);
+    statusEl.textContent =
+      "Error: No available API keys. Add one or wait for cooldowns.";
+    setTimeout(() => (statusEl.textContent = ""), 4000);
     return;
   }
   const apiKey = apiKeyInfo.key;
-  statusEl.textContent = 'Fetching model list...';
-  document.getElementById('wtr-if-refresh-models-btn').disabled = true;
+  statusEl.textContent = "Fetching model list...";
+  document.getElementById("wtr-if-refresh-models-btn").disabled = true;
   GM_xmlhttpRequest({
-    method: 'GET',
+    method: "GET",
     url: `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
     onload: async function (response) {
       try {
         const data = JSON.parse(response.responseText);
-        if (data.error) throw new Error(data.error.message);
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
         const filteredModels = data.models
-          .filter(m => m.supportedGenerationMethods.includes('generateContent'))
-          .map(m => m.name);
+          .filter((m) =>
+            m.supportedGenerationMethods.includes("generateContent"),
+          )
+          .map((m) => m.name);
         if (filteredModels.length > 0) {
-          await GM_setValue(MODELS_CACHE_KEY, {timestamp: Date.now(), models: filteredModels});
+          await GM_setValue(MODELS_CACHE_KEY, {
+            timestamp: Date.now(),
+            models: filteredModels,
+          });
           statusEl.textContent = `Success! Found ${filteredModels.length} models.`;
           await populateModelSelector();
         } else {
-          statusEl.textContent = 'No compatible models found.';
+          statusEl.textContent = "No compatible models found.";
         }
       } catch (e) {
         statusEl.textContent = `Error: ${e.message}`;
       } finally {
-        setTimeout(() => (statusEl.textContent = ''), 4000);
-        document.getElementById('wtr-if-refresh-models-btn').disabled = false;
+        setTimeout(() => (statusEl.textContent = ""), 4000);
+        document.getElementById("wtr-if-refresh-models-btn").disabled = false;
       }
     },
     onerror: function (error) {
-      console.error('Model fetch error:', error);
-      statusEl.textContent = 'Network error while fetching models.';
-      setTimeout(() => (statusEl.textContent = ''), 4000);
-      document.getElementById('wtr-if-refresh-models-btn').disabled = false;
-    }
+      console.error("Model fetch error:", error);
+      statusEl.textContent = "Network error while fetching models.";
+      setTimeout(() => (statusEl.textContent = ""), 4000);
+      document.getElementById("wtr-if-refresh-models-btn").disabled = false;
+    },
   });
 }
 
 function renderApiKeysUI() {
-  const container = document.getElementById('wtr-if-api-keys-container');
-  container.innerHTML = ''; // Clear existing
-  const keys = appState.config.apiKeys.length > 0 ? appState.config.apiKeys : ['']; // Show at least one empty input
+  const container = document.getElementById("wtr-if-api-keys-container");
+  container.innerHTML = ""; // Clear existing
+  const keys =
+    appState.config.apiKeys.length > 0 ? appState.config.apiKeys : [""]; // Show at least one empty input
 
-  keys.forEach(key => {
-    const keyRow = document.createElement('div');
-    keyRow.className = 'wtr-if-key-row';
+  keys.forEach((key) => {
+    const keyRow = document.createElement("div");
+    keyRow.className = "wtr-if-key-row";
     keyRow.innerHTML = `
             <input type="password" class="wtr-if-api-key-input" value="${escapeHtml(
-              key
+              key,
             )}" placeholder="Enter your API key">
             <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
         `;
@@ -3319,154 +4152,449 @@ function renderApiKeysUI() {
 }
 
 function addApiKeyRow() {
-  const container = document.getElementById('wtr-if-api-keys-container');
-  const keyRow = document.createElement('div');
-  keyRow.className = 'wtr-if-key-row';
+  const container = document.getElementById("wtr-if-api-keys-container");
+  const keyRow = document.createElement("div");
+  keyRow.className = "wtr-if-key-row";
   keyRow.innerHTML = `
         <input type="password" class="wtr-if-api-key-input" placeholder="Enter your API key">
         <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
     `;
   container.appendChild(keyRow);
-  keyRow.querySelector('input').focus();
+  keyRow.querySelector("input").focus();
 }
 
 async function togglePanel(show = null) {
-  const panel = document.getElementById('wtr-if-panel');
-  const isVisible = panel.style.display === 'flex';
+  const panel = document.getElementById("wtr-if-panel");
+  const isVisible = panel.style.display === "flex";
   const shouldShow = show !== null ? show : !isVisible;
-  panel.style.display = shouldShow ? 'flex' : 'none';
+  panel.style.display = shouldShow ? "flex" : "none";
   if (shouldShow) {
     // Restore UI state from config
     renderApiKeysUI();
-    document.getElementById('wtr-if-use-json').checked = appState.config.useJson;
-    document.getElementById('wtr-if-logging-enabled').checked = appState.config.loggingEnabled;
-    document.getElementById('wtr-if-auto-restore').checked = appState.preferences.autoRestoreResults;
-    const tempSlider = document.getElementById('wtr-if-temperature');
-    const tempValue = document.getElementById('wtr-if-temp-value');
+    document.getElementById("wtr-if-use-json").checked =
+      appState.config.useJson;
+    document.getElementById("wtr-if-logging-enabled").checked =
+      appState.config.loggingEnabled;
+    document.getElementById("wtr-if-auto-restore").checked =
+      appState.preferences.autoRestoreResults;
+    const tempSlider = document.getElementById("wtr-if-temperature");
+    const tempValue = document.getElementById("wtr-if-temp-value");
     tempSlider.value = appState.config.temperature;
     tempValue.textContent = appState.config.temperature;
 
     // Restore tab
-    panel.querySelectorAll('.wtr-if-tab-btn').forEach(b => b.classList.remove('active'));
-    panel.querySelectorAll('.wtr-if-tab-content').forEach(c => c.classList.remove('active'));
-    const activeTabBtn = panel.querySelector(`.wtr-if-tab-btn[data-tab="${appState.config.activeTab}"]`);
-    const activeTabContent = panel.querySelector(`#wtr-if-tab-${appState.config.activeTab}`);
-    if (activeTabBtn) activeTabBtn.classList.add('active');
-    if (activeTabContent) activeTabContent.classList.add('active');
+    panel
+      .querySelectorAll(".wtr-if-tab-btn")
+      .forEach((b) => b.classList.remove("active"));
+    panel
+      .querySelectorAll(".wtr-if-tab-content")
+      .forEach((c) => c.classList.remove("active"));
+    const activeTabBtn = panel.querySelector(
+      `.wtr-if-tab-btn[data-tab="${appState.config.activeTab}"]`,
+    );
+    const activeTabContent = panel.querySelector(
+      `#wtr-if-tab-${appState.config.activeTab}`,
+    );
+    if (activeTabBtn) {
+      activeTabBtn.classList.add("active");
+    }
+    if (activeTabContent) {
+      activeTabContent.classList.add("active");
+    }
 
     // Restore deep analysis depth
-    document.getElementById('wtr-if-deep-analysis-depth').value = appState.config.deepAnalysisDepth.toString();
+    document.getElementById("wtr-if-deep-analysis-depth").value =
+      appState.config.deepAnalysisDepth.toString();
 
     // Restore filter
-    document.getElementById('wtr-if-filter-select').value = appState.config.activeFilter;
+    document.getElementById("wtr-if-filter-select").value =
+      appState.config.activeFilter;
 
     await populateModelSelector();
 
     // Check for session results and show restore option if available
-    const sessionRestore = document.getElementById('wtr-if-session-restore');
-    if (appState.session.hasSavedResults && appState.preferences.autoRestoreResults) {
+    const sessionRestore = document.getElementById("wtr-if-session-restore");
+    if (
+      appState.session.hasSavedResults &&
+      appState.preferences.autoRestoreResults
+    ) {
       // Auto-restore if enabled
       handleRestoreSession();
     } else if (appState.session.hasSavedResults) {
-      sessionRestore.style.display = 'block';
+      sessionRestore.style.display = "block";
     } else {
-      sessionRestore.style.display = 'none';
+      sessionRestore.style.display = "none";
     }
   }
 }
 
-function updateStatusIndicator(state, message = '') {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  if (!indicator) return;
-  const iconEl = indicator.querySelector('.wtr-if-status-icon');
-  const textEl = indicator.querySelector('.wtr-if-status-text');
+function updateStatusIndicator(state, message = "") {
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  if (!indicator) {
+    return;
+  }
+  const iconEl = indicator.querySelector(".wtr-if-status-icon");
+  const textEl = indicator.querySelector(".wtr-if-status-text");
 
   indicator.className = state;
   textEl.textContent = message;
-  iconEl.textContent = ''; // Clear any previous icon content
+  iconEl.textContent = ""; // Clear any previous icon content
 
-  indicator.style.display = state === 'hidden' ? 'none' : 'flex';
+  indicator.style.display = state === "hidden" ? "none" : "flex";
   adjustIndicatorPosition();
 }
 
-function adjustIndicatorPosition() {
-  const indicator = document.getElementById('wtr-if-status-indicator');
-  if (!indicator) return;
+/**
+ * Dynamic Collision Avoidance System for WTR Status Indicator
+ *
+ * This system provides intelligent, real-time collision detection and avoidance
+ * for the WTR Term Inconsistency Finder status widget.
+ */
 
-  const otherWidget = document.querySelector('.nig-status-widget');
-  const bottomNav = document.querySelector('.bottom-reader-nav');
-  
-  // Check for bottom navigation conflict first
-  if (bottomNav && getComputedStyle(bottomNav).display !== 'none') {
-    log('Conflict detected with .bottom-reader-nav, adjusting position and z-index.');
-    // Move status indicator behind the bottom nav (z-index 1030)
-    indicator.style.zIndex = '1029'; // Lower than bottom nav (1030)
-    indicator.style.bottom = '160px'; // Higher position to avoid collision with NIG status widget
-  } else if (otherWidget && getComputedStyle(otherWidget).display !== 'none') {
-    log('Conflict detected with .nig-status-widget, adjusting position to avoid collision.');
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '180px'; // Much lower position to avoid NIG widget collision
-  } else {
-    // No conflicts, use safe default positioning
-    indicator.style.zIndex = '10000'; // Restore normal z-index
-    indicator.style.bottom = '120px'; // Safe default that's lower than before
+// Position constants
+const POSITION = {
+  BASE: "var(--nig-space-xl, 20px)", // Start at NIG widget level
+  NIG_CONFLICT: "80px", // Move up when NIG widget present
+  SAFE_DEFAULT: "60px", // Fallback position
+};
+
+// Collision detection state
+const collisionState = {
+  isMonitoringActive: false,
+  lastNigWidgetState: null,
+  currentPosition: null,
+  debounceTimer: null,
+};
+
+/**
+ * Get the current computed bottom position of an element
+ */
+function _getElementBottomPosition(element) {
+  if (!element) {
+    return null;
   }
+
+  const computed = getComputedStyle(element);
+  const bottom = computed.bottom;
+
+  // Extract numeric value from bottom position
+  if (bottom && bottom !== "auto") {
+    return parseFloat(bottom.replace("px", "")) || 0;
+  }
+
+  return 0;
+}
+
+/**
+ * Check if two elements would collide vertically
+ */
+function wouldCollide(element1, element2, spacing = 10) {
+  if (!element1 || !element2) {
+    return false;
+  }
+
+  const rect1 = element1.getBoundingClientRect();
+  const rect2 = element2.getBoundingClientRect();
+
+  // Check if elements overlap vertically
+  const element1Bottom = rect1.bottom;
+  const element2Top = rect2.top;
+
+  return element1Bottom + spacing > element2Top;
+}
+
+/**
+ * Determine optimal position based on current collision state
+ */
+function calculateOptimalPosition(nigWidget, indicator) {
+  const isNigVisible =
+    nigWidget && getComputedStyle(nigWidget).display !== "none";
+
+  // Log current state for debugging
+  const nigState = isNigVisible ? "present" : "absent";
+  const _currentPos = collisionState.currentPosition;
+
+  // Position logic
+  let newPosition = POSITION.BASE;
+  let newZIndex = 10000;
+
+  // Check for NIG widget conflict
+  if (isNigVisible && wouldCollide(indicator, nigWidget)) {
+    newPosition = POSITION.NIG_CONFLICT;
+    newZIndex = 10000;
+    utils_log(
+      `NIG widget conflict detected (${nigState}). Position: ${newPosition}, Z-index: ${newZIndex}`,
+    );
+  } else {
+    // No conflicts - return to base position
+    newPosition = POSITION.BASE;
+    newZIndex = 10000;
+    if (isNigVisible) {
+      utils_log(`No conflicts detected. Returning to base position: ${newPosition}`);
+    }
+  }
+
+  return {
+    position: newPosition,
+    zIndex: newZIndex,
+    states: { nig: nigState },
+  };
+}
+
+/**
+ * Apply position changes with smooth transitions
+ */
+function applyPosition(indicator, position, zIndex) {
+  if (!indicator) {
+    return;
+  }
+
+  // Only update if position has actually changed
+  if (collisionState.currentPosition === position) {
+    return;
+  }
+
+  collisionState.currentPosition = position;
+
+  // Apply position with smooth transition
+  indicator.style.bottom = position;
+  indicator.style.zIndex = zIndex;
+
+  utils_log(`Position updated to: ${position}, Z-index: ${zIndex}`);
+}
+
+/**
+ * Main collision detection function - dynamically monitors and adjusts position
+ */
+function adjustIndicatorPosition() {
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  if (!indicator) {
+    return;
+  }
+
+  // Get relevant elements
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
+
+  // Calculate optimal position based on current state
+  const { position, zIndex, states } = calculateOptimalPosition(
+    nigWidget,
+    indicator,
+  );
+
+  // Apply the calculated position
+  applyPosition(indicator, position, zIndex);
+
+  // Update state tracking
+  collisionState.lastNigWidgetState = states.nig;
 }
 
 function injectControlButton() {
   const mainObserver = new MutationObserver((mutations, mainObs) => {
-    const navBar = document.querySelector('nav.bottom-reader-nav');
+    const navBar = document.querySelector("nav.bottom-reader-nav");
     if (navBar) {
-      log('Bottom navigation bar found. Attaching persistent observer.');
+      utils_log("Bottom navigation bar found. Attaching persistent observer.");
       mainObs.disconnect();
 
       const navObserver = new MutationObserver(() => {
-        const targetContainer = navBar.querySelector('div[role="group"].btn-group');
-        if (targetContainer && !document.getElementById('wtr-if-analyze-btn')) {
-          log('Button container found. Injecting button.');
-          const analyzeButton = document.createElement('button');
-          analyzeButton.id = 'wtr-if-analyze-btn';
-          analyzeButton.className = 'wtr btn btn-outline-dark btn-sm';
-          analyzeButton.type = 'button';
-          analyzeButton.title = 'Analyze Inconsistencies';
-          analyzeButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>`;
-          analyzeButton.addEventListener('click', () => togglePanel(true));
+        const targetContainer = navBar.querySelector(
+          'div[role="group"].btn-group',
+        );
+        if (targetContainer && !document.getElementById("wtr-if-analyze-btn")) {
+          utils_log("Button container found. Injecting button.");
+          const analyzeButton = document.createElement("button");
+          analyzeButton.id = "wtr-if-analyze-btn";
+          analyzeButton.className = "wtr btn btn-outline-dark btn-sm";
+          analyzeButton.type = "button";
+          analyzeButton.title = "Analyze Inconsistencies";
+          analyzeButton.innerHTML =
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>';
+          analyzeButton.addEventListener("click", () => togglePanel(true));
           targetContainer.appendChild(analyzeButton);
         }
       });
 
-      navObserver.observe(navBar, {childList: true, subtree: true});
+      navObserver.observe(navBar, { childList: true, subtree: true });
       // Initial check
       const initialTarget = navBar.querySelector('div[role="group"].btn-group');
-      if (initialTarget && !document.getElementById('wtr-if-analyze-btn')) {
-        const analyzeButton = document.createElement('button');
-        analyzeButton.id = 'wtr-if-analyze-btn';
-        analyzeButton.className = 'wtr btn btn-outline-dark btn-sm';
-        analyzeButton.type = 'button';
-        analyzeButton.title = 'Analyze Inconsistencies';
-        analyzeButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>`;
-        analyzeButton.addEventListener('click', () => togglePanel(true));
+      if (initialTarget && !document.getElementById("wtr-if-analyze-btn")) {
+        const analyzeButton = document.createElement("button");
+        analyzeButton.id = "wtr-if-analyze-btn";
+        analyzeButton.className = "wtr btn btn-outline-dark btn-sm";
+        analyzeButton.type = "button";
+        analyzeButton.title = "Analyze Inconsistencies";
+        analyzeButton.innerHTML =
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg>';
+        analyzeButton.addEventListener("click", () => togglePanel(true));
         initialTarget.appendChild(analyzeButton);
       }
     }
   });
-  mainObserver.observe(document.body, {childList: true, subtree: true});
+  mainObserver.observe(document.body, { childList: true, subtree: true });
 }
 
+/**
+ * Initialize the dynamic collision avoidance system
+ */
+function initializeCollisionAvoidance() {
+  // Start monitoring
+  collisionState.isMonitoringActive = true;
+
+  // Initial position check
+  adjustIndicatorPosition();
+
+  // Set up comprehensive observers for dynamic collision detection
+  setupConflictObserver();
+  setupScrollListener();
+  setupResizeListener();
+
+  utils_log("Dynamic collision avoidance system initialized.");
+}
+
+/**
+ * Enhanced conflict observer with debounced updates and comprehensive monitoring
+ */
 function setupConflictObserver() {
-  const observer = new MutationObserver(() => {
-    adjustIndicatorPosition();
+  // Debounced observer to prevent excessive updates
+  const debouncedAdjustPosition = debounce(() => {
+    if (collisionState.isMonitoringActive) {
+      adjustIndicatorPosition();
+    }
+  }, 100);
+
+  const observer = new MutationObserver((mutations) => {
+    // Check if any relevant mutations occurred
+    const relevantMutations = mutations.some((mutation) => {
+      // Monitor for widget appearance/disappearance
+      if (mutation.type === "childList") {
+        return (
+          mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0
+        );
+      }
+      // Monitor for style/class changes that might affect visibility
+      if (mutation.type === "attributes") {
+        return ["style", "class", "display"].includes(mutation.attributeName);
+      }
+      return false;
+    });
+
+    if (relevantMutations) {
+      debouncedAdjustPosition();
+    }
   });
+
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['style', 'class']
+    attributeFilter: ["style", "class", "id", "display"],
   });
-  log('Conflict observer initialized.');
+
+  // Also observe NIG widget if it exists
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
+  if (nigWidget) {
+    observer.observe(nigWidget, {
+      attributes: true,
+      attributeFilter: ["style", "class", "display"],
+    });
+  }
+
+  utils_log("Enhanced conflict observer initialized (NIG widget only).");
 }
+
+/**
+ * Monitor scroll events to detect position changes
+ */
+function setupScrollListener() {
+  let scrollTimeout;
+  const handleScroll = () => {
+    if (!collisionState.isMonitoringActive) {
+      return;
+    }
+
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 150); // Debounce scroll events
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  utils_log("Scroll listener initialized for collision detection.");
+}
+
+/**
+ * Monitor window resize events
+ */
+function setupResizeListener() {
+  let resizeTimeout;
+  const handleResize = () => {
+    if (!collisionState.isMonitoringActive) {
+      return;
+    }
+
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      adjustIndicatorPosition();
+    }, 250); // Debounce resize events
+  };
+
+  window.addEventListener("resize", handleResize);
+  utils_log("Resize listener initialized for collision detection.");
+}
+
+/**
+ * Debounce utility function
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+/**
+ * Enable/disable collision monitoring
+ */
+function setCollisionMonitoring(enabled) {
+  collisionState.isMonitoringActive = enabled;
+  log(`Collision monitoring ${enabled ? "enabled" : "disabled"}.`);
+
+  if (enabled) {
+    adjustIndicatorPosition(); // Immediate update when re-enabling
+  }
+}
+
+/**
+ * Get current collision avoidance status for debugging
+ */
+function getCollisionAvoidanceStatus() {
+  const indicator = document.getElementById("wtr-if-status-indicator");
+  const nigWidget = document.querySelector(
+    ".nig-status-widget, #nig-status-widget",
+  );
+
+  return {
+    isMonitoring: collisionState.isMonitoringActive,
+    currentPosition: collisionState.currentPosition,
+    lastNigState: collisionState.lastNigWidgetState,
+    indicatorRect: indicator ? indicator.getBoundingClientRect() : null,
+    nigWidgetVisible: nigWidget
+      ? getComputedStyle(nigWidget).display !== "none"
+      : false,
+  };
+}
+
 ;// ./src/modules/ui/index.js
 // src/modules/ui/index.js
+
 
 
 
@@ -3476,7 +4604,7 @@ function setupConflictObserver() {
 // Import styles - Webpack will handle injection
 
 
-// Import version information
+// Import version information (fallback for build time)
 
 
 // Import core modules
@@ -3486,15 +4614,25 @@ function setupConflictObserver() {
 
 // --- INITIALIZATION ---
 async function src_main() {
-  await loadConfig();
-  log("Configuration loaded.");
-  createUI();
-  injectControlButton();
-  setupConflictObserver();
-  GM_registerMenuCommand("Term Inconsistency Finder", () => togglePanel(true));
+  try {
+    await loadConfig();
+    utils_log("Configuration loaded.");
+    createUI();
+    injectControlButton();
+    initializeCollisionAvoidance();
+    GM_registerMenuCommand("Term Inconsistency Finder", () =>
+      togglePanel(true),
+    );
+    utils_log(`WTR Term Inconsistency Finder v${version.VERSION} initialized successfully.`);
+  } catch (error) {
+    console.error("Failed to initialize WTR Term Inconsistency Finder:", error);
+  }
 }
 
 // Run the script
 src_main();
+
+})();
+
 /******/ })()
 ;

@@ -1,39 +1,32 @@
 // src/version.js
-// Centralized version configuration for the WTR Lab Term Inconsistency Finder
-// This is the SINGLE SOURCE OF TRUTH for all version information
+// Backward compatibility layer for version information
+// This file will be replaced by the build banner system in production
 
-export const VERSION = "5.3.3";
-export const VERSION_INFO = {
-  major: 5,
-  minor: 3,
-  patch: 3,
-  build: null, // Set to number for build versions, null for release
-  channel: "stable", // 'stable', 'dev', 'performance', 'greasyfork'
-};
+// Support both Node.js and browser environments
+let VERSION_INFO;
+try {
+  const versionModule = require("../config/versions.js");
+  VERSION_INFO = versionModule.VERSION_INFO;
+} catch {
+  // Fallback for browser environment or when config is not available
+  VERSION_INFO = {
+    SEMANTIC: "5.3.5",
+    DISPLAY: "v5.3.5",
+    BUILD_ENV: "production",
+    BUILD_DATE: "2025-11-10",
+  };
+}
 
-// Webpack build variants
-export const BUILD_VARIANTS = {
-  standard: {
-    version: VERSION,
-    suffix: "",
-    description: "Standard build for Tampermonkey",
-  },
-  development: {
-    version: `${VERSION}-build.[buildNo]`,
-    suffix: "-build",
-    description: "Development build with hot reload",
-  },
-  greasyfork: {
-    version: `${VERSION}-greasyfork`,
-    suffix: "-greasyfork",
-    description: "GreasyFork compliant build",
-  },
-  performance: {
-    version: `${VERSION}-perf`,
-    suffix: "-perf",
-    description: "Performance optimized build",
-  },
-};
+// Export VERSION constant for backward compatibility
+const VERSION = VERSION_INFO.SEMANTIC;
 
-// For runtime version display
-export const DISPLAY_VERSION = `v${VERSION}`;
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    VERSION,
+    VERSION_INFO,
+  };
+} else {
+  // Browser environment
+  window.WTR_VERSION = VERSION;
+  window.WTR_VERSION_INFO = VERSION_INFO;
+}

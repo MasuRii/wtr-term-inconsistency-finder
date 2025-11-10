@@ -5,6 +5,37 @@ All notable changes to the WTR Lab Term Inconsistency Finder will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.5] - 2025-11-10
+
+### Added
+- **Multi-Build System**: Implemented comprehensive webpack multi-target build system with performance, GreasyFork, and development builds
+- **Enhanced Development Workflow**: Complete auto-formatting and auto-fixing pipeline with Prettier, ESLint, and Stylelint integration
+- **Professional Build Pipeline**: Automated build process with CSS linting fixes, userscript validation, and version management
+
+### Changed
+- **Build Command Enhancement**: Updated `npm run build` to include full auto-fix capabilities (`lint:fix` instead of `lint:check`)
+- **CSS Processing**: Added proper CSS loader configuration for webpack to handle `@import` statements and style processing
+- **Linting System**: Complete integration of automated code quality checks with auto-fix capabilities
+- **Development Experience**: Streamlined development workflow with comprehensive formatting and linting
+
+### Fixed
+- **CSS Linting Errors**: Resolved selector ordering and duplicate selector issues in `src/styles/results.css`
+- **Userscript Validation**: Fixed webpack userscript header validation by removing conflicting `homepage` field from `package.json`
+- **CSS Import Processing**: Added missing CSS loader configuration to properly handle `@import` statements
+- **Build Pipeline**: Resolved webpack build failures related to CSS processing and userscript metadata validation
+
+### Technical
+- **Webpack Configuration**: Enhanced multi-target webpack configuration with CSS loaders for all build types
+- **CSS Architecture**: Maintained modular CSS structure with proper import handling and build optimization
+- **Version Management**: Improved version synchronization across all build artifacts and metadata files
+- **Quality Assurance**: Full integration of automated formatting and linting in the build pipeline
+- **Build Artifacts**: Optimized output for performance (93.5 KiB), GreasyFork (159 KiB), and development (159 KiB) builds
+
+### Infrastructure
+- **Development Tools**: Complete setup for Prettier, ESLint, and Stylelint with auto-fix capabilities
+- **Build Targets**: Professional build system supporting multiple distribution formats
+- **Code Quality**: Automated code formatting, linting, and validation in the build process
+
 ## [5.3.3] - 2025-11-07
 
 ### Added
@@ -114,7 +145,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **v5.3.3**: Current - Smart quotes system with active chapter detection
+- **v5.3.5**: Current - Multi-build system with comprehensive development workflow
+- **v5.3.3**: Smart quotes system with active chapter detection
 - **v5.3.2**: Fixed quote handling and UI conflicts
 - **v5.3.1**: Modular architecture with advanced features
 - **v5.2.0**: Legacy - Enhanced AI integration

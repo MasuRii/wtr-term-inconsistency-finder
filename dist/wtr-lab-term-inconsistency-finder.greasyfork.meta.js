@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
-// @description Performance-optimized version of the WTR Lab Term Inconsistency Finder. Finds term inconsistencies in WTR Lab chapters using Gemini AI with enhanced performance optimizations including tree shaking, minification, and code splitting.
-// @version 5.3.3-perf
+// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
+// @version 5.3.3
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -14,7 +14,6 @@
 // @icon https://www.google.com/s2/favicons?sz=64&domain=wtr-lab.com
 // @license MIT
 // @namespace http://tampermonkey.net/
-// @require http://localhost:8080/wtr-term-inconsistency-finder.performance.user.js
 // @run-at document-idle
 // @website https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==

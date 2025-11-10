@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name WTR Lab Term Inconsistency Finder
-// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI. GreasyFork compliant version.
-// @version 5.3.3-greasyfork
+// @name WTR Lab Term Inconsistency Finder [DEV]
+// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
+// @version 5.3.3-dev.1762789756800
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -14,7 +14,6 @@
 // @icon https://www.google.com/s2/favicons?sz=64&domain=wtr-lab.com
 // @license MIT
 // @namespace http://tampermonkey.net/
-// @require http://localhost:8080/wtr-term-inconsistency-finder.greasyfork.user.js
 // @run-at document-idle
 // @website https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==
