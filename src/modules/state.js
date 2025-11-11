@@ -1,5 +1,5 @@
 // src/modules/state.js
-import { log } from "./utils";
+import { log } from "./utils/core";
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_";
 export const CONFIG_KEY = `${SCRIPT_PREFIX}config`;
@@ -417,6 +417,27 @@ export function updateKeyState(
 /**
  * Get the next available key according to state management rules
  */
+export function mergeAnalysisResults(existingResults, newResults) {
+  // Merge new results with existing results, avoiding duplicates
+  const mergedResults = [...existingResults];
+  const existingTerms = new Set(
+    existingResults.map(
+      (result) => result.term?.toLowerCase() || result.text?.toLowerCase(),
+    ),
+  );
+
+  newResults.forEach((newResult) => {
+    const newTerm =
+      newResult.term?.toLowerCase() || newResult.text?.toLowerCase();
+    if (newTerm && !existingTerms.has(newTerm)) {
+      mergedResults.push(newResult);
+      existingTerms.add(newTerm);
+    }
+  });
+
+  return mergedResults;
+}
+
 export function getNextAvailableKey() {
   const keyStates = initializeKeyStates();
   const now = Date.now();

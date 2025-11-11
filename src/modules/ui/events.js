@@ -17,7 +17,6 @@ import {
   renderApiKeysUI,
   populateModelSelector,
   updateStatusIndicator,
-  _escapeHtml,
 } from "./panel";
 import { displayResults } from "./display";
 
