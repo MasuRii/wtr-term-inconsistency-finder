@@ -5,282 +5,95 @@ All notable changes to the WTR Lab Term Inconsistency Finder will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
 ## [5.3.6] - 2025-11-10
 
-### Added
-- **WTR Lab Term Replacer Integration Mode Switcher**:
-  - Introduced runtime detection via [`src/modules/utils.isWTRLabTermReplacerLoaded()`](src/modules/utils.js:982) to differentiate between:
-    - Using the original WTR site term replacer.
-    - Using the external WTR Lab Term Replacer userscript and JSON compatibility mode.
-  - Added clear configuration messaging and link to the supported external userscript, so users can explicitly choose their integration mode.
-- **Advanced API Key Rotation System**: Implemented state-managed key pool with persistent storage for improved reliability:
-  - **State Management**: Four key statuses (`AVAILABLE`, `ON_COOLDOWN`, `EXHAUSTED`, `INVALID`) persisted across page reloads
-  - **Smart Cooldowns**: Context-aware cooldowns based on error type:
-    - `EXHAUSTED`: 24-hour cooldown with automatic daily reset for quota exhaustion
-    - `ON_COOLDOWN` (UNAVAILABLE/INTERNAL): 1-minute cooldown for temporary server issues
-    - `ON_COOLDOWN` (DEADLINE_EXCEEDED): 30-second cooldown for timeouts
-    - `ON_COOLDOWN` (network errors): 5-minute cooldown for connectivity issues
-  - **Persistent State**: Key states saved to `localStorage` for cross-session reliability
-  - **Automatic Recovery**: Keys automatically transition to `AVAILABLE` when cooldowns expire
-  - **Failure Tracking**: Keys marked as `INVALID` after 3 consecutive failures
-  - **Intelligent Selection**: System finds the key that will be available soonest when all keys are temporarily unavailable
+### ✨ Added
+- **WTR Lab Term Replacer Integration Mode Switcher**: Automatically detects if the external Term Replacer userscript is active, switching between "Apply" and "Copy" modes accordingly. Provides clear user messaging.
+- **Advanced API Key Rotation System**: Implemented a state-managed key pool (`AVAILABLE`, `ON_COOLDOWN`, `EXHAUSTED`, `INVALID`) with persistent `localStorage` state. Features context-aware cooldowns, automatic recovery, and intelligent key selection to improve reliability and handle API limits gracefully.
 
-### Changed
-- **Gemini Prompt Refinement**: Updated the advanced system prompt in [`src/modules/geminiApi.js`](src/modules/geminiApi.js:20) to explicitly exclude non-user-actionable chapter title numbering discrepancies that originate from WTR Lab site-level or template-level behavior (such as systematic off-by-one chapter title patterns).
-- **Finder Tab Layout Stability**:
-  - Ensured the Finder tab preserves all intended sections:
-    - Primary Analysis Controls
-    - Deep Analysis Configuration
-    - Filter and Display Controls
-    - Results Display Area
-  - Restricted dynamic rendering to the dedicated `#wtr-if-results` container so structural UI elements are never cleared when updating results.
-- **Panel Stacking Order**:
-  - Updated `#wtr-if-panel` to use `z-index: 1040` (via [`src/styles/panel.css`](src/styles/panel.css:11)) so the Inconsistency Finder panel consistently appears above the site's bottom navigator while remaining independent from status widget stacking.
-- **UI Header Cleanup**: Removed version number from panel header for cleaner appearance (now shows "Term Inconsistency Finder" instead of "Term Inconsistency Finder 5.3.5")
+### ♻️ Changed
+- **Gemini Prompt Refinement**: Updated the system prompt to ignore non-user-actionable numbering discrepancies from the WTR Lab site templates.
+- **Finder Tab Layout Stability**: Ensured the main UI structure remains static during result updates, preventing layout shifts.
+- **UI Stacking Order**: Adjusted `z-index` to ensure the Finder panel appears above the site's bottom navigator.
+- **UI Header Cleanup**: Removed the version number from the panel header for a cleaner look.
 
-### Fixed
-- **Status Widget Collision and Jitter**:
-  - Refined collision logic in [`src/modules/ui/panel.js`](src/modules/ui/panel.js:441) so the status widget:
-    - Defaults to `bottom: var(--nig-space-xl, 20px)` in normal conditions.
-    - Only moves up to the conflict offset (e.g., `80px`) when a visible NIG status widget (or equivalent external status widget) actually overlaps the default position.
-    - Ignores the site's bottom reader navigator for vertical repositioning (it no longer causes spurious jumps), while preserving correct z-index ordering.
-- **Dynamic Apply/Copy Behavior for Finder Actions**:
-  - Centralized Apply/Copy mode handling in [`src/modules/ui/events.updateApplyCopyButtonsMode()`](src/modules/ui/events.js:286) so all Finder action buttons (global and per-result, including session-restored ones):
-    - Show and use "Apply Selected"/"Apply All" (with `apply-*` actions) only when the external WTR Lab Term Replacer userscript is detected.
-    - Show and use "Copy Selected"/"Copy All" (with `copy-*` actions) when the external userscript is not detected.
-  - Ensured [`src/modules/ui/events.handleApplyClick()`](src/modules/ui/events.js:347) routes strictly by `data-action`:
-    - `apply-*` → dispatches `wtr:addTerm` to the external replacer (when available).
-    - `copy-*` → produces non-destructive clipboard output in the format:
-      - `Term: variant1|variant2|...`
-      - `Replaced: chosenSuggestion`
-    - Prevents accidental apply attempts when the external replacer is unavailable.
-- **Button Behavior Consistency**: Fixed critical synchronization issues where button labels and functionality would become desynchronized from userscript detection state:
-  - Added `updateApplyCopyButtonsMode()` calls after filter changes to prevent drift during user interactions
-  - Added button mode synchronization after result rendering to maintain consistent state
-  - Added button synchronization when panel opens to establish correct initial state
-  - Prevents button labels from incorrectly reverting between "Copy"/"Apply" modes during filter changes
-- **Smart Quotes Safety and Correctness**:
-  - Reworked smart quote handling in [`src/modules/utils.smartenQuotes()`](src/modules/utils.js:54) and [`applySmartQuotesReplacement()`](src/modules/utils.js:186) to:
-    - Be conservative and context-aware for apostrophes and quotes.
-    - Preserve existing smart quotes.
-    - Include anomaly detection to prevent explosive or corrupt transformations (with automatic fallback to original text).
-    - Respect a `smartQuotesEnabled` configuration flag.
-- **API Backoff and Final Failure State**:
-  - Enhanced [`src/modules/geminiApi.js`](src/modules/geminiApi.js:30) with:
-    - Exponential backoff for retriable errors (2s, 4s, 8s, capped, with a global time window).
-    - Clear final failure conditions when all keys/retries are exhausted.
-    - Preservation of existing key rotation and cooldown behavior.
-    - Robust error handling to avoid tight retry loops and silent failures.
-- **Semantic Duplicate Merging Hardening**:
-  - Updated merging and similarity logic in [`src/modules/utils.js`](src/modules/utils.js:558) to:
-    - Incorporate script-aware checks (Latin/CJK/Cyrillic) and proper-name heuristics.
-    - Block cross-script or low-quality merges (e.g., preventing "Rhode" from merging with "雜物").
-    - Ensure replacement regexes are built only from the variations of the selected concept.
-- **API Key Rotation Critical Bug**: Fixed critical issue where script was stuck using only key index 0 despite having 5 keys configured:
-  - Root cause: Short cooldowns (1-2 seconds) were expiring before exponential backoff delays, causing repeated use of same failed key
-  - Solution: Implemented proper state-managed key rotation with persistent storage
-  - Result: Now properly rotates through all available keys instead of getting stuck in quota exhaustion loops
-  - Enhanced error messages for better troubleshooting and user feedback
-- **Status Widget User Experience**: Improved status widget messages by shortening verbose text that was causing width issues, making the interface more user-friendly
+### 🐛 Fixed
+- **Status Widget Collision**: Refined positioning logic to prevent jitter and overlap with other status widgets, correctly ignoring the site's bottom navigator for vertical placement.
+- **Dynamic Apply/Copy Behavior**: Centralized button mode handling to ensure all action buttons correctly sync with the Term Replacer's detection state, preventing incorrect actions.
+- **Smart Quotes Safety**: Reworked smart quote replacement to be more conservative and context-aware, preventing malformed transformations.
+- **API Backoff Logic**: Enhanced API calls with exponential backoff for retriable errors, preventing tight retry loops.
+- **Semantic Duplicate Merging**: Hardened merging logic with script-aware checks (e.g., Latin/CJK) to prevent improper merges of unrelated terms.
+- **Critical API Key Rotation Bug**: Fixed a major issue where the script was stuck using only the first API key. The new state management system resolves this completely.
+- **Status Widget UX**: Shortened verbose status messages to improve readability and prevent UI overflow.
 
 ## [5.3.5] - 2025-11-10
 
-### Added
-- **Multi-Build System**: Implemented comprehensive webpack multi-target build system with performance, GreasyFork, and development builds
-- **Enhanced Development Workflow**: Complete auto-formatting and auto-fixing pipeline with Prettier, ESLint, and Stylelint integration
-- **Professional Build Pipeline**: Automated build process with CSS linting fixes, userscript validation, and version management
+### ✨ Added
+- **Multi-Build System**: Implemented a webpack multi-target build system for performance, GreasyFork, and development outputs.
+- **Enhanced Development Workflow**: Integrated Prettier, ESLint, and Stylelint for a complete auto-formatting and auto-fixing pipeline.
 
-### Changed
-- **Build Command Enhancement**: Updated `npm run build` to include full auto-fix capabilities (`lint:fix` instead of `lint:check`)
-- **CSS Processing**: Added proper CSS loader configuration for webpack to handle `@import` statements and style processing
-- **Linting System**: Complete integration of automated code quality checks with auto-fix capabilities
-- **Development Experience**: Streamlined development workflow with comprehensive formatting and linting
+### ♻️ Changed
+- **Build Process**: Updated `npm run build` to include automated linting and fixing.
+- **CSS Processing**: Configured webpack with proper loaders to handle CSS `@import` and processing.
 
-### Fixed
-- **CSS Linting Errors**: Resolved selector ordering and duplicate selector issues in `src/styles/results.css`
-- **Userscript Validation**: Fixed webpack userscript header validation by removing conflicting `homepage` field from `package.json`
-- **CSS Import Processing**: Added missing CSS loader configuration to properly handle `@import` statements
-- **Build Pipeline**: Resolved webpack build failures related to CSS processing and userscript metadata validation
+### 🐛 Fixed
+- **CSS Linting Errors**: Resolved various selector ordering and duplicate issues.
+- **Userscript Validation**: Fixed a webpack header validation issue caused by a conflicting `homepage` field in `package.json`.
+- **Build Failures**: Corrected issues related to CSS processing and userscript metadata validation.
 
-### Technical
-- **Webpack Configuration**: Enhanced multi-target webpack configuration with CSS loaders for all build types
-- **CSS Architecture**: Maintained modular CSS structure with proper import handling and build optimization
-- **Version Management**: Improved version synchronization across all build artifacts and metadata files
-- **Quality Assurance**: Full integration of automated formatting and linting in the build pipeline
-- **Build Artifacts**: Optimized output for performance (93.5 KiB), GreasyFork (159 KiB), and development (159 KiB) builds
-
-### Infrastructure
-- **Development Tools**: Complete setup for Prettier, ESLint, and Stylelint with auto-fix capabilities
-- **Build Targets**: Professional build system supporting multiple distribution formats
-- **Code Quality**: Automated code formatting, linting, and validation in the build process
+### ⚙️ Internal
+- **Webpack Configuration**: Enhanced multi-target webpack config for all build types.
+- **Version Management**: Improved version synchronization across build artifacts.
+- **Optimized Build Artifacts**: Tailored outputs for performance (93.5 KiB), GreasyFork (159 KiB), and development (159 KiB).
 
 ## [5.3.3] - 2025-11-07
 
-### Added
-- **Smart Quotes Replacement System**: Implemented smart quotes replacement that runs BEFORE terms replacement to avoid inconsistencies due to quotation issues
-- **Active Chapter Skipping**: Both smart quotes and terms replacement now skip processing on chapters with the "chapter-tracker active" class to avoid conflicts with other userscripts
+### ✨ Added
+- **Smart Quotes Replacement**: Implemented a pre-processing step to standardize quotes before term analysis.
+- **Active Chapter Skipping**: The script now avoids processing chapters currently being edited to prevent conflicts.
 
-### Fixed
-- **Status Indicator Positioning**: Adjusted status indicator positioning to avoid collision with the existing NIG status widget
-  - Normal position: bottom: 50px (increased from 20px)
-  - When conflicts detected: bottom: 110px (increased from 80px)
-  - Maintains z-index management for proper layering
-
-### Technical
-- **Processing Order**: Changed order of operations to: smart quotes replacement → terms replacement
-- **Chapter Detection**: Enhanced chapter data collection to include tracker element references for proper active chapter detection
-- **Conflict Avoidance**: Active chapters are now skipped in both smart quotes and term replacement processes
+### 🐛 Fixed
+- **Status Indicator Positioning**: Adjusted CSS to avoid collision with other status widgets on the page.
 
 ## [5.3.2] - 2025-11-06
 
-### Fixed
-- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes ", single quotes ', or smart quotes " " ' '). This resolves false positives caused by different chapters being processed by different quote conversion scripts.
-- **Auto-Restore Configuration Bug**: Fixed persistence issue where "Auto-restore saved results on panel open" setting would not save when disabled. Configuration now properly persists user preferences.
-- **Bottom Navigation Conflict**: Fixed z-index conflict between status indicator and site bottom navigation. Status indicator now properly hides behind the bottom nav when visible to prevent visual overlap.
-
-### Technical
-- **AI Prompt Enhancement**: Added critical quote normalization logic to distinguish between genuine text inconsistencies and formatting differences
-- **Configuration Management**: Improved save/load mechanism to properly handle user preferences
-- **Z-Index Management**: Dynamic z-index adjustment based on bottom navigation presence (z-index: 1029 when bottom nav is visible, 10000 when hidden)
+### 🐛 Fixed
+- **Quote Handling False Positives**: Enhanced the AI prompt to correctly ignore differences in quote styles (e.g., straight vs. smart quotes).
+- **Configuration Bug**: Fixed an issue where the "Auto-restore saved results" setting would not save correctly when disabled.
+- **UI Conflict**: Resolved a `z-index` conflict with the site's bottom navigation bar.
 
 ## [5.3.1] - 2025-11-06
 
-### Added
-- **Modular Architecture**: Complete refactoring to modern ES6 modules for better maintainability
-- **Multi-API Key Support**: Smart rotation and cooldown management for multiple Gemini API keys
-- **Deep Analysis**: Multiple analysis iterations (1-5) for comprehensive results
-- **Session Persistence**: Auto-save and restore analysis results with continuation support
-- **Advanced Filtering**: Filter by priority levels, new vs verified findings
-- **Enhanced UI**: Modern, responsive interface with section-based layout
-- **Term Replacer Integration**: Seamless integration with Term Replacer extension
-- **Real-time Status**: Live progress indicators and detailed logging
-- **Context Summarization**: Intelligent handling of large result sets to prevent UI overload
-- **Smart Result Merging**: Quality-based conflict resolution for multiple analysis runs
-- **Enhanced Alias Detection**: Improved recognition of intentional aliases vs true inconsistencies
-- **Data Sanitization**: Automatic cleanup of corrupted suggestion data from restored sessions
-- **GitHub Actions**: Automated build workflow for continuous integration
-- **Comprehensive Documentation**: Detailed README with installation and development guides
+### ✨ Added
+- Complete refactoring to a modern **ES6 modular architecture**.
+- **Multi-API Key Support** with rotation and cooldowns.
+- **Deep Analysis** feature with multiple iterations.
+- **Session Persistence** for saving and restoring results.
+- **Advanced Filtering** and an enhanced, responsive UI.
+- Seamless integration with the **Term Replacer** userscript.
+- **GitHub Actions** for automated CI builds.
 
-### Changed
-- **Build System**: Migrated to webpack-userscript for professional builds
-- **Code Organization**: Split monolith into focused modules (api, state, ui, utils)
-- **Error Handling**: Enhanced retry logic with exponential backoff
-- **Performance**: Optimized memory usage and response processing
-- **User Experience**: Streamlined configuration workflow
-- **API Integration**: Improved model fetching and validation
-- **Session Management**: More robust storage and recovery mechanisms
+### ♻️ Changed
+- Migrated the build system to **webpack-userscript**.
+- Reorganized the codebase into focused modules (`api`, `state`, `ui`, `utils`).
+- Improved error handling with exponential backoff.
 
-### Fixed
-- **Quote Handling False Positives**: Enhanced AI prompt to prevent flagging terms that differ only in quote styles (straight quotes, smart quotes, curly quotes) - caused by different chapters being processed by different quote conversion scripts
-- **Auto-Restore Configuration Bug**: Fixed persistence issue where "Auto-restore saved results on panel open" setting would not save when disabled
-- **Session Restoration**: Fixed corrupted suggestion data handling
-- **Memory Leaks**: Resolved issues with large analysis result sets
-- **API Rate Limiting**: Improved cooldown and rotation logic
-- **UI Responsiveness**: Enhanced performance for large result displays
-- **Build Artifacts**: Proper .gitignore and distribution setup
-- **Development Workflow**: Hot reload proxy script functionality
-
-### Technical
-- **Architecture**: ES6 modules with clean separation of concerns
-- **Build Output**: Single-file bundle ready for Greasy Fork distribution
-- **Development**: Hot reload support with proxy script
-- **Testing**: Local development server with auto-rebuild
-- **Distribution**: GitHub Actions for automated builds
-- **Documentation**: Comprehensive developer and user guides
-- **Quote Normalization**: AI prompt enhancement for smarter quote-style inconsistency detection
-- **Configuration Management**: Improved save/load mechanism for user preferences
+### 🐛 Fixed
+- Addressed various bugs related to session restoration, memory leaks, API rate limiting, and UI responsiveness.
 
 ## [5.2.0] - 2025-10-XX (Legacy)
 
-### Added
-- Initial AI-powered inconsistency detection
-- Basic UI implementation
-- API key management
-- Priority-based result filtering
-
-### Changed
-- Improved AI prompting
-- Better error handling
-- UI refinements
-
-### Fixed
-- API response parsing
-- Memory optimization
-- Session management
+### ✨ Added
+- Initial AI-powered inconsistency detection.
+- Priority-based result filtering.
 
 ## [5.1.0] - 2025-09-XX (Legacy)
 
-### Added
-- Basic Gemini AI integration
-- Chapter data extraction
-- Results display system
-- Configuration management
-
-### Technical
-- Initial monolithic structure
-- Basic webpack setup
-- UI framework integration
-
-## Version History
-
-- **v5.3.5**: Current - Multi-build system with comprehensive development workflow
-- **v5.3.3**: Smart quotes system with active chapter detection
-- **v5.3.2**: Fixed quote handling and UI conflicts
-- **v5.3.1**: Modular architecture with advanced features
-- **v5.2.0**: Legacy - Enhanced AI integration
-- **v5.1.0**: Legacy - Initial AI-powered version
-- **v5.0.0**: Legacy - Basic inconsistency detection
-
-## Installation Notes
-
-### For Users
-- Install latest version from [Greasy Fork](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
-- Supports auto-updates via @updateURL
-- Requires Tampermonkey browser extension
-
-### For Developers
-- Clone repository and run `npm install`
-- Use `npm run dev` for development with hot reload
-- Use `npm run build` for production builds
-- See README.md for detailed setup instructions
-
-## Upcoming Features
-
-### Planned for v5.4.0
-- Enhanced localization support
-- Additional AI model support
-- Performance optimizations
-- Mobile UI improvements
-
-### Future Roadmap
-- Batch chapter processing
-- Advanced analytics dashboard
-- Community-driven rule sets
-- Multi-language support
-
-## Breaking Changes
-
-### v5.3.0 Migration
-- **API Keys**: Migrated from single key to array format (auto-migrated)
-- **UI Layout**: Completely redesigned interface (backward compatible)
-- **Configuration**: Enhanced settings with new options
-- **Build System**: New webpack-based build (affects developers only)
-
-### Migration Assistance
-- Existing configurations are automatically migrated
-- No user action required for updates
-- Previous session data is preserved and sanitized
-
-## Support
-
-For issues, feature requests, or questions:
-- **GitHub Issues**: [Create an issue](https://github.com/MasuRii/wtr-term-inconsistency-finder/issues)
-- **Discussions**: [Join discussions](https://github.com/MasuRii/wtr-term-inconsistency-finder/discussions)
-- **Greasy Fork**: Script page with community feedback
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and contribution process.
+### ✨ Added
+- Initial integration with the Gemini AI.
+- Basic chapter data extraction and results display.
 
 ---
 
