@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.6
+// @version 5.3.7
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -1537,6 +1537,14 @@ function startAnalysis(isContinuation = false) {
   }
 }
 
+function safeSetStyle(element, property, value) {
+  if (element && element.style && property) {
+    element.style[property] = value;
+    return true;
+  }
+  return false;
+}
+
 function handleSaveConfig() {
   const keyInputs = document.querySelectorAll(".wtr-if-api-key-input");
   const newApiKeys = [];
@@ -1650,7 +1658,7 @@ function handleRestoreSession() {
     // Hide session restore element if it exists (removed UI section)
     const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
     if (sessionRestoreEl) {
-      sessionRestoreEl.style.display = "none";
+      safeSetStyle(sessionRestoreEl, "display", "none");
     }
 
     // Enable continue button after restoring results
@@ -1662,7 +1670,11 @@ function handleRestoreSession() {
     const statusEl = document.getElementById("wtr-if-status");
     if (statusEl) {
       statusEl.textContent = `Restored ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults.length} results from previous session`;
-      setTimeout(() => (statusEl.textContent = ""), 3000);
+      setTimeout(() => {
+        if (statusEl) {
+          statusEl.textContent = "";
+        }
+      }, 3000);
     }
   }
 }
@@ -1673,7 +1685,7 @@ function handleClearSession() {
   // Hide session restore element if it exists (removed UI section)
   const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
   if (sessionRestoreEl) {
-    sessionRestoreEl.style.display = "none";
+    safeSetStyle(sessionRestoreEl, "display", "none");
   }
 
   // Disable continue button when clearing results
@@ -1685,7 +1697,11 @@ function handleClearSession() {
   const statusEl = document.getElementById("wtr-if-status");
   if (statusEl) {
     statusEl.textContent = "Saved session results cleared";
-    setTimeout(() => (statusEl.textContent = ""), 3000);
+    setTimeout(() => {
+      if (statusEl) {
+        statusEl.textContent = "";
+      }
+    }, 3000);
   }
 }
 
@@ -1862,7 +1878,9 @@ function handleApplyClick(event) {
     const originalText = button.textContent;
     button.textContent = "None Selected!";
     setTimeout(() => {
-      button.textContent = originalText;
+      if (button) {
+        button.textContent = originalText;
+      }
     }, 2000);
     return;
   }
@@ -1901,7 +1919,9 @@ function handleApplyClick(event) {
       const originalText = button.textContent;
       button.textContent = "Nothing to Copy";
       setTimeout(() => {
-        button.textContent = originalText;
+        if (button) {
+          button.textContent = originalText;
+        }
       }, 1500);
       return;
     }
@@ -1916,12 +1936,14 @@ function handleApplyClick(event) {
         try {
           const textarea = document.createElement("textarea");
           textarea.value = text;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
+          safeSetStyle(textarea, "position", "fixed");
+          safeSetStyle(textarea, "opacity", "0");
           document.body.appendChild(textarea);
           textarea.select();
           const successful = document.execCommand("copy");
-          document.body.removeChild(textarea);
+          if (textarea && textarea.parentNode) {
+            textarea.parentNode.removeChild(textarea);
+          }
           if (!successful) {
             reject(new Error("execCommand copy failed"));
           } else {
@@ -1936,16 +1958,26 @@ function handleApplyClick(event) {
     const originalText = button.textContent;
     writeToClipboard(output.trimEnd())
       .then(() => {
+        if (!button) {
+          return;
+        }
         button.textContent = "Copied!";
         setTimeout(() => {
-          button.textContent = originalText;
+          if (button) {
+            button.textContent = originalText;
+          }
         }, 1500);
       })
       .catch((err) => {
         (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Failed to copy terms payload.", err);
+        if (!button) {
+          return;
+        }
         button.textContent = "Copy Failed";
         setTimeout(() => {
-          button.textContent = originalText;
+          if (button) {
+            button.textContent = originalText;
+          }
         }, 1500);
       });
 
@@ -1978,10 +2010,12 @@ function handleApplyClick(event) {
 
     const originalText = button.textContent;
     button.textContent = "Invalid Suggestion!";
-    button.style.backgroundColor = "#dc3545";
+    safeSetStyle(button, "backgroundColor", "#dc3545");
     setTimeout(() => {
-      button.textContent = originalText;
-      button.style.backgroundColor = "";
+      if (button) {
+        button.textContent = originalText;
+        safeSetStyle(button, "backgroundColor", "");
+      }
     }, 3000);
     return;
   }
@@ -2037,8 +2071,10 @@ function handleCopyVariationClick(event) {
       button.innerHTML = "✅";
       button.disabled = true;
       setTimeout(() => {
-        button.innerHTML = originalContent;
-        button.disabled = false;
+        if (button) {
+          button.innerHTML = originalContent;
+          button.disabled = false;
+        }
       }, 1500);
     })
     .catch((err) => {
@@ -2046,7 +2082,9 @@ function handleCopyVariationClick(event) {
       const originalContent = button.innerHTML;
       button.innerHTML = "❌";
       setTimeout(() => {
-        button.innerHTML = originalContent;
+        if (button) {
+          button.innerHTML = originalContent;
+        }
       }, 1500);
     });
 }
@@ -2542,6 +2580,9 @@ function createUI() {
 
 async function populateModelSelector() {
   const selectEl = document.getElementById("wtr-if-model");
+  if (!selectEl) {
+    return;
+  }
   selectEl.innerHTML = "<option>Loading from cache...</option>";
   selectEl.disabled = true;
   const cachedData = await GM_getValue(_state__WEBPACK_IMPORTED_MODULE_0__/* .MODELS_CACHE_KEY */ .ES, null);
@@ -2611,6 +2652,9 @@ async function fetchAndCacheModels() {
 
 function renderApiKeysUI() {
   const container = document.getElementById("wtr-if-api-keys-container");
+  if (!container) {
+    return;
+  }
   container.innerHTML = ""; // Clear existing
   const keys =
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length > 0 ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys : [""]; // Show at least one empty input
@@ -2642,6 +2686,9 @@ function addApiKeyRow() {
 
 async function togglePanel(show = null) {
   const panel = document.getElementById("wtr-if-panel");
+  if (!panel) {
+    return;
+  }
   const isVisible = panel.style.display === "flex";
   const shouldShow = show !== null ? show : !isVisible;
   panel.style.display = shouldShow ? "flex" : "none";
@@ -3545,7 +3592,7 @@ module.exports = function (cssWithMappingToString) {
 /***/ ((module) => {
 
 "use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.6","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run format && npm run lint:fix && npm run version:update && webpack --mode=production","build:performance":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js version","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"css-loader":"^7.1.2","eslint":"^9.39.1","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.4","prettier":"^3.6.2","style-loader":"^4.0.0","stylelint":"^16.25.0","stylelint-prettier":"^5.0.3","stylelint-config-standard":"^39.0.1","webpack":"^5.102.1","webpack-cli":"^6.0.1","webpack-dev-server":"^5.2.2","webpack-userscript":"^3.2.3"}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.7","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run format && npm run lint:fix && npm run version:update && webpack --mode=production","build:performance":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js version","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"css-loader":"^7.1.2","eslint":"^9.39.1","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.4","prettier":"^3.6.2","style-loader":"^4.0.0","stylelint":"^16.25.0","stylelint-prettier":"^5.0.3","stylelint-config-standard":"^39.0.1","webpack":"^5.102.1","webpack-cli":"^6.0.1","webpack-dev-server":"^5.2.2","webpack-userscript":"^3.2.3"}}');
 
 /***/ }),
 

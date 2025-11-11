@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.3.7] - 2025-11-11
+
+### 🐛 Fixed
+- **Critical TypeError in Failure-Handling Logic**: Resolved unhandled TypeError when accessing 'style' property of null DOM elements during deep analysis API retry exhaustion scenarios. Added comprehensive null checks and defensive programming patterns to prevent UI crashes when elements become detached during async error handling.
+- **Graceful Failure Sequences**: Implemented robust error handling that ensures the script executes complete and graceful failure sequences without uncaught exceptions after all deep analysis API retry attempts are exhausted.
+- **DOM Element Validation**: Added proper validation for all DOM element references before accessing properties, including progress indicators, error messaging elements, and UI state management components.
+- **Safe Style Property Access**: Created `safeSetStyle()` helper function to prevent TypeError exceptions when DOM elements are missing or detached during timeout handlers and asynchronous operations.
+- **UI State Consistency**: Ensured the user interface remains responsive and consistent during error states, preventing frozen, blocked, or inconsistent UI states during failure scenarios.
+
 ## [5.3.6] - 2025-11-10
 
 ### ✨ Added

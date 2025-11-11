@@ -79,6 +79,14 @@ function startAnalysis(isContinuation = false) {
   }
 }
 
+function safeSetStyle(element, property, value) {
+  if (element && element.style && property) {
+    element.style[property] = value;
+    return true;
+  }
+  return false;
+}
+
 export function handleSaveConfig() {
   const keyInputs = document.querySelectorAll(".wtr-if-api-key-input");
   const newApiKeys = [];
@@ -192,7 +200,7 @@ export function handleRestoreSession() {
     // Hide session restore element if it exists (removed UI section)
     const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
     if (sessionRestoreEl) {
-      sessionRestoreEl.style.display = "none";
+      safeSetStyle(sessionRestoreEl, "display", "none");
     }
 
     // Enable continue button after restoring results
@@ -204,7 +212,11 @@ export function handleRestoreSession() {
     const statusEl = document.getElementById("wtr-if-status");
     if (statusEl) {
       statusEl.textContent = `Restored ${appState.runtime.cumulativeResults.length} results from previous session`;
-      setTimeout(() => (statusEl.textContent = ""), 3000);
+      setTimeout(() => {
+        if (statusEl) {
+          statusEl.textContent = "";
+        }
+      }, 3000);
     }
   }
 }
@@ -215,7 +227,7 @@ export function handleClearSession() {
   // Hide session restore element if it exists (removed UI section)
   const sessionRestoreEl = document.getElementById("wtr-if-session-restore");
   if (sessionRestoreEl) {
-    sessionRestoreEl.style.display = "none";
+    safeSetStyle(sessionRestoreEl, "display", "none");
   }
 
   // Disable continue button when clearing results
@@ -227,7 +239,11 @@ export function handleClearSession() {
   const statusEl = document.getElementById("wtr-if-status");
   if (statusEl) {
     statusEl.textContent = "Saved session results cleared";
-    setTimeout(() => (statusEl.textContent = ""), 3000);
+    setTimeout(() => {
+      if (statusEl) {
+        statusEl.textContent = "";
+      }
+    }, 3000);
   }
 }
 
@@ -404,7 +420,9 @@ export function handleApplyClick(event) {
     const originalText = button.textContent;
     button.textContent = "None Selected!";
     setTimeout(() => {
-      button.textContent = originalText;
+      if (button) {
+        button.textContent = originalText;
+      }
     }, 2000);
     return;
   }
@@ -443,7 +461,9 @@ export function handleApplyClick(event) {
       const originalText = button.textContent;
       button.textContent = "Nothing to Copy";
       setTimeout(() => {
-        button.textContent = originalText;
+        if (button) {
+          button.textContent = originalText;
+        }
       }, 1500);
       return;
     }
@@ -458,12 +478,14 @@ export function handleApplyClick(event) {
         try {
           const textarea = document.createElement("textarea");
           textarea.value = text;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
+          safeSetStyle(textarea, "position", "fixed");
+          safeSetStyle(textarea, "opacity", "0");
           document.body.appendChild(textarea);
           textarea.select();
           const successful = document.execCommand("copy");
-          document.body.removeChild(textarea);
+          if (textarea && textarea.parentNode) {
+            textarea.parentNode.removeChild(textarea);
+          }
           if (!successful) {
             reject(new Error("execCommand copy failed"));
           } else {
@@ -478,16 +500,26 @@ export function handleApplyClick(event) {
     const originalText = button.textContent;
     writeToClipboard(output.trimEnd())
       .then(() => {
+        if (!button) {
+          return;
+        }
         button.textContent = "Copied!";
         setTimeout(() => {
-          button.textContent = originalText;
+          if (button) {
+            button.textContent = originalText;
+          }
         }, 1500);
       })
       .catch((err) => {
         log("Failed to copy terms payload.", err);
+        if (!button) {
+          return;
+        }
         button.textContent = "Copy Failed";
         setTimeout(() => {
-          button.textContent = originalText;
+          if (button) {
+            button.textContent = originalText;
+          }
         }, 1500);
       });
 
@@ -520,10 +552,12 @@ export function handleApplyClick(event) {
 
     const originalText = button.textContent;
     button.textContent = "Invalid Suggestion!";
-    button.style.backgroundColor = "#dc3545";
+    safeSetStyle(button, "backgroundColor", "#dc3545");
     setTimeout(() => {
-      button.textContent = originalText;
-      button.style.backgroundColor = "";
+      if (button) {
+        button.textContent = originalText;
+        safeSetStyle(button, "backgroundColor", "");
+      }
     }, 3000);
     return;
   }
@@ -579,8 +613,10 @@ export function handleCopyVariationClick(event) {
       button.innerHTML = "✅";
       button.disabled = true;
       setTimeout(() => {
-        button.innerHTML = originalContent;
-        button.disabled = false;
+        if (button) {
+          button.innerHTML = originalContent;
+          button.disabled = false;
+        }
       }, 1500);
     })
     .catch((err) => {
@@ -588,7 +624,9 @@ export function handleCopyVariationClick(event) {
       const originalContent = button.innerHTML;
       button.innerHTML = "❌";
       setTimeout(() => {
-        button.innerHTML = originalContent;
+        if (button) {
+          button.innerHTML = originalContent;
+        }
       }, 1500);
     });
 }

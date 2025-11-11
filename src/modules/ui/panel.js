@@ -207,6 +207,9 @@ export function createUI() {
 
 export async function populateModelSelector() {
   const selectEl = document.getElementById("wtr-if-model");
+  if (!selectEl) {
+    return;
+  }
   selectEl.innerHTML = "<option>Loading from cache...</option>";
   selectEl.disabled = true;
   const cachedData = await GM_getValue(MODELS_CACHE_KEY, null);
@@ -276,6 +279,9 @@ export async function fetchAndCacheModels() {
 
 export function renderApiKeysUI() {
   const container = document.getElementById("wtr-if-api-keys-container");
+  if (!container) {
+    return;
+  }
   container.innerHTML = ""; // Clear existing
   const keys =
     appState.config.apiKeys.length > 0 ? appState.config.apiKeys : [""]; // Show at least one empty input
@@ -307,6 +313,9 @@ export function addApiKeyRow() {
 
 export async function togglePanel(show = null) {
   const panel = document.getElementById("wtr-if-panel");
+  if (!panel) {
+    return;
+  }
   const isVisible = panel.style.display === "flex";
   const shouldShow = show !== null ? show : !isVisible;
   panel.style.display = shouldShow ? "flex" : "none";
