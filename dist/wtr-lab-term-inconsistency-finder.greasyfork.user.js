@@ -5720,8 +5720,61 @@ function clearSessionResults() {
  */
 function loadKeyStates() {
   try {
-    const savedStates = GM_getValue(KEY_STATE_KEY, {});
-    return savedStates || {};
+    const savedStates = GM_getValue(KEY_STATE_KEY, {}) || {};
+    const now = Date.now();
+    const normalizedStates = {};
+
+    Object.keys(savedStates).forEach((key) => {
+      const parsedIndex = parseInt(key, 10);
+      const index = Number.isNaN(parsedIndex) ? key : parsedIndex;
+      const raw = savedStates[key] || {};
+
+      // Defensive normalization
+      const status = raw.status || "AVAILABLE";
+      const unlockTime =
+        typeof raw.unlockTime === "number" && Number.isFinite(raw.unlockTime)
+          ? raw.unlockTime
+          : 0;
+      const failureCount =
+        typeof raw.failureCount === "number" && raw.failureCount >= 0
+          ? raw.failureCount
+          : 0;
+
+      let normalizedStatus = status;
+      let normalizedUnlockTime = unlockTime;
+
+      // Auto-refresh cooldown expiry on load to avoid stale "ON_COOLDOWN"
+      if (normalizedStatus === "ON_COOLDOWN" && now > normalizedUnlockTime) {
+        normalizedStatus = "AVAILABLE";
+        normalizedUnlockTime = 0;
+      }
+
+      normalizedStates[index] = {
+        status: normalizedStatus,
+        unlockTime: normalizedUnlockTime,
+        lastUsed:
+          typeof raw.lastUsed === "number" && Number.isFinite(raw.lastUsed)
+            ? raw.lastUsed
+            : null,
+        failureCount,
+        lastReset:
+          typeof raw.lastReset === "number" && Number.isFinite(raw.lastReset)
+            ? raw.lastReset
+            : raw.lastReset || null,
+      };
+    });
+
+    // Persist normalized states if any structural or semantic differences exist.
+    const serializedOriginal = JSON.stringify(savedStates);
+    const serializedNormalized = JSON.stringify(normalizedStates);
+    if (serializedOriginal !== serializedNormalized) {
+      saveKeyStates(normalizedStates);
+      (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(
+        "Inconsistency Finder: Normalized API key states on load to prevent stale cooldown or invalid metadata.",
+      );
+    }
+
+    return normalizedStates;
   } catch (e) {
     console.error("Inconsistency Finder: Error loading key states:", e);
     return {};
@@ -5816,15 +5869,36 @@ function updateKeyState(
     };
   }
 
+  // Ensure unlockTime is numeric
+  const safeUnlockTime =
+    typeof unlockTime === "number" && Number.isFinite(unlockTime)
+      ? unlockTime
+      : 0;
+
+  // Normalize: if setting ON_COOLDOWN with past unlockTime (time drift), treat as AVAILABLE.
+  let nextStatus = status;
+  let nextUnlockTime = safeUnlockTime;
+  if (nextStatus === "ON_COOLDOWN" && now > safeUnlockTime) {
+    nextStatus = "AVAILABLE";
+    nextUnlockTime = 0;
+  }
+
+  const prevFailureCount =
+    typeof keyStates[keyIndex].failureCount === "number"
+      ? keyStates[keyIndex].failureCount
+      : 0;
+
+  const nextFailureCount = Math.max(0, prevFailureCount + failureCount);
+
   keyStates[keyIndex] = {
     ...keyStates[keyIndex],
-    status: status,
-    unlockTime: unlockTime || 0,
+    status: nextStatus,
+    unlockTime: nextUnlockTime,
     lastUsed: now,
-    failureCount: Math.max(0, keyStates[keyIndex].failureCount + failureCount),
+    failureCount: nextFailureCount,
   };
 
-  // Mark as permanently invalid after 3 consecutive failures
+  // Mark as permanently invalid after 3 consecutive failures (unless explicitly set INVALID)
   if (keyStates[keyIndex].failureCount >= 3 && status !== "INVALID") {
     keyStates[keyIndex].status = "INVALID";
   }
@@ -5842,6 +5916,34 @@ function getNextAvailableKey() {
 
   if (!appState.config.apiKeys || appState.config.apiKeys.length === 0) {
     return null;
+  }
+
+  // Proactively refresh any keys whose cooldown has expired based on real-time clock.
+  // This ensures that after inactivity, the first attempt sees available keys
+  // without requiring a prior failure to trigger a state refresh.
+  let refreshNeeded = false;
+  for (let i = 0; i < appState.config.apiKeys.length; i++) {
+    const state = keyStates[i];
+    if (
+      state &&
+      state.status === "ON_COOLDOWN" &&
+      typeof state.unlockTime === "number" &&
+      Number.isFinite(state.unlockTime) &&
+      now > state.unlockTime
+    ) {
+      keyStates[i] = {
+        ...state,
+        status: "AVAILABLE",
+        unlockTime: 0,
+      };
+      refreshNeeded = true;
+    }
+  }
+  if (refreshNeeded) {
+    saveKeyStates(keyStates);
+    (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(
+      "Inconsistency Finder: Refreshed API key cooldown states before selection.",
+    );
   }
 
   // First pass: look for AVAILABLE keys
