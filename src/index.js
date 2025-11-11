@@ -3,7 +3,7 @@
 // Import styles - Webpack will handle injection
 import "./styles/main.css";
 
-// Import version information
+// Import version information (fallback for build time)
 import { VERSION } from "./version";
 
 // Import core modules
@@ -13,17 +13,24 @@ import {
   createUI,
   injectControlButton,
   initializeCollisionAvoidance,
-  togglePanel
+  togglePanel,
 } from "./modules/ui";
 
 // --- INITIALIZATION ---
 async function main() {
-  await loadConfig();
-  log("Configuration loaded.");
-  createUI();
-  injectControlButton();
-  initializeCollisionAvoidance();
-  GM_registerMenuCommand("Term Inconsistency Finder", () => togglePanel(true));
+  try {
+    await loadConfig();
+    log("Configuration loaded.");
+    createUI();
+    injectControlButton();
+    initializeCollisionAvoidance();
+    GM_registerMenuCommand("Term Inconsistency Finder", () =>
+      togglePanel(true),
+    );
+    log(`WTR Term Inconsistency Finder v${VERSION} initialized successfully.`);
+  } catch (error) {
+    console.error("Failed to initialize WTR Term Inconsistency Finder:", error);
+  }
 }
 
 // Run the script

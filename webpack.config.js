@@ -1,22 +1,128 @@
+// webpack.config.js
+// Multi-build configuration for WTR Term Inconsistency Finder
+
 const path = require("path");
 const { UserscriptPlugin } = require("webpack-userscript");
+const pkg = require("./package.json");
+const { VERSION_INFO, getVersion } = require("./config/versions.js");
 
-const { VERSION } = require('./src/version.js');
+// Common metadata for all builds
+const COMMON_META = {
+  description: pkg.description,
+  author: pkg.author,
+  license: pkg.license,
+  namespace: "http://tampermonkey.net/",
+  match: "https://wtr-lab.com/en/novel/*/*/*",
+  icon: "https://www.google.com/s2/favicons?sz=64&domain=wtr-lab.com",
+  connect: "generativelanguage.googleapis.com",
+  grant: [
+    "GM_setValue",
+    "GM_getValue",
+    "GM_addStyle",
+    "GM_registerMenuCommand",
+    "GM_xmlhttpRequest",
+  ],
+  "run-at": "document-idle",
+  supportURL: "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
+  website: "https://github.com/MasuRii/wtr-term-inconsistency-finder",
+};
 
-module.exports = {
+// Script name constants
+const SCRIPT_NAME = "WTR Lab Term Inconsistency Finder";
+const PACKAGE_NAME = pkg.name;
+
+// Build time for development builds
+const buildTime = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15);
+
+// 1. Performance Build (Production)
+const performanceConfig = {
+  name: "performance",
+  mode: "production",
   entry: "./src/index.js",
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "wtr-term-inconsistency-finder.user.js",
-    publicPath: "http://localhost:8080/",
+    filename: `${PACKAGE_NAME}.user.js`,
   },
   module: {
     rules: [
       {
         test: /\.css$/,
-        use: ["style-loader", "css-loader"],
+        use: [
+          "style-loader",
+          "css-loader"
+        ]
+      }
+    ]
+  },
+  optimization: {
+    minimize: true,
+    usedExports: true,
+    concatenateModules: true,
+    splitChunks: {
+      chunks: "all",
+    },
+  },
+  plugins: [
+    new UserscriptPlugin({
+      headers: {
+        ...COMMON_META,
+        name: SCRIPT_NAME,
+        version: getVersion("semantic"),
+        downloadURL: `https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/${PACKAGE_NAME}.user.js`,
+        updateURL: `https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/${PACKAGE_NAME}.user.js`,
       },
-    ],
+      proxyScript: false,
+    }),
+  ],
+};
+
+// 2. GreasyFork Build
+const greasyforkConfig = {
+  name: "greasyfork",
+  mode: "production",
+  entry: "./src/index.js",
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: `${PACKAGE_NAME}.greasyfork.user.js`,
+  },
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: [
+          "style-loader",
+          "css-loader"
+        ]
+      }
+    ]
+  },
+  optimization: {
+    minimize: false,
+    usedExports: true,
+    concatenateModules: true,
+  },
+  plugins: [
+    new UserscriptPlugin({
+      headers: {
+        ...COMMON_META,
+        name: SCRIPT_NAME,
+        version: getVersion("semantic"),
+        // No updateURL/downloadURL for GreasyFork compliance
+      },
+      proxyScript: false,
+    }),
+  ],
+};
+
+// 3. Development Build
+const devConfig = {
+  name: "dev",
+  mode: "development",
+  entry: "./src/index.js",
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: `${PACKAGE_NAME}.dev.user.js`,
+    publicPath: "http://localhost:8080/",
   },
   devServer: {
     static: {
@@ -25,42 +131,45 @@ module.exports = {
     port: 8080,
     hot: true,
     liveReload: false,
+    client: {
+      webSocketURL: "ws://localhost:8080/ws",
+      overlay: false,
+      logging: "none",
+    },
+  },
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: [
+          "style-loader",
+          "css-loader"
+        ]
+      }
+    ]
   },
   optimization: {
-    // Disable minification for Greasy Fork compliance
     minimize: false,
+    usedExports: true,
+    splitChunks: {
+      chunks: "all",
+    },
   },
   plugins: [
     new UserscriptPlugin({
-      headers: (vars) => ({
-        name: "WTR Lab Term Inconsistency Finder",
-        namespace: "http://tampermonkey.net/",
-        version: vars.isDev ? `${VERSION}-build.[buildNo]` : VERSION,
-        description: "Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing. Includes session persistence, auto-restore results with continuation support, and configuration management. Enhanced with author note exclusion, improved alias detection, and streamlined UI.",
-        author: "MasuRii",
-        license: "MIT",
-        match: "https://wtr-lab.com/en/novel/*/*/*",
-        icon: "https://www.google.com/s2/favicons?sz=64&domain=wtr-lab.com",
-        connect: "generativelanguage.googleapis.com",
-        grant: [
-          "GM_setValue",
-          "GM_getValue",
-          "GM_addStyle",
-          "GM_registerMenuCommand",
-          "GM_xmlhttpRequest",
-        ],
-        "run-at": "document-idle",
-        // Updated repository links
-        "updateURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
-        "downloadURL": "https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/wtr-term-inconsistency-finder.user.js",
-        "supportURL": "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
-        "website": "https://github.com/MasuRii/wtr-term-inconsistency-finder",
-      }),
+      headers: {
+        ...COMMON_META,
+        name: `${SCRIPT_NAME} [DEV]`,
+        version: getVersion("dev"),
+      },
       proxyScript: {
-        baseUrl: "http://127.0.0.1:8080/",
+        baseUrl: "http://localhost:8080",
         filename: "[basename].proxy.user.js",
         enable: true,
       },
     }),
   ],
 };
+
+// Export all configurations
+module.exports = [performanceConfig, greasyforkConfig, devConfig];
