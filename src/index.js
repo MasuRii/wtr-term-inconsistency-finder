@@ -4,7 +4,7 @@
 import "./styles/main.css";
 
 // Import version information (fallback for build time)
-import { VERSION } from "./version";
+// import { VERSION } from "./version";
 
 // Import core modules
 import { loadConfig } from "./modules/state";
@@ -27,7 +27,7 @@ async function main() {
     GM_registerMenuCommand("Term Inconsistency Finder", () =>
       togglePanel(true),
     );
-    log(`WTR Term Inconsistency Finder v${VERSION} initialized successfully.`);
+    log("WTR Term Inconsistency Finder initialized successfully.");
   } catch (error) {
     console.error("Failed to initialize WTR Term Inconsistency Finder:", error);
   }

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UI State Consistency**: Ensured the user interface remains responsive and consistent during error states, preventing frozen, blocked, or inconsistent UI states during failure scenarios.
 - **Import/Export Resolution Issues**: Fixed various module import path conflicts and duplicate function exports that were causing build failures, ensuring all modules resolve correctly.
 - **Circular Dependencies**: Resolved conflicting function exports (e.g., `log` function) by consolidating utilities in appropriate modules and removing duplicates.
+- **Console Cleanup**: Removed the version number from the initialization console log message to reduce noise.
 
 ### ✨ Added
 - **Enhanced ESLint Configuration**: Implemented strict import/export validation rules to prevent module resolution issues from reaching production builds, ensuring robust code quality and dependency management.
@@ -33,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Utilities Layer**: Split `utils.js` (1,038 lines) into 4 focused modules: `core.js` (150 lines), `text.js` (108 lines), `results.js` (202 lines), and `semantic.js` (405 lines)
   - **Backward Compatibility**: Created index files (`api/index.js`, `utils/index.js`) to maintain existing API interfaces
   - **Import Path Standardization**: Unified import patterns using relative paths for consistent module resolution
+- **UI Modernization**: Replaced all panel emojis (🔍, 🤖, ⚙️, 🔑, 💾, 🎛️, 📋) and status indicator emojis (✅, ❌) with Material Icons for a cleaner, more consistent user interface.
+- **Gemini Prompt Refinement**: Updated the system prompt to specifically exclude flagging chapter numbering inconsistencies where the "--- CHAPTER X ---" header number mismatches the in-text title number, as this is a non-user-actionable display artifact.
 - **Build System Enhancement**: Enhanced webpack integration with proper module handling and improved dependency resolution
 - **ESLint Enforcement**: Updated configuration to treat import/export issues as build failures instead of warnings, preventing production deployment issues
 

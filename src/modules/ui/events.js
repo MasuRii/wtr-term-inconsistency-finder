@@ -609,7 +609,8 @@ export function handleCopyVariationClick(event) {
     .writeText(textToCopy)
     .then(() => {
       const originalContent = button.innerHTML;
-      button.innerHTML = "✅";
+      button.innerHTML =
+        '<i class="material-icons" style="color: #28a745;">check</i>';
       button.disabled = true;
       setTimeout(() => {
         if (button) {

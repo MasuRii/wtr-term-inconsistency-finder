@@ -19,12 +19,12 @@
 // ==/UserScript==
 
 /******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
 /***/ 9:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 
 // EXPORTS
 __webpack_require__.d(__webpack_exports__, {
@@ -1040,7 +1040,6 @@ function mergeAnalysisResults(existingResults, newResults) {
 /***/ 41:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   R: () => (/* binding */ getAvailableApiKey),
 /* harmony export */   j: () => (/* binding */ handleApiErrorStatus)
@@ -1227,7 +1226,6 @@ function handleApiErrorStatus(
 /***/ 56:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -1244,7 +1242,6 @@ module.exports = setAttributesWithoutAttributes;
 /***/ 72:
 /***/ ((module) => {
 
-"use strict";
 
 
 var stylesInDOM = [];
@@ -1335,7 +1332,6 @@ module.exports = function (list, options) {
 /***/ 92:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -1491,7 +1487,20 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
 }
 
 #wtr-if-status-indicator.complete .wtr-if-status-icon::before {
-  content: "✅";
+  content: "✓";
+  font-family: "Material Icons", sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 16px;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
 }
 
 #wtr-if-status-indicator.error {
@@ -1512,7 +1521,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
 /***/ 113:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -1533,7 +1541,6 @@ module.exports = styleTagTransform;
 /***/ 131:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -1620,7 +1627,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
 /***/ 148:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   B7: () => (/* binding */ handleApplyClick),
 /* harmony export */   Zo: () => (/* binding */ handleRestoreSession),
@@ -2230,7 +2236,8 @@ function handleCopyVariationClick(event) {
     .writeText(textToCopy)
     .then(() => {
       const originalContent = button.innerHTML;
-      button.innerHTML = "✅";
+      button.innerHTML =
+        '<i class="material-icons" style="color: #28a745;">check</i>';
       button.disabled = true;
       setTimeout(() => {
         if (button) {
@@ -2516,7 +2523,6 @@ function addEventListeners() {
 /***/ 183:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   $1: () => (/* binding */ addApiKeyRow),
 /* harmony export */   LI: () => (/* binding */ updateStatusIndicator),
@@ -2558,7 +2564,7 @@ function createUI() {
                     <!-- Primary Analysis Controls Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔍</i> Primary Analysis Controls</h3>
+                            <h3><i class="material-icons">search</i> Primary Analysis Controls</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-finder-controls">
@@ -2571,7 +2577,7 @@ function createUI() {
                     <!-- Deep Analysis Configuration Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">⚙️</i> Deep Analysis Configuration</h3>
+                            <h3><i class="material-icons">settings</i> Deep Analysis Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-deep-analysis-controls">
@@ -3409,7 +3415,6 @@ function getCollisionAvoidanceStatus() {
 /***/ 198:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -3582,7 +3587,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 /***/ 201:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Hv: () => (/* reexport safe */ _display__WEBPACK_IMPORTED_MODULE_1__.H),
 /* harmony export */   LI: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.LI),
@@ -3605,7 +3609,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 /***/ 249:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -3661,7 +3664,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder - Mod
 /***/ 314:
 /***/ ((module) => {
 
-"use strict";
 
 
 /*
@@ -3753,7 +3755,6 @@ module.exports = function (cssWithMappingToString) {
 /***/ 322:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   s: () => (/* binding */ generatePrompt)
 /* harmony export */ });
@@ -3777,6 +3778,10 @@ const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translati
 - CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes " ") should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
 - CRITICAL: Do NOT flag systematic chapter title numbering offsets or mismatches that are clearly caused by the source website's structure or template rather than the editable chapter content. In particular:
     * If multiple consecutive chapters show a consistent pattern where the visible chapter heading (e.g., "--- CHAPTER 302 ---") and the in-title number (e.g., "Chapter 301: Arcane Armor") are offset by the same amount (such as always lagging by one), treat this as a non-user-actionable, site-level issue.
+    * SPECIFIC EXCLUSION: Do NOT flag chapter numbering inconsistencies where:
+        - The chapter uses the "--- CHAPTER X ---" header format AND
+        - The header number appears mismatched with the in-title content number (e.g., "--- CHAPTER 344 ---" followed by "Chapter 343 Rhode Tulip's Vision")
+        - This pattern represents a display/formatting artifact that cannot be user-corrected through chapter content editing
     * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
     * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
     * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
@@ -4038,73 +4043,9 @@ ${schemaDefinition}
 
 /***/ }),
 
-/***/ 330:
-/***/ ((module) => {
-
-"use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.7","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run format && npm run lint:fix && npm run version:update && webpack --mode=production","build:performance":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js version","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"css-loader":"^7.1.2","eslint":"^9.39.1","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.4","prettier":"^3.6.2","style-loader":"^4.0.0","stylelint":"^16.25.0","stylelint-prettier":"^5.0.3","stylelint-config-standard":"^39.0.1","webpack":"^5.102.1","webpack-cli":"^6.0.1","webpack-dev-server":"^5.2.2","webpack-userscript":"^3.2.3"}}');
-
-/***/ }),
-
-/***/ 387:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-// config/versions.js
-// Centralized version management for WTR Term Inconsistency Finder
-
-// Environment variable overrides with fallbacks
-const envVersion = process.env.WTR_VERSION || process.env.APP_VERSION;
-const buildEnv = process.env.WTR_BUILD_ENV || process.env.BUILD_ENV || "production";
-const buildDate = process.env.WTR_BUILD_DATE || process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
-
-// Derive base version from package.json at runtime so only package.json is edited manually
-const pkg = __webpack_require__(330);
-const BASE_VERSION = pkg.version;
-
-const VERSION_INFO = {
-  SEMANTIC: envVersion || BASE_VERSION,           // Semantic version
-  DISPLAY: `v${envVersion || BASE_VERSION}`,      // Display version
-  BUILD_ENV: buildEnv || "production",            // Build environment
-  BUILD_DATE: buildDate,                          // Build date
-  GREASYFORK: envVersion || BASE_VERSION,         // GreasyFork version
-  NPM: envVersion || BASE_VERSION,                // NPM version
-  BADGE: envVersion || BASE_VERSION,              // Badge version
-  CHANGELOG: envVersion || BASE_VERSION,          // Changelog version
-};
-
-// Export version info and utility functions
-module.exports = {
-  VERSION_INFO,
-  
-  // Utility functions
-  getVersion: (type = "semantic") => {
-    switch (type.toLowerCase()) {
-      case "semantic":
-      case "semver":
-        return VERSION_INFO.SEMANTIC;
-      case "display":
-        return VERSION_INFO.DISPLAY;
-      case "build":
-        return `${VERSION_INFO.SEMANTIC}-${VERSION_INFO.BUILD_ENV}`;
-      case "dev":
-        return `${VERSION_INFO.SEMANTIC}-dev.${Date.now()}`;
-      default:
-        return VERSION_INFO.SEMANTIC;
-    }
-  },
-  
-  getBuildTime: () => new Date().toISOString(),
-  getBuildDate: () => VERSION_INFO.BUILD_DATE,
-  isProduction: () => VERSION_INFO.BUILD_ENV === "production",
-  isDevelopment: () => VERSION_INFO.BUILD_ENV === "development"
-};
-
-/***/ }),
-
 /***/ 421:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -4275,49 +4216,9 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Enhanced Form Styling for Configura
 
 /***/ }),
 
-/***/ 424:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-// src/version.js
-// Backward compatibility layer for version information
-// This file will be replaced by the build banner system in production
-
-// Support both Node.js and browser environments
-let VERSION_INFO;
-try {
-  const versionModule = __webpack_require__(387);
-  VERSION_INFO = versionModule.VERSION_INFO;
-} catch {
-  // Fallback for browser environment or when config is not available
-  VERSION_INFO = {
-    SEMANTIC: "5.3.5",
-    DISPLAY: "v5.3.5",
-    BUILD_ENV: "production",
-    BUILD_DATE: "2025-11-10",
-  };
-}
-
-// Export VERSION constant for backward compatibility
-const VERSION = VERSION_INFO.SEMANTIC;
-
-if ( true && module.exports) {
-  module.exports = {
-    VERSION,
-    VERSION_INFO,
-  };
-} else {
-  // Browser environment
-  window.WTR_VERSION = VERSION;
-  window.WTR_VERSION_INFO = VERSION_INFO;
-}
-
-
-/***/ }),
-
 /***/ 526:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   findInconsistencies: () => (/* binding */ findInconsistencies)
 /* harmony export */ });
@@ -4677,7 +4578,6 @@ function handleApiError(errorMessage) {
 /***/ 540:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -4694,7 +4594,6 @@ module.exports = insertStyleElement;
 /***/ 601:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = function (i) {
@@ -4706,7 +4605,6 @@ module.exports = function (i) {
 /***/ 659:
 /***/ ((module) => {
 
-"use strict";
 
 
 var memo = {};
@@ -4747,7 +4645,6 @@ module.exports = insertBySelector;
 /***/ 784:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -4901,7 +4798,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section-based Finder layout improve
 /***/ 825:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -4969,7 +4865,6 @@ module.exports = domAPI;
 /***/ 871:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   H: () => (/* binding */ displayResults)
 /* harmony export */ });
@@ -5226,7 +5121,6 @@ function displayResults(results) {
 /***/ 901:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Ir: () => (/* binding */ getNovelSlug),
 /* harmony export */   Rm: () => (/* binding */ log),
@@ -5392,7 +5286,6 @@ function isWTRLabTermReplacerLoaded() {
 /***/ 907:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   ES: () => (/* binding */ MODELS_CACHE_KEY),
 /* harmony export */   I6: () => (/* binding */ saveSessionResults),
@@ -5961,7 +5854,6 @@ function getNextAvailableKey() {
 /***/ 970:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 
 // EXPORTS
 __webpack_require__.d(__webpack_exports__, {
@@ -6452,7 +6344,6 @@ function handleApiError(errorMessage) {
 /***/ 974:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -6623,9 +6514,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
-// This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
-(() => {
-"use strict";
 
 // EXTERNAL MODULE: ./node_modules/style-loader/dist/runtime/injectStylesIntoStyleTag.js
 var injectStylesIntoStyleTag = __webpack_require__(72);
@@ -6674,8 +6562,6 @@ var update = injectStylesIntoStyleTag_default()(main/* default */.A, options);
 
        /* harmony default export */ const styles_main = (main/* default */.A && main/* default */.A.locals ? main/* default */.A.locals : undefined);
 
-// EXTERNAL MODULE: ./src/version.js
-var version = __webpack_require__(424);
 // EXTERNAL MODULE: ./src/modules/state.js
 var state = __webpack_require__(907);
 // EXTERNAL MODULE: ./src/modules/utils.js + 4 modules
@@ -6689,7 +6575,7 @@ var ui = __webpack_require__(201);
 
 
 // Import version information (fallback for build time)
-
+// import { VERSION } from "./version";
 
 // Import core modules
 
@@ -6707,7 +6593,7 @@ async function src_main() {
     GM_registerMenuCommand("Term Inconsistency Finder", () =>
       (0,ui/* togglePanel */.Pj)(true),
     );
-    (0,utils/* log */.Rm)(`WTR Term Inconsistency Finder v${version.VERSION} initialized successfully.`);
+    (0,utils/* log */.Rm)("WTR Term Inconsistency Finder initialized successfully.");
   } catch (error) {
     console.error("Failed to initialize WTR Term Inconsistency Finder:", error);
   }
@@ -6715,8 +6601,6 @@ async function src_main() {
 
 // Run the script
 src_main();
-
-})();
 
 /******/ })()
 ;

@@ -23,7 +23,7 @@ export function createUI() {
                     <!-- Primary Analysis Controls Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔍</i> Primary Analysis Controls</h3>
+                            <h3><i class="material-icons">search</i> Primary Analysis Controls</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-finder-controls">
@@ -36,7 +36,7 @@ export function createUI() {
                     <!-- Deep Analysis Configuration Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">⚙️</i> Deep Analysis Configuration</h3>
+                            <h3><i class="material-icons">settings</i> Deep Analysis Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-deep-analysis-controls">
