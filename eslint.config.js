@@ -45,6 +45,7 @@ module.exports = [
       import: importPlugin,
     },
     rules: {
+      "linebreak-style": ["error", "unix"],
       "prettier/prettier": "error",
       "no-unused-vars": [
         "error",
