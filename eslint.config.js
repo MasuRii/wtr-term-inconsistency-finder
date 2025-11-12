@@ -77,6 +77,16 @@ module.exports = [
       "no-unsafe-negation": "error",
       "use-isnan": "error",
       "no-useless-escape": "error",
+      // Import/export rules to prevent build issues
+      "import/no-unresolved": "error",
+      "import/named": "error",
+      "import/default": "error",
+      "import/namespace": "error",
+      "import/no-extraneous-dependencies": "error",
+      "import/no-absolute-path": "error",
+      "import/no-dynamic-require": "error",
+      "import/no-self-import": "error",
+      "import/no-useless-path-segments": "error",
     },
     ignores: [
       "node_modules/",
