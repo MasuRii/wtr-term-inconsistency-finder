@@ -90,7 +90,7 @@ function sanitizeSuggestionData(suggestion) {
 
 function sanitizeResultsData(results) {
   // Sanitize all results to fix corrupted suggestion data from restored sessions
-  return results.map((result) => {
+  return results.map(result => {
     if (!result.suggestions || !Array.isArray(result.suggestions)) {
       return result;
     }
@@ -123,7 +123,10 @@ export async function loadConfig() {
     log("Loaded preferences from config:", appState.preferences);
   }
 
-  appState.config = { ...appState.config, ...savedConfig };
+  appState.config = {
+    ...appState.config,
+    ...savedConfig,
+  };
 
   // Load session results if available
   const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY);
@@ -231,7 +234,7 @@ export function loadKeyStates() {
     const now = Date.now();
     const normalizedStates = {};
 
-    Object.keys(savedStates).forEach((key) => {
+    Object.keys(savedStates).forEach(key => {
       const parsedIndex = parseInt(key, 10);
       const index = Number.isNaN(parsedIndex) ? key : parsedIndex;
       const raw = savedStates[key] || {};

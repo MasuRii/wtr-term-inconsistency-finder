@@ -258,7 +258,7 @@ function generatePrompt(chapterText, existingResults = []) {
 
   if (existingResults.length > 0) {
     // Validate results before processing
-    const validResults = existingResults.filter((result) => {
+    const validResults = existingResults.filter(result => {
       const isValid = validateResultForContext(result);
       if (!isValid) {
         log(
@@ -445,7 +445,7 @@ export function findInconsistencies(
   );
 
   const combinedText = chapterData
-    .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+    .map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
     .join("\n\n");
   log(
     `${operationName}: Sending ${
@@ -466,7 +466,9 @@ export function findInconsistencies(
   GM_xmlhttpRequest({
     method: "POST",
     url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     data: JSON.stringify(requestData),
     onload: function (response) {
       log("Received raw response from API:", response.responseText);
@@ -627,11 +629,11 @@ export function findInconsistencies(
         const verifiedItems = parsedResponse.verified_inconsistencies || [];
         const newItems = parsedResponse.new_inconsistencies || [];
 
-        verifiedItems.forEach((item) => {
+        verifiedItems.forEach(item => {
           item.isNew = false;
           item.status = "Verified";
         });
-        newItems.forEach((item) => {
+        newItems.forEach(item => {
           item.isNew = true;
         });
 
@@ -646,7 +648,7 @@ export function findInconsistencies(
           );
           return;
         }
-        parsedResponse.forEach((r) => (r.isNew = true));
+        parsedResponse.forEach(r => (r.isNew = true));
         appState.runtime.cumulativeResults = parsedResponse;
       }
 
@@ -793,7 +795,7 @@ function findInconsistenciesIteration(
     const currentKeyIndex = apiKeyInfo.index;
 
     const combinedText = chapterData
-      .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+      .map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
       .join("\n\n");
     log(
       `${operationName}: Sending ${
@@ -814,7 +816,9 @@ function findInconsistenciesIteration(
     GM_xmlhttpRequest({
       method: "POST",
       url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       data: JSON.stringify(requestData),
       onload: function (response) {
         log("Received raw response from API:", response.responseText);
@@ -949,11 +953,11 @@ function findInconsistenciesIteration(
           const verifiedItems = parsedResponse.verified_inconsistencies || [];
           const newItems = parsedResponse.new_inconsistencies || [];
 
-          verifiedItems.forEach((item) => {
+          verifiedItems.forEach(item => {
             item.isNew = false;
             item.status = "Verified";
           });
-          newItems.forEach((item) => {
+          newItems.forEach(item => {
             item.isNew = true;
           });
 
@@ -974,7 +978,7 @@ function findInconsistenciesIteration(
             delete appState.runtime.deepAnalysisStartTimes[iterationKey];
             return;
           }
-          parsedResponse.forEach((r) => (r.isNew = true));
+          parsedResponse.forEach(r => (r.isNew = true));
           appState.runtime.cumulativeResults = mergeAnalysisResults(
             appState.runtime.cumulativeResults,
             parsedResponse,

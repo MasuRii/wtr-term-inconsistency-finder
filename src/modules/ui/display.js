@@ -24,21 +24,19 @@ export function displayResults(results) {
   const filterValue =
     document.getElementById("wtr-if-filter-select")?.value || "all";
 
-  let displayedResults = results.filter((r) => !r.error && r.concept);
-  const errors = results.filter((r) => r.error);
+  let displayedResults = results.filter(r => !r.error && r.concept);
+  const errors = results.filter(r => r.error);
 
   if (filterValue === "new") {
-    displayedResults = displayedResults.filter((r) => r.isNew);
+    displayedResults = displayedResults.filter(r => r.isNew);
   } else if (filterValue === "verified") {
     displayedResults = displayedResults.filter(
-      (r) =>
+      r =>
         r.status === "Verified" ||
         (r.isNew === false && r.status !== "Verified"),
     );
   } else if (filterValue !== "all") {
-    displayedResults = displayedResults.filter(
-      (r) => r.priority === filterValue,
-    );
+    displayedResults = displayedResults.filter(r => r.priority === filterValue);
   }
 
   if (displayedResults.length === 0 && errors.length === 0) {
@@ -62,12 +60,10 @@ export function displayResults(results) {
 
   // Append successful results first
   const successFragment = document.createDocumentFragment();
-  displayedResults.forEach((group) => {
+  displayedResults.forEach(group => {
     const groupEl = document.createElement("div");
     groupEl.className = "wtr-if-result-group";
-    const uniqueVariations = [
-      ...new Set(group.variations.map((v) => v.phrase)),
-    ];
+    const uniqueVariations = [...new Set(group.variations.map(v => v.phrase))];
     const variationsJson = JSON.stringify(uniqueVariations);
 
     const suggestionsHtml = (group.suggestions || [])
@@ -172,7 +168,7 @@ export function displayResults(results) {
                     <div class="wtr-if-variations">
                         ${(group.variations || [])
                           .map(
-                            (item) => `
+                            item => `
                         <div class="wtr-if-variation-item">
                             <div class="wtr-if-variation-header">
                                 <input type="checkbox" class="wtr-if-variation-checkbox" value="${escapeHtml(
@@ -208,7 +204,7 @@ export function displayResults(results) {
   errors
     .slice()
     .reverse()
-    .forEach((err) => {
+    .forEach(err => {
       const errorEl = document.createElement("div");
       errorEl.className = "wtr-if-error";
       errorEl.textContent = err.error;
@@ -220,7 +216,7 @@ export function displayResults(results) {
     document.getElementById("wtr-if-tab-finder") || resultsContainer;
 
   if (finderScope) {
-    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach((btn) => {
+    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach(btn => {
       // Ensure per-result buttons are reliably discoverable for mode switching
       if (!btn.dataset.role) {
         btn.dataset.role = "wtr-if-apply-action";
@@ -240,7 +236,7 @@ export function displayResults(results) {
   // Wire up individual variation copy buttons
   resultsContainer
     .querySelectorAll(".wtr-if-copy-variation-btn")
-    .forEach((btn) => btn.addEventListener("click", handleCopyVariationClick));
+    .forEach(btn => btn.addEventListener("click", handleCopyVariationClick));
 
   // Ensure Apply/Copy button modes are synchronized after results are rendered
   updateApplyCopyButtonsMode();

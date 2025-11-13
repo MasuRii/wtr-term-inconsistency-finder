@@ -90,7 +90,7 @@ function safeSetStyle(element, property, value) {
 export function handleSaveConfig() {
   const keyInputs = document.querySelectorAll(".wtr-if-api-key-input");
   const newApiKeys = [];
-  keyInputs.forEach((input) => {
+  keyInputs.forEach(input => {
     const key = input.value.trim();
     if (key) {
       newApiKeys.push(key);
@@ -129,7 +129,7 @@ export function handleFileImportAndAnalyze(event) {
   }
   const isContinuation = event.target.dataset.continuation === "true";
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
       const novelSlug = getNovelSlug();
@@ -345,7 +345,7 @@ export function updateApplyCopyButtonsMode() {
   const groupButtons = finderTab.querySelectorAll(
     "[data-role='wtr-if-apply-action'], .wtr-if-apply-btn",
   );
-  groupButtons.forEach((btn) => {
+  groupButtons.forEach(btn => {
     let scope = btn.dataset.scope || btn.getAttribute("data-scope");
     if (!scope) {
       const a = btn.dataset.action || "";
@@ -410,7 +410,7 @@ export function handleApplyClick(event) {
       const checkedBoxes = groupEl.querySelectorAll(
         ".wtr-if-variation-checkbox:checked",
       );
-      checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+      checkedBoxes.forEach(box => variationsToApply.push(box.value));
     }
   }
 
@@ -468,7 +468,7 @@ export function handleApplyClick(event) {
       return;
     }
 
-    const writeToClipboard = (text) => {
+    const writeToClipboard = text => {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         return navigator.clipboard.writeText(text);
       }
@@ -510,7 +510,7 @@ export function handleApplyClick(event) {
           }
         }, 1500);
       })
-      .catch((err) => {
+      .catch(err => {
         log("Failed to copy terms payload.", err);
         if (!button) {
           return;
@@ -568,7 +568,7 @@ export function handleApplyClick(event) {
 
   if (uniqueVariations.length > 1) {
     uniqueVariations.sort((a, b) => b.length - a.length);
-    originalTerm = uniqueVariations.map((v) => escapeRegExp(v)).join("|");
+    originalTerm = uniqueVariations.map(v => escapeRegExp(v)).join("|");
     isRegex = true;
     log(
       `Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`,
@@ -619,7 +619,7 @@ export function handleCopyVariationClick(event) {
         }
       }, 1500);
     })
-    .catch((err) => {
+    .catch(err => {
       console.error("Inconsistency Finder: Failed to copy text:", err);
       const originalContent = button.innerHTML;
       button.innerHTML = "❌";
@@ -662,14 +662,14 @@ function importConfiguration() {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".json";
-  input.onchange = (e) => {
+  input.onchange = e => {
     const file = e.target.files[0];
     if (!file) {
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = e => {
       try {
         const data = JSON.parse(e.target.result);
 
@@ -681,7 +681,10 @@ function importConfiguration() {
         const _backup = { ...appState.config };
 
         // Import new config
-        appState.config = { ...appState.config, ...data.config };
+        appState.config = {
+          ...appState.config,
+          ...data.config,
+        };
         if (data.preferences) {
           appState.preferences = {
             ...appState.preferences,
@@ -769,34 +772,32 @@ export function addEventListeners() {
   document
     .getElementById("wtr-if-status-indicator")
     .addEventListener("click", handleStatusClick);
-  panel.querySelector("#wtr-if-temperature").addEventListener("input", (e) => {
+  panel.querySelector("#wtr-if-temperature").addEventListener("input", e => {
     document.getElementById("wtr-if-temp-value").textContent = e.target.value;
   });
 
-  panel
-    .querySelector("#wtr-if-auto-restore")
-    .addEventListener("change", (e) => {
-      appState.preferences.autoRestoreResults = e.target.checked;
-      saveConfig();
-    });
+  panel.querySelector("#wtr-if-auto-restore").addEventListener("change", e => {
+    appState.preferences.autoRestoreResults = e.target.checked;
+    saveConfig();
+  });
 
   panel
     .querySelector("#wtr-if-deep-analysis-depth")
-    .addEventListener("change", (e) => {
+    .addEventListener("change", e => {
       appState.config.deepAnalysisDepth = parseInt(e.target.value) || 1;
       saveConfig();
     });
 
-  panel.querySelectorAll(".wtr-if-tab-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  panel.querySelectorAll(".wtr-if-tab-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
       const targetTab = e.target.dataset.tab;
       panel
         .querySelectorAll(".wtr-if-tab-btn")
-        .forEach((b) => b.classList.remove("active"));
+        .forEach(b => b.classList.remove("active"));
       e.target.classList.add("active");
       panel
         .querySelectorAll(".wtr-if-tab-content")
-        .forEach((c) => c.classList.remove("active"));
+        .forEach(c => c.classList.remove("active"));
       panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add("active");
       appState.config.activeTab = targetTab;
       saveConfig();
@@ -849,7 +850,7 @@ export function addEventListeners() {
     .addEventListener("click", addApiKeyRow);
   panel
     .querySelector("#wtr-if-api-keys-container")
-    .addEventListener("click", (e) => {
+    .addEventListener("click", e => {
       if (e.target.classList.contains("wtr-if-remove-key-btn")) {
         if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {
           e.target.closest(".wtr-if-key-row").remove();

@@ -215,7 +215,7 @@ export async function populateModelSelector() {
   const cachedData = await GM_getValue(MODELS_CACHE_KEY, null);
   if (cachedData && cachedData.models && cachedData.models.length > 0) {
     selectEl.innerHTML = cachedData.models
-      .map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+      .map(m => `<option value="${m}">${m.replace("models/", "")}</option>`)
       .join("");
     selectEl.value = appState.config.model;
   } else {
@@ -247,10 +247,8 @@ export async function fetchAndCacheModels() {
           throw new Error(data.error.message);
         }
         const filteredModels = data.models
-          .filter((m) =>
-            m.supportedGenerationMethods.includes("generateContent"),
-          )
-          .map((m) => m.name);
+          .filter(m => m.supportedGenerationMethods.includes("generateContent"))
+          .map(m => m.name);
         if (filteredModels.length > 0) {
           await GM_setValue(MODELS_CACHE_KEY, {
             timestamp: Date.now(),
@@ -286,7 +284,7 @@ export function renderApiKeysUI() {
   const keys =
     appState.config.apiKeys.length > 0 ? appState.config.apiKeys : [""]; // Show at least one empty input
 
-  keys.forEach((key) => {
+  keys.forEach(key => {
     const keyRow = document.createElement("div");
     keyRow.className = "wtr-if-key-row";
     keyRow.innerHTML = `
@@ -336,10 +334,10 @@ export async function togglePanel(show = null) {
     // Restore tab
     panel
       .querySelectorAll(".wtr-if-tab-btn")
-      .forEach((b) => b.classList.remove("active"));
+      .forEach(b => b.classList.remove("active"));
     panel
       .querySelectorAll(".wtr-if-tab-content")
-      .forEach((c) => c.classList.remove("active"));
+      .forEach(c => c.classList.remove("active"));
     const activeTabBtn = panel.querySelector(
       `.wtr-if-tab-btn[data-tab="${appState.config.activeTab}"]`,
     );
@@ -680,7 +678,10 @@ export function injectControlButton() {
         }
       });
 
-      navObserver.observe(navBar, { childList: true, subtree: true });
+      navObserver.observe(navBar, {
+        childList: true,
+        subtree: true,
+      });
       // Initial check
       const initialTarget = navBar.querySelector('div[role="group"].btn-group');
       if (initialTarget && !document.getElementById("wtr-if-analyze-btn")) {
@@ -696,7 +697,10 @@ export function injectControlButton() {
       }
     }
   });
-  mainObserver.observe(document.body, { childList: true, subtree: true });
+  mainObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 /**
@@ -728,8 +732,8 @@ export function setupConflictObserver() {
     }
   }, 150);
 
-  const observer = new MutationObserver((mutations) => {
-    const relevantMutations = mutations.some((mutation) => {
+  const observer = new MutationObserver(mutations => {
+    const relevantMutations = mutations.some(mutation => {
       if (mutation.type === "childList") {
         return (
           mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0

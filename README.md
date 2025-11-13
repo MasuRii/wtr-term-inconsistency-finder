@@ -111,7 +111,7 @@ This project is built with a modern JavaScript toolchain for maintainability and
 │   ├── styles/             # CSS styles
 │   └── index.js            # Main entry point
 ├── .github/                # GitHub Actions workflows
-├── .eslintrc.cjs           # ESLint configuration
+├── eslint.config.js        # ESLint configuration
 ├── .prettierrc.json        # Prettier configuration
 ├── package.json            # Project dependencies and scripts
 └── webpack.config.js       # Webpack configuration

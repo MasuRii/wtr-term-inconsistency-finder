@@ -17,4 +17,3 @@
 // @supportURL   https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @website      https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==
-

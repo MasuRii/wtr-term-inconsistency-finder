@@ -25,7 +25,7 @@ async function main() {
     injectControlButton();
     initializeCollisionAvoidance();
     GM_registerMenuCommand("Term Inconsistency Finder", () =>
-      togglePanel(true)
+      togglePanel(true),
     );
     log("WTR Term Inconsistency Finder initialized successfully.");
   } catch (error) {

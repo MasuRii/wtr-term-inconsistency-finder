@@ -34,7 +34,7 @@ export function crawlChapterData() {
     }
   });
   log(
-    `Successfully collected data for ${chapterData.length} chapters: [${chapterData.map((d) => d.chapter).join(", ")}]`,
+    `Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(", ")}]`,
   );
   return chapterData;
 }
@@ -205,7 +205,7 @@ export function applySmartQuotesReplacement(chapterData) {
   let chaptersWithChanges = 0;
   let skippedChapters = 0;
 
-  const processedData = chapterData.map((data) => {
+  const processedData = chapterData.map(data => {
     // Skip processing if this is the active chapter
     if (
       data.tracker &&
@@ -373,7 +373,7 @@ export function applyTermReplacements(chapterData, terms = []) {
   const addSimpleGroup = (map, flags, wholeWord, caseSensitive) => {
     if (map.size > 0) {
       const sortedKeys = [...map.keys()].sort((a, b) => b.length - a.length);
-      const patterns = sortedKeys.map((k) => {
+      const patterns = sortedKeys.map(k => {
         const escaped = escapeRegExp(k);
         return wholeWord ? `\\b${escaped}\\b` : escaped;
       });
@@ -393,7 +393,7 @@ export function applyTermReplacements(chapterData, terms = []) {
   addSimpleGroup(simple_ci_whole, "gi", true, false);
 
   // 2. Process each chapter's text.
-  return chapterData.map((data) => {
+  return chapterData.map(data => {
     // Skip processing if this is the active chapter
     if (
       data.tracker &&
@@ -472,7 +472,7 @@ export function summarizeContextResults(existingResults, maxItems = 50) {
 
   // Sort by quality score (highest first)
   const sortedResults = existingResults
-    .map((result) => ({
+    .map(result => ({
       ...result,
       qualityScore: calculateResultQuality(result),
     }))
@@ -680,7 +680,7 @@ function isProperNameLike(concept) {
   }
 
   // Simple heuristic: multiple capitalized tokens
-  if (tokens.length > 1 && tokens.every((t) => /^[A-Z][a-z]+$/.test(t))) {
+  if (tokens.length > 1 && tokens.every(t => /^[A-Z][a-z]+$/.test(t))) {
     return true;
   }
 
@@ -711,7 +711,7 @@ export function areSemanticallySimilar(concept1, concept2) {
 
   // Normalize for ASCII/Latin similarity. Non-Latin content will mostly reduce to empty,
   // which is fine because we already guard by script category above.
-  const normalize = (str) =>
+  const normalize = str =>
     str
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, "")
@@ -764,7 +764,7 @@ export function areSemanticallySimilar(concept1, concept2) {
   const words2 = norm2.split(/\s+/).filter(Boolean);
 
   if (words1.length && words2.length) {
-    const commonWords = words1.filter((word) => words2.includes(word));
+    const commonWords = words1.filter(word => words2.includes(word));
     const overlapRatio =
       commonWords.length / Math.max(words1.length, words2.length);
 
@@ -786,7 +786,7 @@ export function areSemanticallySimilar(concept1, concept2) {
 export function mergeAnalysisResults(existingResults, newResults) {
   const merged = [...existingResults];
 
-  newResults.forEach((newResult) => {
+  newResults.forEach(newResult => {
     if (!newResult || typeof newResult !== "object") {
       return;
     }
@@ -795,7 +795,7 @@ export function mergeAnalysisResults(existingResults, newResults) {
     const newScript = detectScriptCategory(newConcept);
 
     // Find potential semantic duplicates (script-aware via areSemanticallySimilar)
-    const duplicateIndex = merged.findIndex((existing) => {
+    const duplicateIndex = merged.findIndex(existing => {
       if (!existing || !existing.concept) {
         return false;
       }
@@ -882,7 +882,7 @@ export function mergeAnalysisResults(existingResults, newResults) {
         ].filter(
           (variation, index, arr) =>
             arr.findIndex(
-              (v) =>
+              v =>
                 v.phrase === variation.phrase &&
                 v.chapter === variation.chapter,
             ) === index,
@@ -893,7 +893,7 @@ export function mergeAnalysisResults(existingResults, newResults) {
           ...(newResult.suggestions || []),
         ].filter(
           (suggestion, index, arr) =>
-            arr.findIndex((s) => s.suggestion === suggestion.suggestion) ===
+            arr.findIndex(s => s.suggestion === suggestion.suggestion) ===
             index,
         ),
         // Preserve status flags from higher quality result
