@@ -19,12 +19,12 @@
 // ==/UserScript==
 
 /******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
 /***/ 43:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Nz: () => (/* binding */ findInconsistenciesDeepAnalysis),
 /* harmony export */   Rq: () => (/* binding */ getAvailableApiKey)
@@ -282,7 +282,7 @@ function generatePrompt(chapterText, existingResults = []) {
 
   if (existingResults.length > 0) {
     // Validate results before processing
-    const validResults = existingResults.filter((result) => {
+    const validResults = existingResults.filter(result => {
       const isValid = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .validateResultForContext */ .oV)(result);
       if (!isValid) {
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
@@ -469,7 +469,7 @@ function findInconsistencies(
   );
 
   const combinedText = chapterData
-    .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+    .map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
     .join("\n\n");
   (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
     `${operationName}: Sending ${
@@ -490,7 +490,9 @@ function findInconsistencies(
   GM_xmlhttpRequest({
     method: "POST",
     url: `https://generativelanguage.googleapis.com/v1beta/${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model}:generateContent?key=${currentKey}`,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     data: JSON.stringify(requestData),
     onload: function (response) {
       (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Received raw response from API:", response.responseText);
@@ -651,11 +653,11 @@ function findInconsistencies(
         const verifiedItems = parsedResponse.verified_inconsistencies || [];
         const newItems = parsedResponse.new_inconsistencies || [];
 
-        verifiedItems.forEach((item) => {
+        verifiedItems.forEach(item => {
           item.isNew = false;
           item.status = "Verified";
         });
-        newItems.forEach((item) => {
+        newItems.forEach(item => {
           item.isNew = true;
         });
 
@@ -670,7 +672,7 @@ function findInconsistencies(
           );
           return;
         }
-        parsedResponse.forEach((r) => (r.isNew = true));
+        parsedResponse.forEach(r => (r.isNew = true));
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = parsedResponse;
       }
 
@@ -817,7 +819,7 @@ function findInconsistenciesIteration(
     const currentKeyIndex = apiKeyInfo.index;
 
     const combinedText = chapterData
-      .map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
+      .map(d => `--- CHAPTER ${d.chapter} ---\n${d.text}`)
       .join("\n\n");
     (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
       `${operationName}: Sending ${
@@ -838,7 +840,9 @@ function findInconsistenciesIteration(
     GM_xmlhttpRequest({
       method: "POST",
       url: `https://generativelanguage.googleapis.com/v1beta/${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model}:generateContent?key=${currentKey}`,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       data: JSON.stringify(requestData),
       onload: function (response) {
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Received raw response from API:", response.responseText);
@@ -973,11 +977,11 @@ function findInconsistenciesIteration(
           const verifiedItems = parsedResponse.verified_inconsistencies || [];
           const newItems = parsedResponse.new_inconsistencies || [];
 
-          verifiedItems.forEach((item) => {
+          verifiedItems.forEach(item => {
             item.isNew = false;
             item.status = "Verified";
           });
-          newItems.forEach((item) => {
+          newItems.forEach(item => {
             item.isNew = true;
           });
 
@@ -998,7 +1002,7 @@ function findInconsistenciesIteration(
             delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey];
             return;
           }
-          parsedResponse.forEach((r) => (r.isNew = true));
+          parsedResponse.forEach(r => (r.isNew = true));
           _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .mergeAnalysisResults */ .bd)(
             _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults,
             parsedResponse,
@@ -1065,7 +1069,6 @@ function findInconsistenciesIteration(
 /***/ 56:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -1082,7 +1085,6 @@ module.exports = setAttributesWithoutAttributes;
 /***/ 72:
 /***/ ((module) => {
 
-"use strict";
 
 
 var stylesInDOM = [];
@@ -1173,7 +1175,6 @@ module.exports = function (list, options) {
 /***/ 92:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -1350,7 +1351,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
 /***/ 113:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -1371,7 +1371,6 @@ module.exports = styleTagTransform;
 /***/ 131:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -1458,7 +1457,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
 /***/ 148:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   B7: () => (/* binding */ handleApplyClick),
 /* harmony export */   Zo: () => (/* binding */ handleRestoreSession),
@@ -1548,7 +1546,7 @@ function safeSetStyle(element, property, value) {
 function handleSaveConfig() {
   const keyInputs = document.querySelectorAll(".wtr-if-api-key-input");
   const newApiKeys = [];
-  keyInputs.forEach((input) => {
+  keyInputs.forEach(input => {
     const key = input.value.trim();
     if (key) {
       newApiKeys.push(key);
@@ -1587,7 +1585,7 @@ function handleFileImportAndAnalyze(event) {
   }
   const isContinuation = event.target.dataset.continuation === "true";
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
       const novelSlug = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .getNovelSlug */ .Ir)();
@@ -1803,7 +1801,7 @@ function updateApplyCopyButtonsMode() {
   const groupButtons = finderTab.querySelectorAll(
     "[data-role='wtr-if-apply-action'], .wtr-if-apply-btn",
   );
-  groupButtons.forEach((btn) => {
+  groupButtons.forEach(btn => {
     let scope = btn.dataset.scope || btn.getAttribute("data-scope");
     if (!scope) {
       const a = btn.dataset.action || "";
@@ -1868,7 +1866,7 @@ function handleApplyClick(event) {
       const checkedBoxes = groupEl.querySelectorAll(
         ".wtr-if-variation-checkbox:checked",
       );
-      checkedBoxes.forEach((box) => variationsToApply.push(box.value));
+      checkedBoxes.forEach(box => variationsToApply.push(box.value));
     }
   }
 
@@ -1926,7 +1924,7 @@ function handleApplyClick(event) {
       return;
     }
 
-    const writeToClipboard = (text) => {
+    const writeToClipboard = text => {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         return navigator.clipboard.writeText(text);
       }
@@ -1968,7 +1966,7 @@ function handleApplyClick(event) {
           }
         }, 1500);
       })
-      .catch((err) => {
+      .catch(err => {
         (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Failed to copy terms payload.", err);
         if (!button) {
           return;
@@ -2026,7 +2024,7 @@ function handleApplyClick(event) {
 
   if (uniqueVariations.length > 1) {
     uniqueVariations.sort((a, b) => b.length - a.length);
-    originalTerm = uniqueVariations.map((v) => (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeRegExp */ .Nt)(v)).join("|");
+    originalTerm = uniqueVariations.map(v => (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeRegExp */ .Nt)(v)).join("|");
     isRegex = true;
     (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(
       `Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`,
@@ -2077,7 +2075,7 @@ function handleCopyVariationClick(event) {
         }
       }, 1500);
     })
-    .catch((err) => {
+    .catch(err => {
       console.error("Inconsistency Finder: Failed to copy text:", err);
       const originalContent = button.innerHTML;
       button.innerHTML = "❌";
@@ -2120,14 +2118,14 @@ function importConfiguration() {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".json";
-  input.onchange = (e) => {
+  input.onchange = e => {
     const file = e.target.files[0];
     if (!file) {
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = e => {
       try {
         const data = JSON.parse(e.target.result);
 
@@ -2139,7 +2137,10 @@ function importConfiguration() {
         const _backup = { ..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config };
 
         // Import new config
-        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config = { ..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config, ...data.config };
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config = {
+          ..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config,
+          ...data.config,
+        };
         if (data.preferences) {
           _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences = {
             ..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences,
@@ -2227,34 +2228,32 @@ function addEventListeners() {
   document
     .getElementById("wtr-if-status-indicator")
     .addEventListener("click", handleStatusClick);
-  panel.querySelector("#wtr-if-temperature").addEventListener("input", (e) => {
+  panel.querySelector("#wtr-if-temperature").addEventListener("input", e => {
     document.getElementById("wtr-if-temp-value").textContent = e.target.value;
   });
 
-  panel
-    .querySelector("#wtr-if-auto-restore")
-    .addEventListener("change", (e) => {
-      _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults = e.target.checked;
-      (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
-    });
+  panel.querySelector("#wtr-if-auto-restore").addEventListener("change", e => {
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults = e.target.checked;
+    (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+  });
 
   panel
     .querySelector("#wtr-if-deep-analysis-depth")
-    .addEventListener("change", (e) => {
+    .addEventListener("change", e => {
       _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth = parseInt(e.target.value) || 1;
       (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
     });
 
-  panel.querySelectorAll(".wtr-if-tab-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  panel.querySelectorAll(".wtr-if-tab-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
       const targetTab = e.target.dataset.tab;
       panel
         .querySelectorAll(".wtr-if-tab-btn")
-        .forEach((b) => b.classList.remove("active"));
+        .forEach(b => b.classList.remove("active"));
       e.target.classList.add("active");
       panel
         .querySelectorAll(".wtr-if-tab-content")
-        .forEach((c) => c.classList.remove("active"));
+        .forEach(c => c.classList.remove("active"));
       panel.querySelector(`#wtr-if-tab-${targetTab}`).classList.add("active");
       _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.activeTab = targetTab;
       (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
@@ -2307,7 +2306,7 @@ function addEventListeners() {
     .addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_3__/* .addApiKeyRow */ .$1);
   panel
     .querySelector("#wtr-if-api-keys-container")
-    .addEventListener("click", (e) => {
+    .addEventListener("click", e => {
       if (e.target.classList.contains("wtr-if-remove-key-btn")) {
         if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {
           e.target.closest(".wtr-if-key-row").remove();
@@ -2354,7 +2353,6 @@ function addEventListeners() {
 /***/ 183:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   $1: () => (/* binding */ addApiKeyRow),
 /* harmony export */   LI: () => (/* binding */ updateStatusIndicator),
@@ -2588,7 +2586,7 @@ async function populateModelSelector() {
   const cachedData = await GM_getValue(_state__WEBPACK_IMPORTED_MODULE_0__/* .MODELS_CACHE_KEY */ .ES, null);
   if (cachedData && cachedData.models && cachedData.models.length > 0) {
     selectEl.innerHTML = cachedData.models
-      .map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+      .map(m => `<option value="${m}">${m.replace("models/", "")}</option>`)
       .join("");
     selectEl.value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model;
   } else {
@@ -2620,10 +2618,8 @@ async function fetchAndCacheModels() {
           throw new Error(data.error.message);
         }
         const filteredModels = data.models
-          .filter((m) =>
-            m.supportedGenerationMethods.includes("generateContent"),
-          )
-          .map((m) => m.name);
+          .filter(m => m.supportedGenerationMethods.includes("generateContent"))
+          .map(m => m.name);
         if (filteredModels.length > 0) {
           await GM_setValue(_state__WEBPACK_IMPORTED_MODULE_0__/* .MODELS_CACHE_KEY */ .ES, {
             timestamp: Date.now(),
@@ -2659,7 +2655,7 @@ function renderApiKeysUI() {
   const keys =
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length > 0 ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys : [""]; // Show at least one empty input
 
-  keys.forEach((key) => {
+  keys.forEach(key => {
     const keyRow = document.createElement("div");
     keyRow.className = "wtr-if-key-row";
     keyRow.innerHTML = `
@@ -2709,10 +2705,10 @@ async function togglePanel(show = null) {
     // Restore tab
     panel
       .querySelectorAll(".wtr-if-tab-btn")
-      .forEach((b) => b.classList.remove("active"));
+      .forEach(b => b.classList.remove("active"));
     panel
       .querySelectorAll(".wtr-if-tab-content")
-      .forEach((c) => c.classList.remove("active"));
+      .forEach(c => c.classList.remove("active"));
     const activeTabBtn = panel.querySelector(
       `.wtr-if-tab-btn[data-tab="${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.activeTab}"]`,
     );
@@ -3053,7 +3049,10 @@ function injectControlButton() {
         }
       });
 
-      navObserver.observe(navBar, { childList: true, subtree: true });
+      navObserver.observe(navBar, {
+        childList: true,
+        subtree: true,
+      });
       // Initial check
       const initialTarget = navBar.querySelector('div[role="group"].btn-group');
       if (initialTarget && !document.getElementById("wtr-if-analyze-btn")) {
@@ -3069,7 +3068,10 @@ function injectControlButton() {
       }
     }
   });
-  mainObserver.observe(document.body, { childList: true, subtree: true });
+  mainObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 /**
@@ -3101,8 +3103,8 @@ function setupConflictObserver() {
     }
   }, 150);
 
-  const observer = new MutationObserver((mutations) => {
-    const relevantMutations = mutations.some((mutation) => {
+  const observer = new MutationObserver(mutations => {
+    const relevantMutations = mutations.some(mutation => {
       if (mutation.type === "childList") {
         return (
           mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0
@@ -3247,7 +3249,6 @@ function getCollisionAvoidanceStatus() {
 /***/ 198:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -3420,7 +3421,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 /***/ 201:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Hv: () => (/* reexport safe */ _display__WEBPACK_IMPORTED_MODULE_1__.H),
 /* harmony export */   LI: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.LI),
@@ -3443,7 +3443,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 /***/ 249:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -3499,7 +3498,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder - Mod
 /***/ 314:
 /***/ ((module) => {
 
-"use strict";
 
 
 /*
@@ -3588,73 +3586,9 @@ module.exports = function (cssWithMappingToString) {
 
 /***/ }),
 
-/***/ 330:
-/***/ ((module) => {
-
-"use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.7","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run format && npm run lint:fix && npm run version:update && webpack --mode=production","build:performance":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js version","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"css-loader":"^7.1.2","eslint":"^9.39.1","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.4","prettier":"^3.6.2","style-loader":"^4.0.0","stylelint":"^16.25.0","stylelint-prettier":"^5.0.3","stylelint-config-standard":"^39.0.1","webpack":"^5.102.1","webpack-cli":"^6.0.1","webpack-dev-server":"^5.2.2","webpack-userscript":"^3.2.3"}}');
-
-/***/ }),
-
-/***/ 387:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-// config/versions.js
-// Centralized version management for WTR Term Inconsistency Finder
-
-// Environment variable overrides with fallbacks
-const envVersion = process.env.WTR_VERSION || process.env.APP_VERSION;
-const buildEnv = process.env.WTR_BUILD_ENV || process.env.BUILD_ENV || "production";
-const buildDate = process.env.WTR_BUILD_DATE || process.env.BUILD_DATE || new Date().toISOString().split("T")[0];
-
-// Derive base version from package.json at runtime so only package.json is edited manually
-const pkg = __webpack_require__(330);
-const BASE_VERSION = pkg.version;
-
-const VERSION_INFO = {
-  SEMANTIC: envVersion || BASE_VERSION,           // Semantic version
-  DISPLAY: `v${envVersion || BASE_VERSION}`,      // Display version
-  BUILD_ENV: buildEnv || "production",            // Build environment
-  BUILD_DATE: buildDate,                          // Build date
-  GREASYFORK: envVersion || BASE_VERSION,         // GreasyFork version
-  NPM: envVersion || BASE_VERSION,                // NPM version
-  BADGE: envVersion || BASE_VERSION,              // Badge version
-  CHANGELOG: envVersion || BASE_VERSION,          // Changelog version
-};
-
-// Export version info and utility functions
-module.exports = {
-  VERSION_INFO,
-  
-  // Utility functions
-  getVersion: (type = "semantic") => {
-    switch (type.toLowerCase()) {
-      case "semantic":
-      case "semver":
-        return VERSION_INFO.SEMANTIC;
-      case "display":
-        return VERSION_INFO.DISPLAY;
-      case "build":
-        return `${VERSION_INFO.SEMANTIC}-${VERSION_INFO.BUILD_ENV}`;
-      case "dev":
-        return `${VERSION_INFO.SEMANTIC}-dev.${Date.now()}`;
-      default:
-        return VERSION_INFO.SEMANTIC;
-    }
-  },
-  
-  getBuildTime: () => new Date().toISOString(),
-  getBuildDate: () => VERSION_INFO.BUILD_DATE,
-  isProduction: () => VERSION_INFO.BUILD_ENV === "production",
-  isDevelopment: () => VERSION_INFO.BUILD_ENV === "development"
-};
-
-/***/ }),
-
 /***/ 395:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Ir: () => (/* binding */ getNovelSlug),
 /* harmony export */   Jf: () => (/* binding */ applySmartQuotesReplacement),
@@ -3707,7 +3641,7 @@ function crawlChapterData() {
     }
   });
   log(
-    `Successfully collected data for ${chapterData.length} chapters: [${chapterData.map((d) => d.chapter).join(", ")}]`,
+    `Successfully collected data for ${chapterData.length} chapters: [${chapterData.map(d => d.chapter).join(", ")}]`,
   );
   return chapterData;
 }
@@ -3878,7 +3812,7 @@ function applySmartQuotesReplacement(chapterData) {
   let chaptersWithChanges = 0;
   let skippedChapters = 0;
 
-  const processedData = chapterData.map((data) => {
+  const processedData = chapterData.map(data => {
     // Skip processing if this is the active chapter
     if (
       data.tracker &&
@@ -4046,7 +3980,7 @@ function applyTermReplacements(chapterData, terms = []) {
   const addSimpleGroup = (map, flags, wholeWord, caseSensitive) => {
     if (map.size > 0) {
       const sortedKeys = [...map.keys()].sort((a, b) => b.length - a.length);
-      const patterns = sortedKeys.map((k) => {
+      const patterns = sortedKeys.map(k => {
         const escaped = escapeRegExp(k);
         return wholeWord ? `\\b${escaped}\\b` : escaped;
       });
@@ -4066,7 +4000,7 @@ function applyTermReplacements(chapterData, terms = []) {
   addSimpleGroup(simple_ci_whole, "gi", true, false);
 
   // 2. Process each chapter's text.
-  return chapterData.map((data) => {
+  return chapterData.map(data => {
     // Skip processing if this is the active chapter
     if (
       data.tracker &&
@@ -4145,7 +4079,7 @@ function summarizeContextResults(existingResults, maxItems = 50) {
 
   // Sort by quality score (highest first)
   const sortedResults = existingResults
-    .map((result) => ({
+    .map(result => ({
       ...result,
       qualityScore: calculateResultQuality(result),
     }))
@@ -4353,7 +4287,7 @@ function isProperNameLike(concept) {
   }
 
   // Simple heuristic: multiple capitalized tokens
-  if (tokens.length > 1 && tokens.every((t) => /^[A-Z][a-z]+$/.test(t))) {
+  if (tokens.length > 1 && tokens.every(t => /^[A-Z][a-z]+$/.test(t))) {
     return true;
   }
 
@@ -4384,7 +4318,7 @@ function areSemanticallySimilar(concept1, concept2) {
 
   // Normalize for ASCII/Latin similarity. Non-Latin content will mostly reduce to empty,
   // which is fine because we already guard by script category above.
-  const normalize = (str) =>
+  const normalize = str =>
     str
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, "")
@@ -4437,7 +4371,7 @@ function areSemanticallySimilar(concept1, concept2) {
   const words2 = norm2.split(/\s+/).filter(Boolean);
 
   if (words1.length && words2.length) {
-    const commonWords = words1.filter((word) => words2.includes(word));
+    const commonWords = words1.filter(word => words2.includes(word));
     const overlapRatio =
       commonWords.length / Math.max(words1.length, words2.length);
 
@@ -4459,7 +4393,7 @@ function areSemanticallySimilar(concept1, concept2) {
 function mergeAnalysisResults(existingResults, newResults) {
   const merged = [...existingResults];
 
-  newResults.forEach((newResult) => {
+  newResults.forEach(newResult => {
     if (!newResult || typeof newResult !== "object") {
       return;
     }
@@ -4468,7 +4402,7 @@ function mergeAnalysisResults(existingResults, newResults) {
     const newScript = detectScriptCategory(newConcept);
 
     // Find potential semantic duplicates (script-aware via areSemanticallySimilar)
-    const duplicateIndex = merged.findIndex((existing) => {
+    const duplicateIndex = merged.findIndex(existing => {
       if (!existing || !existing.concept) {
         return false;
       }
@@ -4555,7 +4489,7 @@ function mergeAnalysisResults(existingResults, newResults) {
         ].filter(
           (variation, index, arr) =>
             arr.findIndex(
-              (v) =>
+              v =>
                 v.phrase === variation.phrase &&
                 v.chapter === variation.chapter,
             ) === index,
@@ -4566,7 +4500,7 @@ function mergeAnalysisResults(existingResults, newResults) {
           ...(newResult.suggestions || []),
         ].filter(
           (suggestion, index, arr) =>
-            arr.findIndex((s) => s.suggestion === suggestion.suggestion) ===
+            arr.findIndex(s => s.suggestion === suggestion.suggestion) ===
             index,
         ),
         // Preserve status flags from higher quality result
@@ -4716,7 +4650,6 @@ function isWTRLabTermReplacerLoaded() {
 /***/ 421:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -4887,49 +4820,9 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Enhanced Form Styling for Configura
 
 /***/ }),
 
-/***/ 424:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-// src/version.js
-// Backward compatibility layer for version information
-// This file will be replaced by the build banner system in production
-
-// Support both Node.js and browser environments
-let VERSION_INFO;
-try {
-  const versionModule = __webpack_require__(387);
-  VERSION_INFO = versionModule.VERSION_INFO;
-} catch {
-  // Fallback for browser environment or when config is not available
-  VERSION_INFO = {
-    SEMANTIC: "5.3.5",
-    DISPLAY: "v5.3.5",
-    BUILD_ENV: "production",
-    BUILD_DATE: "2025-11-10",
-  };
-}
-
-// Export VERSION constant for backward compatibility
-const VERSION = VERSION_INFO.SEMANTIC;
-
-if ( true && module.exports) {
-  module.exports = {
-    VERSION,
-    VERSION_INFO,
-  };
-} else {
-  // Browser environment
-  window.WTR_VERSION = VERSION;
-  window.WTR_VERSION_INFO = VERSION_INFO;
-}
-
-
-/***/ }),
-
 /***/ 540:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -4946,7 +4839,6 @@ module.exports = insertStyleElement;
 /***/ 601:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = function (i) {
@@ -4958,7 +4850,6 @@ module.exports = function (i) {
 /***/ 659:
 /***/ ((module) => {
 
-"use strict";
 
 
 var memo = {};
@@ -4999,7 +4890,6 @@ module.exports = insertBySelector;
 /***/ 784:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -5153,7 +5043,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section-based Finder layout improve
 /***/ 825:
 /***/ ((module) => {
 
-"use strict";
 
 
 /* istanbul ignore next  */
@@ -5221,7 +5110,6 @@ module.exports = domAPI;
 /***/ 871:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   H: () => (/* binding */ displayResults)
 /* harmony export */ });
@@ -5250,21 +5138,19 @@ function displayResults(results) {
   const filterValue =
     document.getElementById("wtr-if-filter-select")?.value || "all";
 
-  let displayedResults = results.filter((r) => !r.error && r.concept);
-  const errors = results.filter((r) => r.error);
+  let displayedResults = results.filter(r => !r.error && r.concept);
+  const errors = results.filter(r => r.error);
 
   if (filterValue === "new") {
-    displayedResults = displayedResults.filter((r) => r.isNew);
+    displayedResults = displayedResults.filter(r => r.isNew);
   } else if (filterValue === "verified") {
     displayedResults = displayedResults.filter(
-      (r) =>
+      r =>
         r.status === "Verified" ||
         (r.isNew === false && r.status !== "Verified"),
     );
   } else if (filterValue !== "all") {
-    displayedResults = displayedResults.filter(
-      (r) => r.priority === filterValue,
-    );
+    displayedResults = displayedResults.filter(r => r.priority === filterValue);
   }
 
   if (displayedResults.length === 0 && errors.length === 0) {
@@ -5288,12 +5174,10 @@ function displayResults(results) {
 
   // Append successful results first
   const successFragment = document.createDocumentFragment();
-  displayedResults.forEach((group) => {
+  displayedResults.forEach(group => {
     const groupEl = document.createElement("div");
     groupEl.className = "wtr-if-result-group";
-    const uniqueVariations = [
-      ...new Set(group.variations.map((v) => v.phrase)),
-    ];
+    const uniqueVariations = [...new Set(group.variations.map(v => v.phrase))];
     const variationsJson = JSON.stringify(uniqueVariations);
 
     const suggestionsHtml = (group.suggestions || [])
@@ -5398,7 +5282,7 @@ function displayResults(results) {
                     <div class="wtr-if-variations">
                         ${(group.variations || [])
                           .map(
-                            (item) => `
+                            item => `
                         <div class="wtr-if-variation-item">
                             <div class="wtr-if-variation-header">
                                 <input type="checkbox" class="wtr-if-variation-checkbox" value="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(
@@ -5434,7 +5318,7 @@ function displayResults(results) {
   errors
     .slice()
     .reverse()
-    .forEach((err) => {
+    .forEach(err => {
       const errorEl = document.createElement("div");
       errorEl.className = "wtr-if-error";
       errorEl.textContent = err.error;
@@ -5446,7 +5330,7 @@ function displayResults(results) {
     document.getElementById("wtr-if-tab-finder") || resultsContainer;
 
   if (finderScope) {
-    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach((btn) => {
+    finderScope.querySelectorAll(".wtr-if-apply-btn").forEach(btn => {
       // Ensure per-result buttons are reliably discoverable for mode switching
       if (!btn.dataset.role) {
         btn.dataset.role = "wtr-if-apply-action";
@@ -5466,7 +5350,7 @@ function displayResults(results) {
   // Wire up individual variation copy buttons
   resultsContainer
     .querySelectorAll(".wtr-if-copy-variation-btn")
-    .forEach((btn) => btn.addEventListener("click", _events__WEBPACK_IMPORTED_MODULE_2__/* .handleCopyVariationClick */ .pS));
+    .forEach(btn => btn.addEventListener("click", _events__WEBPACK_IMPORTED_MODULE_2__/* .handleCopyVariationClick */ .pS));
 
   // Ensure Apply/Copy button modes are synchronized after results are rendered
   (0,_events__WEBPACK_IMPORTED_MODULE_2__.updateApplyCopyButtonsMode)();
@@ -5478,7 +5362,6 @@ function displayResults(results) {
 /***/ 907:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   ES: () => (/* binding */ MODELS_CACHE_KEY),
 /* harmony export */   I6: () => (/* binding */ saveSessionResults),
@@ -5583,7 +5466,7 @@ function sanitizeSuggestionData(suggestion) {
 
 function sanitizeResultsData(results) {
   // Sanitize all results to fix corrupted suggestion data from restored sessions
-  return results.map((result) => {
+  return results.map(result => {
     if (!result.suggestions || !Array.isArray(result.suggestions)) {
       return result;
     }
@@ -5616,7 +5499,10 @@ async function loadConfig() {
     (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Loaded preferences from config:", appState.preferences);
   }
 
-  appState.config = { ...appState.config, ...savedConfig };
+  appState.config = {
+    ...appState.config,
+    ...savedConfig,
+  };
 
   // Load session results if available
   const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY);
@@ -5724,7 +5610,7 @@ function loadKeyStates() {
     const now = Date.now();
     const normalizedStates = {};
 
-    Object.keys(savedStates).forEach((key) => {
+    Object.keys(savedStates).forEach(key => {
       const parsedIndex = parseInt(key, 10);
       const index = Number.isNaN(parsedIndex) ? key : parsedIndex;
       const raw = savedStates[key] || {};
@@ -6025,7 +5911,6 @@ function getNextAvailableKey() {
 /***/ 974:
 /***/ ((module, __webpack_exports__, __webpack_require__) => {
 
-"use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
@@ -6196,9 +6081,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
-// This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
-(() => {
-"use strict";
 
 // EXTERNAL MODULE: ./node_modules/style-loader/dist/runtime/injectStylesIntoStyleTag.js
 var injectStylesIntoStyleTag = __webpack_require__(72);
@@ -6247,14 +6129,12 @@ var update = injectStylesIntoStyleTag_default()(main/* default */.A, options);
 
        /* harmony default export */ const styles_main = (main/* default */.A && main/* default */.A.locals ? main/* default */.A.locals : undefined);
 
-// EXTERNAL MODULE: ./src/version.js
-var version = __webpack_require__(424);
 // EXTERNAL MODULE: ./src/modules/state.js
 var state = __webpack_require__(907);
-// EXTERNAL MODULE: ./src/modules/utils.js
-var utils = __webpack_require__(395);
 // EXTERNAL MODULE: ./src/modules/ui/index.js
 var ui = __webpack_require__(201);
+// EXTERNAL MODULE: ./src/modules/utils.js
+var utils = __webpack_require__(395);
 ;// ./src/index.js
 // src/index.js
 
@@ -6262,7 +6142,7 @@ var ui = __webpack_require__(201);
 
 
 // Import version information (fallback for build time)
-
+// import { VERSION } from "./version";
 
 // Import core modules
 
@@ -6280,7 +6160,7 @@ async function src_main() {
     GM_registerMenuCommand("Term Inconsistency Finder", () =>
       (0,ui/* togglePanel */.Pj)(true),
     );
-    (0,utils/* log */.Rm)(`WTR Term Inconsistency Finder v${version.VERSION} initialized successfully.`);
+    (0,utils/* log */.Rm)("WTR Term Inconsistency Finder initialized successfully.");
   } catch (error) {
     console.error("Failed to initialize WTR Term Inconsistency Finder:", error);
   }
@@ -6288,8 +6168,6 @@ async function src_main() {
 
 // Run the script
 src_main();
-
-})();
 
 /******/ })()
 ;
