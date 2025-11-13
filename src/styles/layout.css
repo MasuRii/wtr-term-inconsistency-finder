@@ -1,131 +1,131 @@
 /* Section-based Finder layout improvements */
 .wtr-if-section {
-  background-color: var(--bs-body-bg, #fff);
-  border: 1px solid var(--bs-border-color, #dee2e6);
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgb(0 0 0 / 5%);
-  margin-bottom: 20px;
-  overflow: hidden;
+	background-color: var(--bs-body-bg, #fff);
+	border: 1px solid var(--bs-border-color, #dee2e6);
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgb(0 0 0 / 5%);
+	margin-bottom: 20px;
+	overflow: hidden;
 }
 
 .wtr-if-section-header {
-  background-color: var(--bs-tertiary-bg, #f8f9fa);
-  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-  padding: 12px 16px;
+	background-color: var(--bs-tertiary-bg, #f8f9fa);
+	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+	padding: 12px 16px;
 }
 
 .wtr-if-section-header h3 {
-  align-items: center;
-  color: var(--bs-body-color, #212529);
-  display: flex;
-  font-size: 16px;
-  font-weight: 600;
-  gap: 8px;
-  margin: 0;
+	align-items: center;
+	color: var(--bs-body-color, #212529);
+	display: flex;
+	font-size: 16px;
+	font-weight: 600;
+	gap: 8px;
+	margin: 0;
 }
 
 .wtr-if-icon {
-  align-items: center;
-  display: flex;
-  font-size: 18px;
-  height: 24px;
-  justify-content: center;
-  width: 24px;
+	align-items: center;
+	display: flex;
+	font-size: 18px;
+	height: 24px;
+	justify-content: center;
+	width: 24px;
 }
 
 .wtr-if-section-content {
-  padding: 16px;
+	padding: 16px;
 }
 
 .wtr-if-finder-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
 }
 
 /* Configuration Tab Responsive Design */
 @media (width <= 768px) {
-  .wtr-if-finder-controls {
-    flex-direction: column;
-  }
+	.wtr-if-finder-controls {
+		flex-direction: column;
+	}
 
-  .wtr-if-btn-large {
-    min-width: auto;
-    width: 100%;
-  }
+	.wtr-if-btn-large {
+		min-width: auto;
+		width: 100%;
+	}
 
-  .wtr-if-form-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
+	.wtr-if-form-row {
+		align-items: stretch;
+		flex-direction: column;
+	}
 
-  .wtr-if-form-label {
-    min-width: auto;
-  }
+	.wtr-if-form-label {
+		min-width: auto;
+	}
 
-  .wtr-if-form-select {
-    min-width: auto;
-    width: 100%;
-  }
+	.wtr-if-form-select {
+		min-width: auto;
+		width: 100%;
+	}
 
-  .wtr-if-action-buttons {
-    flex-direction: column;
-  }
+	.wtr-if-action-buttons {
+		flex-direction: column;
+	}
 
-  .wtr-if-action-buttons button {
-    width: 100%;
-  }
+	.wtr-if-action-buttons button {
+		width: 100%;
+	}
 
-  /* Configuration Tab Specific Responsive */
-  .wtr-if-section {
-    margin-bottom: 16px;
-  }
+	/* Configuration Tab Specific Responsive */
+	.wtr-if-section {
+		margin-bottom: 16px;
+	}
 
-  .wtr-if-section-header h3 {
-    align-items: flex-start;
-    flex-direction: column;
-    font-size: 15px;
-    gap: 6px;
-  }
+	.wtr-if-section-header h3 {
+		align-items: flex-start;
+		flex-direction: column;
+		font-size: 15px;
+		gap: 6px;
+	}
 
-  .wtr-if-model-controls {
-    flex-direction: column;
-    gap: 8px;
-  }
+	.wtr-if-model-controls {
+		flex-direction: column;
+		gap: 8px;
+	}
 
-  .wtr-if-model-controls select,
-  .wtr-if-model-controls button {
-    width: 100%;
-  }
+	.wtr-if-model-controls select,
+	.wtr-if-model-controls button {
+		width: 100%;
+	}
 
-  .wtr-if-import-export .wtr-if-form-row {
-    flex-direction: column;
-    gap: 8px;
-  }
+	.wtr-if-import-export .wtr-if-form-row {
+		flex-direction: column;
+		gap: 8px;
+	}
 
-  .wtr-if-import-export button {
-    width: 100%;
-  }
+	.wtr-if-import-export button {
+		width: 100%;
+	}
 
-  .wtr-if-section-content {
-    padding: 12px;
-  }
+	.wtr-if-section-content {
+		padding: 12px;
+	}
 
-  .wtr-if-api-keys-container-wrapper {
-    max-height: 150px;
-  }
+	.wtr-if-api-keys-container-wrapper {
+		max-height: 150px;
+	}
 }
 
 /* Configuration Tab Specific Enhancements */
 .wtr-if-import-export {
-  border-top: 1px solid var(--bs-border-color, #dee2e6);
-  margin-top: 15px;
-  padding-top: 15px;
+	border-top: 1px solid var(--bs-border-color, #dee2e6);
+	margin-top: 15px;
+	padding-top: 15px;
 }
 
 .wtr-if-import-export h4 {
-  font-size: 14px;
-  font-weight: bold;
-  margin-bottom: 10px;
-  margin-top: 0;
+	font-size: 14px;
+	font-weight: bold;
+	margin-bottom: 10px;
+	margin-top: 0;
 }

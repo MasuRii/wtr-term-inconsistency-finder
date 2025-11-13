@@ -1,150 +1,150 @@
 /* Results Display Styles */
 #wtr-if-results {
-  margin-top: 10px;
+	margin-top: 10px;
 }
 
 .wtr-if-result-group {
-  background-color: var(--bs-body-bg, #fff);
-  border: 1px solid var(--bs-border-color, #dee2e6);
-  border-radius: 6px;
-  margin-bottom: 16px;
+	background-color: var(--bs-body-bg, #fff);
+	border: 1px solid var(--bs-border-color, #dee2e6);
+	border-radius: 6px;
+	margin-bottom: 16px;
 }
 
 .wtr-if-group-header {
-  background-color: var(--bs-tertiary-bg, #f8f9fa);
-  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-  padding: 12px;
-  position: relative;
+	background-color: var(--bs-tertiary-bg, #f8f9fa);
+	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+	padding: 12px;
+	position: relative;
 }
 
 .wtr-if-group-header h3 {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 16px;
-  gap: 8px;
-  margin: 0 0 8px;
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	font-size: 16px;
+	gap: 8px;
+	margin: 0 0 8px;
 }
 
 .wtr-if-explanation {
-  font-size: 14px;
-  font-style: italic;
-  margin: 0;
-  opacity: 0.9;
+	font-size: 14px;
+	font-style: italic;
+	margin: 0;
+	opacity: 0.9;
 }
 
 .wtr-if-group-actions {
-  position: absolute;
-  right: 12px;
-  top: 12px;
+	position: absolute;
+	right: 12px;
+	top: 12px;
 }
 
 .wtr-if-details-section {
-  padding: 12px;
+	padding: 12px;
 }
 
 .wtr-if-details-section h4 {
-  border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
-  font-size: 14px;
-  font-weight: bold;
-  margin-bottom: 8px;
-  margin-top: 0;
-  padding-bottom: 4px;
+	border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
+	font-size: 14px;
+	font-weight: bold;
+	margin-bottom: 8px;
+	margin-top: 0;
+	padding-bottom: 4px;
 }
 
 .wtr-if-variations,
 .wtr-if-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .wtr-if-variation-item {
-  border: 1px solid var(--bs-border-color-translucent, #dee2e6);
-  border-radius: 4px;
+	border: 1px solid var(--bs-border-color-translucent, #dee2e6);
+	border-radius: 4px;
 }
 
 .wtr-if-variation-header {
-  align-items: center;
-  background-color: var(--bs-secondary-bg, #e9ecef);
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  padding: 6px 8px;
+	align-items: center;
+	background-color: var(--bs-secondary-bg, #e9ecef);
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	padding: 6px 8px;
 }
 
 .wtr-if-incorrect {
-  color: var(--bs-danger-text-emphasis, #58151c);
-  font-weight: bold;
+	color: var(--bs-danger-text-emphasis, #58151c);
+	font-weight: bold;
 }
 
 .wtr-if-variation-header .wtr-if-incorrect {
-  flex-grow: 1;
-  color: var(--bs-danger-text-emphasis, #58151c);
-  font-weight: bold;
+	flex-grow: 1;
+	color: var(--bs-danger-text-emphasis, #58151c);
+	font-weight: bold;
 }
 
 .wtr-if-variation-checkbox {
-  flex-shrink: 0;
-  margin: 0;
+	flex-shrink: 0;
+	margin: 0;
 }
 
 .wtr-if-context {
-  font-size: 13px;
-  margin: 0;
-  padding: 6px 8px;
+	font-size: 13px;
+	margin: 0;
+	padding: 6px 8px;
 }
 
 .wtr-if-suggestion-item {
-  border: 1px solid var(--bs-border-color-translucent, #dee2e6);
-  border-radius: 4px;
-  overflow: hidden;
+	border: 1px solid var(--bs-border-color-translucent, #dee2e6);
+	border-radius: 4px;
+	overflow: hidden;
 }
 
 .wtr-if-suggestion-header {
-  align-items: center;
-  background-color: var(--bs-success-bg-subtle, #d1e7dd);
-  display: flex;
-  justify-content: space-between;
-  padding: 8px;
+	align-items: center;
+	background-color: var(--bs-success-bg-subtle, #d1e7dd);
+	display: flex;
+	justify-content: space-between;
+	padding: 8px;
 }
 
 .wtr-if-correct {
-  color: var(--bs-success-text-emphasis, #0a3622);
-  font-weight: bold;
+	color: var(--bs-success-text-emphasis, #0a3622);
+	font-weight: bold;
 }
 
 .wtr-if-suggestion-header .wtr-if-correct {
-  flex-grow: 1;
-  color: var(--bs-success-text-emphasis, #0a3622);
-  font-weight: bold;
+	flex-grow: 1;
+	color: var(--bs-success-text-emphasis, #0a3622);
+	font-weight: bold;
 }
 
 .wtr-if-suggestion-actions {
-  display: flex;
-  gap: 8px;
+	display: flex;
+	gap: 8px;
 }
 
 .wtr-if-replacement-info {
-  background-color: var(--bs-tertiary-bg, #f8f9fa);
-  border-top: 1px solid var(--bs-border-color-translucent, #dee2e6);
-  font-size: 13px;
-  margin: 0;
-  padding: 6px 8px;
+	background-color: var(--bs-tertiary-bg, #f8f9fa);
+	border-top: 1px solid var(--bs-border-color-translucent, #dee2e6);
+	font-size: 13px;
+	margin: 0;
+	padding: 6px 8px;
 }
 
 .wtr-if-replacement-info code {
-  background-color: var(--bs-body-bg, #fff);
-  border: 1px solid var(--bs-border-color, #dee2e6);
-  border-radius: 4px;
-  font-family: var(--bs-font-monospace, monospace);
-  padding: 2px 5px;
+	background-color: var(--bs-body-bg, #fff);
+	border: 1px solid var(--bs-border-color, #dee2e6);
+	border-radius: 4px;
+	font-family: var(--bs-font-monospace, monospace);
+	padding: 2px 5px;
 }
 
 .wtr-if-reasoning {
-  font-size: 13px;
-  margin: 0;
-  padding: 6px 8px;
+	font-size: 13px;
+	margin: 0;
+	padding: 6px 8px;
 }
 
 /* Base color classes for text highlighting */
