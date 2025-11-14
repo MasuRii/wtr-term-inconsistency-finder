@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [5.3.8] - 2025-11-14
+
+### ♻️ Changed
+- **Major Gemini API Module Refactoring**: Completely modularized the monolithic 908-line `geminiApi.js` file into 5 focused modules following single responsibility principle:
+  - `retryLogic.js` (107 lines) - Exponential backoff and retry scheduling logic
+  - `promptManager.js` (310 lines) - AI prompt generation and response parsing
+  - `apiErrorHandler.js` (143 lines) - Centralized error handling and classification
+  - `analysisEngine.js` (609 lines) - Core analysis and API integration logic
+  - `geminiApi.js` (82 lines) - Facade module maintaining backward compatibility
+- **Enhanced Code Organization**: Improved maintainability, testability, and developer experience through logical separation of concerns
+- **Better Tree-Shaking**: Modular structure enables improved webpack optimization for unused code elimination
+- **Preserved Backward Compatibility**: All existing function signatures and interfaces remain unchanged - no breaking changes
+
+### ⚙️ Internal
+- **Comprehensive Documentation**: Added detailed JSDoc documentation to all new modular components
+- **Dependency Management**: Implemented proper module initialization order with circular dependency resolution
+- **Error Handling Enhancement**: Extended error handling patterns across all modules with comprehensive recovery strategies
+- **Build System Validation**: Verified `npm run build` completes successfully with 0 syntax errors after modularization
 
 ## [5.3.7] - 2025-11-11
 

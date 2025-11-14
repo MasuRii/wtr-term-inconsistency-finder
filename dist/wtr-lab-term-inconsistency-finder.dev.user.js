@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.7-dev.1763022164666
+// @version 5.3.7-dev.1763101693837
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -21,923 +21,6 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
-
-/***/ 43:
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Nz: () => (/* binding */ findInconsistenciesDeepAnalysis),
-/* harmony export */   Rq: () => (/* binding */ getAvailableApiKey)
-/* harmony export */ });
-/* unused harmony export findInconsistencies */
-/* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(907);
-/* harmony import */ var _ui__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(201);
-/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(395);
-// src/modules/geminiApi.js
-
-
-
-
-const MAX_RETRIES_PER_KEY = 3
-
-// Exponential backoff settings (per logical operation, not per key)
-const BASE_BACKOFF_MS = 2000 // 2s
-const MAX_BACKOFF_MS = 60000 // 60s cap
-const MAX_TOTAL_RETRY_DURATION_MS = 5 * 60 * 1000 // 5 minutes safety cap per run
-
-const RETRIABLE_STATUSES = new Set([
-	"RESOURCE_EXHAUSTED", // 429 Rate limit
-	"INTERNAL", // 500 Server error
-	"UNAVAILABLE", // 503 Service overloaded
-	"DEADLINE_EXCEEDED", // 504 Request timed out
-])
-
-/**
- * Calculate exponential backoff delay with an upper bound.
- * retryIndex is zero-based: 0 -> BASE_BACKOFF_MS, 1 -> 2x, 2 -> 4x, etc.
- */
-function calculateBackoffDelayMs(retryIndex) {
-	const delay = BASE_BACKOFF_MS * Math.pow(2, retryIndex)
-	return Math.min(delay, MAX_BACKOFF_MS)
-}
-
-/**
- * Schedule a retriable retry with exponential backoff.
- * - Preserves existing key rotation & cooldown logic (caller must have set cooldowns).
- * - Ensures we do not exceed a global max retry window.
- * - Provides consistent logging and UI feedback.
- */
-function scheduleRetriableRetry({ operationName, retryCount, maxTotalRetries, startedAt, nextStep }) {
-	const now = Date.now()
-
-	// Enforce attempt-based and time-based ceilings
-	if (retryCount >= maxTotalRetries) {
-		handleApiError(
-			`${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
-		)
-		return
-	}
-
-	if (now - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
-		handleApiError(
-			`${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
-		)
-		return
-	}
-
-	const delay = calculateBackoffDelayMs(retryCount)
-	;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`${operationName}: Scheduling retry #${retryCount + 1} with exponential backoff delay ${delay}ms.`)
-	;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("running", `Retrying in ${Math.round(delay / 1000)}s...`)
-
-	// Ensure no uncaught exceptions propagate from the scheduled callback
-	setTimeout(() => {
-		try {
-			nextStep()
-		} catch (e) {
-			console.error(`Inconsistency Finder: Uncaught error during scheduled retry for ${operationName}:`, e)
-			handleApiError(`${operationName} encountered an unexpected error during retry. Please try again.`)
-		}
-	}, delay)
-}
-
-const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translation Consistency Editor," designed to detect and fix translation inconsistencies in machine-translated novels. Your primary goal is to identify terms (character names, locations, items, abilities, titles, etc.) that have been translated inconsistently across chapters, provide standardization suggestions, and offer contextual analysis for nuances like aliases, stylistic localizations, and cultural honorifics.
-
-## Core Capabilities
-1.  Scanning & Detection: Automatically scan for inconsistent translations of the same entity. Track variations of character names, place names, items, abilities, titles, and other recurring terms. Detect semantic similarities between terms that may be different translations of the same concept.
-2.  Entity Profiling & Alias Linking: Build profiles for key narrative entities (characters, locations, etc.) to link aliases, nicknames, and full names using contextual clues. Recognize component-based naming schemes (e.g., 'Heavy Cavalry' as a shorthand for 'Heavy Cavalry Exoskeleton') and entity-derived names (e.g., a location incorporating a character's name like '[Character] City').
-3.  Username Lexical & Formatting Analysis: Proactively identify potential usernames based on non-English lexical patterns (pinyin, romaji, etc.) and formatting violations (the presence of spaces). If a username triggers both, present both sets of suggestions together in a single, consolidated report item.
-4.  Suggestion Generation: For each identified inconsistency, provide 3 distinct standardization suggestions. Include data-driven metrics for each suggestion (e.g., frequency, first appearance) and explain the reasoning with quantitative support, maintaining the story's context.
-
-## What NOT to Flag (Exclusions)
-- Do not flag or report terms that have been previously confirmed as an alias cluster.
-- Do not flag onomatopoeia (sound words, emotional expressions, or expressive vocalizations like "Wuwuwu", "Aha!", "Huhu", etc.) as these are cute stylistic elements that should remain in their original flavor.
-- Do not flag casual internet expressions or emotional vocalizations that are culturally appropriate and intentionally expressive.
-- Do NOT flag anything related to author notes, author commentary, or translator notes - these are intentional additions that may make the text longer but should not be flagged for inconsistencies.
-- Do NOT flag usernames or character references that are clearly aliases, undercovers, or alternate identifications of the same character.
-- CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes “ ” ‘ ’) should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
-- CRITICAL: Do NOT flag systematic chapter title numbering offsets or mismatches that are clearly caused by the source website's structure or template rather than the editable chapter content. In particular:
-    * If multiple consecutive chapters show a consistent pattern where the visible chapter heading (e.g., "--- CHAPTER 302 ---") and the in-title number (e.g., "Chapter 301: Arcane Armor") are offset by the same amount (such as always lagging by one), treat this as a non-user-actionable, site-level issue.
-    * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
-    * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
-    * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
-
-## Focus On
-- In-text content within the chapter body.
-- Character names, locations, items, abilities, techniques, titles, and organizations.
-- Chapter titles and any inconsistencies within them.
-- Potential alias clusters for entities.
-- Usernames for holistic formatting and localization opportunities.
-- Non-English honorifics for cultural nuance handling.
-
-## Prioritization System (Dynamic Impact-Based)
-You will use a dynamic Impact Score to rank all detected issues, ensuring that items most critical to the story are prioritized.
-
-### How the Impact Score is Calculated:
-1.  Frequency & Density (Base Score): The raw count of a term's appearances relative to the total length of the scanned text.
-2.  Narrative Centrality (Context Multiplier): A multiplier based on how tied a term is to the core plot. Boost scores for terms appearing near the protagonist, in chapter titles, or frequently in dialogue.
-3.  Chronological Volatility (Recency & Pattern Score): Prioritize inconsistencies in recent chapters. Lower the score for terms that were inconsistent early on but have since become consistent. Flag "Potential Term Evolutions" (e.g., a title changing after a promotion) for review with a lower error score.
-4.  Dependency & "Root" Status (Architectural Multiplier): Identify "root" inconsistencies (like a sect's name) that cause a cascade of "dependent" inconsistencies (like titles "Sect Elder," "Sect Disciple"). The root term receives a massive priority multiplier.
-
-### Priority Levels (Based on Calculated Impact Score):
-- [Priority: CRITICAL]: High-frequency, high-centrality terms with ongoing volatility. Main character names, core concepts in chapter titles, or major "root" inconsistencies.
-- [Priority: HIGH]: Important secondary characters, key locations, or recurring abilities that are inconsistent in recent chapters.
-- [Priority: MEDIUM]: Supporting elements, items, or inconsistencies that are less frequent or occurred in earlier chapters.
-- [Priority: LOW]: Minor background elements, one-off mentions with variations, or confirmed "Term Evolutions" that just need a final check.
-- [Priority: STYLISTIC]: All localization and formatting suggestions (usernames, honorifics) are grouped here.
-- [Priority: INFO]: Informational notes, such as 'Potential Alias Clusters' or 'Potential Nuance Clusters'.
-
-## Improved Detection Logic
-Think step by step in your analysis: 1. Scan the text for recurring terms. 2. Build entity profiles and link aliases using contextual clues. 3. Calculate impact scores based on frequency, centrality, volatility, and dependencies. 4. Verify each detection for high-confidence errors (reflect: Is this an unintentional inconsistency or a nuance/evolution? Discard if not a true error). 5. Generate data-driven suggestions.
-1.  QUOTE NORMALIZATION (CRITICAL): Before comparing any terms for inconsistencies, first normalize all quotation marks by stripping them. Terms like "Project Doomsday", 'Project Doomsday', and “Project Doomsday” should be treated as the SAME term "Project Doomsday" for comparison purposes. Only flag an inconsistency if the CORE TEXT (excluding quotes) differs.
-2.  Contextual Verification Snippets: For each potential inconsistency, extract and present a brief contextual snippet (1-2 sentences) for each variant to verify the match.
-3.  Disambiguation Logic for Similar Terms: If two similar-sounding terms like "Flame Art" and "Blaze Art" appear in the same chapter or are used by different characters in the same context, treat them as distinct entities.
-4.  Source Term Inference: Infer a probable source term or pinyin as the "Original Concept" anchor for grouping variations (e.g., group "Li Fuchen," "Li Fu Chen," and "Lee Fuchen" under an inferred anchor like \`[Li Fuchen]\`).
-5.  Conceptual Anchoring: If terms with low string similarity share conceptual anchors (e.g., consistently associated with the same character or location), create a high-confidence link.
-6.  Component-Based Matching: Break down long names into core components (e.g., [Azure Dragon] + [Flame/Burning] + [Sword/Blade]) and match based on the core entity and synonymous descriptors.
-7.  Relational Inconsistency Detection: Identify "Relational Clusters" where inconsistencies are linked (e.g., a character's name changing along with their title in the same chapter).
-8.  Track and Flag Chronological Inconsistencies (Term Evolution): If a term disappears and is consistently replaced by a new one from a specific chapter onward, flag it as a "Potential Term Evolution" rather than a simple error.
-9.  Speaker-Based Disambiguation: Associate terms with the characters who use them to avoid false positives.
-10.  Proactively Identify "Root" Inconsistencies: Identify "root" terms that cause multiple dependent inconsistencies and prioritize them.
-11. Advanced Entity Recognition (Aliases & Nicknames): Build a profile for each key entity. Use contextual clues (explicit links like "...friends called him Jon" or implicit links like shared attributes) to link different names to the same entity. CRITICAL: When you encounter terms like 'BattlefieldAtmosphereGroup' and 'BattlefieldOldBro' used for the same character, analyze the context carefully - these are clearly shorthand variants of the same entity. Look for phrases like "also known as", "also called", "alias", "shorthand", "nickname", or contextual patterns where one term consistently refers to the same character as another term. Do NOT flag these as inconsistencies - they are intentional variations used in the story.
-12. Username Analysis Protocol:
-    *   Formatting Trigger: Flag any potential username containing one or more literal space characters (e.g., 'Elderly Abin').
-    *   Lexical Trigger: Flag any potential username matching pinyin, Japanese Romaji, Korean Romanization, or other non-English romanized language patterns. Do not flag fluent, multi-word English usernames.
-    *   Formatting Exemption: You MUST NOT flag potential usernames that are presented as a single, concatenated word (e.g., 'PlayerName', 'AnotherUser'), even if they use internal capitalization (PascalCase). This is a standard and acceptable format.
-    *   Holistic Analysis: If a username is flagged by BOTH triggers, you MUST provide BOTH formatting and localization suggestions.
-    *   Contextual Differentiation: You MUST NOT flag a name for username-style inconsistencies if the context explicitly identifies the character as an NPC (e.g., 'secretary,' 'guard,' 'shopkeeper'). Username analysis should only apply when context strongly suggests a player character (e.g., mentions of 'player,' 'ID,' 'leaderboard').
-13. Non-English Honorifics Handling: Pattern-match for common honorifics, explain their nuance, and present options that align with common genre practices.
-14. Low-Frequency Alias Boosting: Apply a confidence boost to low-frequency terms if they exhibit strong conceptual ties to high-frequency core entities.
-15. Nuance Analysis: When detecting semantically similar terms, analyze usage patterns. If patterns suggest an intentional conceptual distinction (e.g., state vs. government), flag as 'Potential Nuance Cluster' instead of an inconsistency.
-16. Enhanced Alias Recognition Pattern: Look for these specific patterns that indicate intentional aliases, not inconsistencies:
-    - Contextual indicators: "also known as", "alias", "shorthand", "nickname", "undercover", "went by"
-    - Game/online context: References to usernames, player IDs, gaming handles, or online personas
-    - Sequential usage: Same character being referred to with different names in different chapters
-    - Character development: Names changing as part of character progression or identity evolution
-    - Example pattern: A character with full username 'BattlefieldAtmosphereGroup' using shorter variants like 'BattlefieldOldBro' or 'BattlefieldAtmoGroup' - these are deliberate shorthand, not errors
-    - When you see this pattern, mark as 'INFO' priority with explanation about intentional alias usage
-17. Pinyin vs. English Mismatch: Identify and flag pinyin terms used inconsistently within a group of otherwise standardized English terms. For example, if a character's skills are 'Fireball', 'Ice Lance', and 'Shenlong Po', flag 'Shenlong Po' as a potential localization inconsistency and suggest an English equivalent.
-
-16. Localization Suggestions Logic:
-    - Localization suggestions should ONLY appear for terms that are in pinyin, Chinese characters, or other non-English formats
-    - If a term is already in English or appears to be an established English term in context, DO NOT suggest localization
-    - For pinyin terms, provide localization suggestions only if there is no reasonable English equivalent already established in the context
-    - If a pinyin term appears multiple times and all instances suggest the same English meaning, treat it as a proper noun (character name, place name, etc.) and only suggest localization once with full explanation
-    - Avoid duplicate localization suggestions that are still in pinyin format
-    - Only use "localization suggestion" terminology when the context strongly indicates the term needs translation from Chinese/pinyin to English
-
-## Core Directives
-1.  Prioritization is Key: Always process items with the highest Impact Score first.
-2.  Be a Data-Driven Partner: All suggestions must be supported by data (frequency, context, etc.).
-3.  Enhance the Reading Experience: Focus on changes that have the biggest positive impact on story comprehension.
-4.  Ensure Complete Report Population: For all detected items, always populate the 'variations' section with the identified variants, including their appearance counts, chapters, and context snippets.
-5.  Recommend the Best Suggestion: For each inconsistency, you MUST identify the single best suggestion and add the field "is_recommended": true to it. Only one suggestion per group should have this flag.
-6.  Use Plain Text: Do not use any markdown formatting like bold or italics within the JSON fields, especially in 'explanation', 'reasoning', and 'suggestion' fields. Use plain text only to ensure compatibility and reduce token usage.
-7.  Treat Each Finding as a Unique Concept: Each unique term or entity identified as an issue (e.g., an inconsistent name, a username with spaces, a pinyin term needing localization) MUST be treated as its own separate 'concept'. Do NOT group multiple distinct entities under a single generic concept. For example, if you find two usernames 'Player One' and 'Player Two', they must be reported as two separate items in the JSON array, each with its own 'concept' field set to the respective username. Similarly, if 'FangChang' and 'TengTeng' both need localization, they are two separate concepts.
-
-## Examples (Few-Shot Demonstration)
-Example 1: Text: --- CHAPTER 1 --- The hero Li Fuchen fought in Li City. --- CHAPTER 2 --- Lee Fu Chen escaped to Lee City.
-Step-by-Step Analysis: 1. Scan: Terms 'Li Fuchen', 'Lee Fu Chen' (names); 'Li City', 'Lee City' (locations). 2. Profile: Link as same entity via context (hero's journey). 3. Impact: High frequency, central to plot -> CRITICAL. 4. Verify: Unintentional inconsistency, not evolution. 5. Suggestions: Standardize name to 'Li Fuchen' (frequency: 2, first appearance Ch1).
-
-Quote Normalization Example: Text: --- CHAPTER 1 --- The hero said "Project Doomsday" was dangerous. --- CHAPTER 2 --- The villain whispered 'Project Doomsday' again. --- CHAPTER 3 --- The report mentioned "Project Doomsday" frequently.
-Step-by-Step Analysis: 1. Scan: Terms 'Project Doomsday', 'Project Doomsday', 'Project Doomsday' (same term with different quote styles). 2. Normalize: Strip all quotation marks to compare core terms. 3. Verify: All variations are the same term "Project Doomsday" with different quote formatting. 4. Decision: This is NOT an inconsistency - it's a false positive caused by different chapters being processed by different quote conversion scripts. 5. Action: Do NOT flag this as an inconsistency.
-
-Output JSON:
-\`\`\`json
-[
-  {
-    "concept": "Li Fuchen",
-    "priority": "CRITICAL",
-    "explanation": "Inconsistent name translations for the main character.",
-    "suggestions": [
-      {
-        "display_text": "Standardize to 'Li Fuchen'",
-        "suggestion": "Li Fuchen",
-        "reasoning": "This is the first and most frequently used variant.",
-        "is_recommended": true
-      }
-    ],
-    "variations": [
-      {
-        "phrase": "Li Fuchen",
-        "chapter": "1",
-        "context_snippet": "The hero Li Fuchen fought..."
-      },
-      {
-        "phrase": "Lee Fu Chen",
-        "chapter": "2",
-        "context_snippet": "Lee Fu Chen escaped..."
-      }
-    ]
-  }
-]
-\`\`\`
-
-Base all detections exclusively on the provided text; use plain text only in JSON fields.`
-
-function generatePrompt(chapterText, existingResults = []) {
-	let prompt = ADVANCED_SYSTEM_PROMPT
-	prompt += `\n\nHere is the text to analyze:\n---\n${chapterText}\n---`
-
-	const schemaDefinition = `
-         [
-           {
-             "concept": "The core concept or inferred original term.",
-             "priority": "CRITICAL | HIGH | MEDIUM | LOW | STYLISTIC | INFO",
-             "explanation": "A brief explanation of the inconsistency or issue.",
-             "suggestions": [
-               {
-                 "display_text": "A user-friendly description of the suggestion (e.g., 'Standardize to \\'Term A\\' everywhere.')",
-                 "suggestion": "The exact, clean text to be used for replacement (e.g., 'Term A'). This field MUST NOT contain conversational text like 'Standardize to...'. Use an empty string (\\"\\") for informational suggestions.",
-                 "reasoning": "The detailed reasoning behind this suggestion.",
-                 "is_recommended": "Optional. A boolean (true) indicating if this is the AI's top recommendation. Only one suggestion per concept should have this flag."
-               }
-             ],
-             "variations": [
-               {
-                 "phrase": "The specific incorrect/variant phrase found.",
-                 "chapter": "The chapter number as a string.",
-                 "context_snippet": "A snippet of text showing the context."
-               }
-             ]
-           }
-         ]`
-
-	if (existingResults.length > 0) {
-		// Validate results before processing
-		const validResults = existingResults.filter((result) => {
-			const isValid = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .validateResultForContext */ .oV)(result)
-			if (!isValid) {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Filtered out invalid result from context: ${result.concept || "Unknown concept"}`)
-			}
-			return isValid
-		})
-
-		if (validResults.length === 0) {
-			(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("All existing results failed validation, proceeding without context")
-		} else {
-			(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-				`Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`,
-			)
-		}
-
-		// Apply context summarization to prevent exponential growth
-		const summarizedResults = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .summarizeContextResults */ .fN)(validResults, 30) // Limit to 30 detailed items
-
-		const existingJson = JSON.stringify(
-			summarizedResults.map(({ concept, explanation, variations }) => ({
-				concept,
-				explanation,
-				variations,
-			})),
-			null,
-			2,
-		)
-		prompt += `\n\n## Senior Editor Verification & Continuation Task
-You are now operating as a Senior Editor. Your task is to perform a rigorous second-pass verification on a list of potential inconsistencies identified in a previous analysis. The provided text may have been updated or corrected since the initial scan. Your judgment must be strict, and your output must be based *exclusively* on the new text provided.
-
-Apply Chain of Verification: 1. For each concept, plan 2-3 critical questions to check accuracy. 2. Verify answers against the text. 3. Resolve any inconsistencies or discard if invalid (e.g., aliases, evolutions). 4. Reflect: Critique your verifications for high confidence; revise if needed.
-
-Your Mandatory Tasks:
-
-1.  Re-Scan and Re-Build Verified Inconsistencies:
-       *   For each concept in the "Previously Identified" list, you must re-scan the entire new text.
-       *   If a concept still represents a genuine, high-confidence, unintentional error that harms readability, you MUST build a completely new, fresh JSON object for it.
-       *   CRUCIAL: Do NOT copy any data from the provided list. All fields—especially \`variations\`, \`context_snippet\`, and \`priority\`—must be re-calculated and re-extracted from the current text. If a variation no longer appears, it must not be included. If new variations are found, they must be added.
-       *   Place these freshly built objects into the \`verified_inconsistencies\` array.
-
-2.  Strictly Discard Invalid Concepts:
-       *   You MUST OMIT any concept from the output if it is no longer a true error. Discard items if your deeper analysis reveals they are:
-           *   Intentional Aliases/Nicknames: (e.g., "Bob" vs. "Robert" used interchangeably).
-           *   Contextual Nuance: Similar terms with distinct meanings (e.g., "Flame Art" used by Character A vs. "Blaze Art" used by Character B).
-           *   Resolved/Corrected: The inconsistency no longer exists in the provided text.
-           *   Confirmed Term Evolution: A term is consistently replaced by another from a specific chapter onward (e.g., "Squire" becomes "Knight" after a promotion).
-           *   Initial False Positive: The original flag was an error upon closer inspection.
-       *   Discarded items should NOT appear in either output array.
-
-3.  Discover New Inconsistencies:
-       *   After completing the verification process, perform a full, fresh analysis of the text to find any NEW inconsistencies that were not on the original list.
-       *   Create a standard JSON object for each new finding.
-       *   Place these new objects into the \`new_inconsistencies\` array.
-
-## Few-Shot Example
-Previously Identified: [{"concept": "Li Fuchen", "variations": [{"phrase": "Lee Fu Chen"}]}]
-New Text: --- CHAPTER 1 --- The hero Li Fuchen fought. --- CHAPTER 2 --- Li Fuchen escaped.
-Step-by-Step Verification: 1. Plan questions: "Does 'Li Fuchen' appear consistently? Is 'Lee Fu Chen' still present?" 2. Verify: Scan text – 'Lee Fu Chen' is gone, inconsistency resolved. 3. Resolve: Discard as corrected. 4. New Scan: Find new 'Magic Sword' vs 'Mystic Blade' inconsistency.
-Output:
-\`\`\`json
-{
-   "verified_inconsistencies": [],
-   "new_inconsistencies": [
-     {
-       "concept": "Magic Sword",
-       "priority": "MEDIUM",
-       "explanation": "The term for the sword is inconsistent.",
-       "suggestions": [
-         {
-           "display_text": "Standardize to 'Magic Sword'",
-           "suggestion": "Magic Sword",
-           "reasoning": "Appears first.",
-           "is_recommended": true
-         }
-       ],
-       "variations": [
-         { "phrase": "Magic Sword", "chapter": "1", "context_snippet": "..." },
-         { "phrase": "Mystic Blade", "chapter": "2", "context_snippet": "..." }
-       ]
-     }
-   ]
-}
-\`\`\`
-
-Previously Identified Inconsistencies for Verification:
-\`\`\`json
-${existingJson}
-\`\`\`
-
-Required Output Format:
-Your response MUST be a single, valid JSON object with two keys: \`verified_inconsistencies\` and \`new_inconsistencies\`. Both arrays must contain objects that strictly follow the provided schema. If no items are found for a category, return an empty array (\`[]\`). Do not add any conversational text outside of the final JSON object.
-
-Schema Reference:
-\`\`\`json
-${schemaDefinition}
-\`\`\`
-`
-	} else {
-		prompt += `\n\nIMPORTANT: Your final output MUST be ONLY a single, valid JSON array matching this specific schema. Do not include any other text, explanations, or markdown formatting outside of the JSON array itself.
-        Schema:
-        ${schemaDefinition}`
-	}
-	return prompt
-}
-
-function getAvailableApiKey() {
-	const apiKeyInfo = (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .getNextAvailableKey */ .gb)()
-	if (apiKeyInfo) {
-		return {
-			key: apiKeyInfo.key,
-			index: apiKeyInfo.index,
-			state: apiKeyInfo.state,
-		}
-	}
-	return null
-}
-
-function handleApiError(errorMessage) {
-	console.error("Inconsistency Finder:", errorMessage)
-	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults.push({ error: errorMessage })
-	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning = false
-
-	// Reset retry-related state so future runs are clean
-	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt = null
-	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes) {
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes = {}
-	}
-
-	(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("error", "Error!")
-	;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .displayResults */ .Hv)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
-}
-
-// Main analysis functions
-function findInconsistencies(chapterData, existingResults = [], retryCount = 0, parseRetryCount = 0) {
-	const operationName = "Analysis"
-	const maxTotalRetries = Math.max(1, _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length) * MAX_RETRIES_PER_KEY
-
-	// Initialize or reuse startedAt to enforce a global safety window for this run
-	const startedAt = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt || Date.now()
-	if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt) {
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt = startedAt
-	}
-
-	// Hard cap by attempts
-	if (retryCount >= maxTotalRetries) {
-		handleApiError(
-			`${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
-		)
-		return
-	}
-
-	// Hard cap by duration (5-minute safety net)
-	if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
-		handleApiError(
-			`${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
-		)
-		return
-	}
-
-	const apiKeyInfo = getAvailableApiKey()
-	if (!apiKeyInfo) {
-		handleApiError("All API keys are currently rate-limited or failing. Please wait a moment before trying again.")
-		return
-	}
-	const currentKey = apiKeyInfo.key
-	const currentKeyIndex = apiKeyInfo.index
-
-	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning = true
-	;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("running", `${operationName} (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`)
-
-	const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-	;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-		`${operationName}: Sending ${
-			combinedText.length
-		} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-	)
-
-	const prompt = generatePrompt(combinedText, existingResults)
-	const requestData = {
-		contents: [{ parts: [{ text: prompt }] }],
-		generationConfig: {
-			temperature: _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature,
-		},
-	}
-
-	GM_xmlhttpRequest({
-		method: "POST",
-		url: `https://generativelanguage.googleapis.com/v1beta/${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model}:generateContent?key=${currentKey}`,
-		headers: {
-			"Content-Type": "application/json",
-		},
-		data: JSON.stringify(requestData),
-		onload: function (response) {
-			;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Received raw response from API:", response.responseText)
-			let apiResponse
-			let parsedResponse
-
-			// Shell parse errors are treated as retriable (can be transient)
-			try {
-				apiResponse = JSON.parse(response.responseText)
-			} catch (e) {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-					`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
-				)
-				scheduleRetriableRetry({
-					operationName: `${operationName} (shell parse recovery)`,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-				})
-				return
-			}
-
-			// Handle explicit API error responses
-			if (apiResponse.error) {
-				const errorStatus = apiResponse.error.status
-				const errorMessage = apiResponse.error.message || ""
-				const isRetriable =
-					RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes("The model is overloaded")
-
-				if (isRetriable) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-						`${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}.`,
-					)
-
-					if (errorStatus === "RESOURCE_EXHAUSTED") {
-						// Mark key as exhausted with 24-hour cooldown (daily reset)
-						const unlockTime = Date.now() + 24 * 60 * 60 * 1000 // 24 hours
-						;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .updateKeyState */ .gH)(currentKeyIndex, "EXHAUSTED", unlockTime, 1)
-						;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Key ${currentKeyIndex} marked as EXHAUSTED. Will reset in 24 hours.`)
-					} else if (errorStatus === "UNAVAILABLE" || errorStatus === "INTERNAL") {
-						// Temporary server issues - put on short cooldown
-						const unlockTime = Date.now() + 60 * 1000 // 1 minute
-						;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .updateKeyState */ .gH)(currentKeyIndex, "ON_COOLDOWN", unlockTime, 1)
-						;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Key ${currentKeyIndex} on temporary COOLDOWN for 1 minute.`)
-					} else if (errorStatus === "DEADLINE_EXCEEDED") {
-						// Request timeout - brief cooldown
-						const unlockTime = Date.now() + 30 * 1000 // 30 seconds
-						;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .updateKeyState */ .gH)(currentKeyIndex, "ON_COOLDOWN", unlockTime, 1)
-						;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Key ${currentKeyIndex} on timeout COOLDOWN for 30 seconds.`)
-					}
-
-					scheduleRetriableRetry({
-						operationName,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-					})
-					return
-				}
-
-				// Non-retriable API error -> final failure
-				const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`
-				handleApiError(finalError)
-				return
-			}
-
-			const candidate = apiResponse.candidates?.[0]
-			if (!candidate || !candidate.content) {
-				let error
-				if (candidate?.finishReason === "MAX_TOKENS") {
-					error =
-						"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-				} else {
-					error = `Invalid API response: No content found. Finish Reason: ${
-						candidate?.finishReason || "Unknown"
-					}`
-				}
-				handleApiError(error)
-				return
-			}
-
-			// Parse the inner content (model JSON); treat malformed JSON as retriable once
-			try {
-				const resultText = candidate.content.parts[0].text
-				const cleanedJsonString = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .extractJsonFromString */ .zF)(resultText)
-				parsedResponse = JSON.parse(cleanedJsonString)
-				;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
-			} catch (e) {
-				if (parseRetryCount < 1) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-						`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
-					)
-					;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("running", "AI response malformed. Retrying...")
-					scheduleRetriableRetry({
-						operationName: `${operationName} (parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1),
-					})
-					return
-				}
-				const error = `${operationName} failed to process AI response content after retry: ${e.message}`
-				handleApiError(error)
-				return
-			}
-
-			// Success: rotate key index for next invocation
-			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length
-			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning = false
-			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt = null
-
-			const isVerificationRun = existingResults.length > 0
-
-			if (isVerificationRun) {
-				if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
-					handleApiError(
-						"Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
-					)
-					return
-				}
-				const verifiedItems = parsedResponse.verified_inconsistencies || []
-				const newItems = parsedResponse.new_inconsistencies || []
-
-				verifiedItems.forEach((item) => {
-					item.isNew = false
-					item.status = "Verified"
-				})
-				newItems.forEach((item) => {
-					item.isNew = true
-				})
-
-				;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-					`Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
-				)
-				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = [...verifiedItems, ...newItems]
-			} else {
-				if (!Array.isArray(parsedResponse)) {
-					handleApiError("Invalid response format for initial run. Expected a JSON array.")
-					return
-				}
-				parsedResponse.forEach((r) => (r.isNew = true))
-				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = parsedResponse
-			}
-
-			(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveSessionResults */ .I6)()
-			;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("complete", "Complete!")
-			const continueBtn = document.getElementById("wtr-if-continue-btn")
-			if (continueBtn) {
-				continueBtn.disabled = false
-			}
-			(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .displayResults */ .Hv)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
-		},
-		onerror: function (error) {
-			console.error("Inconsistency Finder: Network error:", error)
-			;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-				`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
-			)
-			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
-
-			scheduleRetriableRetry({
-				operationName,
-				retryCount,
-				maxTotalRetries,
-				startedAt,
-				nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-			})
-		},
-	})
-}
-
-function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targetDepth = 1, currentDepth = 1) {
-	if (currentDepth > targetDepth) {
-		// Deep analysis complete
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning = false
-		const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : "Complete!"
-		;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("complete", statusMessage)
-		document.getElementById("wtr-if-continue-btn").disabled = false
-		;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .displayResults */ .Hv)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
-		return
-	}
-
-	(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`)
-
-	// Update status to show iteration progress
-	if (targetDepth > 1) {
-		(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("running", `Deep Analysis (${currentDepth}/${targetDepth})...`)
-	} else {
-		(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)(
-			"running",
-			currentDepth > 1 ? `Deep Analysis (${currentDepth}/${targetDepth})...` : "Analyzing...",
-		)
-	}
-
-	// Standardized context selection - always use cumulative results for deep analysis
-	const contextResults =
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults.length > 0 ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : existingResults
-
-	// Run iteration only if we have a real deep analysis (depth > 1)
-	if (targetDepth > 1) {
-		findInconsistenciesIteration(chapterData, contextResults, targetDepth, currentDepth)
-	} else {
-		// For normal analysis (depth = 1), use the regular analysis function
-		findInconsistencies(chapterData, contextResults)
-	}
-}
-
-function findInconsistenciesIteration(chapterData, existingResults, targetDepth, currentDepth) {
-	const maxTotalRetries = Math.max(1, _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length) * MAX_RETRIES_PER_KEY
-	let retryCount = 0
-	let parseRetryCount = 0
-
-	// Track when this deep analysis iteration started to enforce a safety window
-	const iterationKey = `deep_${currentDepth}`
-	const now = Date.now()
-	if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes) {
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes = {}
-	}
-	if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]) {
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey] = now
-	}
-	const startedAt = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-
-	const operationName = `Deep analysis iteration ${currentDepth}/${targetDepth}`
-
-	const executeIteration = () => {
-		// Attempt-based ceiling
-		if (retryCount >= maxTotalRetries) {
-			handleApiError(
-				`${operationName} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
-			)
-			delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-			return
-		}
-
-		// Time-based safety ceiling
-		if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
-			handleApiError(
-				`${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
-			)
-			delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-			return
-		}
-
-		const apiKeyInfo = getAvailableApiKey()
-		if (!apiKeyInfo) {
-			handleApiError(
-				"All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
-			)
-			delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-			return
-		}
-		const currentKey = apiKeyInfo.key
-		const currentKeyIndex = apiKeyInfo.index
-
-		const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-			`${operationName}: Sending ${
-				combinedText.length
-			} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-		)
-
-		const prompt = generatePrompt(combinedText, existingResults)
-		const requestData = {
-			contents: [{ parts: [{ text: prompt }] }],
-			generationConfig: {
-				temperature: _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature,
-			},
-		}
-
-		GM_xmlhttpRequest({
-			method: "POST",
-			url: `https://generativelanguage.googleapis.com/v1beta/${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model}:generateContent?key=${currentKey}`,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			data: JSON.stringify(requestData),
-			onload: function (response) {
-				;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Received raw response from API:", response.responseText)
-				let apiResponse
-				let parsedResponse
-
-				// Shell parse: treat as retriable (can be transient / truncation)
-				try {
-					apiResponse = JSON.parse(response.responseText)
-				} catch (e) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-						`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
-					)
-					scheduleRetriableRetry({
-						operationName: `${operationName} (shell parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () => {
-							retryCount++
-							executeIteration()
-						},
-					})
-					return
-				}
-
-				if (apiResponse.error) {
-					const errorStatus = apiResponse.error.status
-					const errorMessage = apiResponse.error.message || ""
-					const isRetriable =
-						RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes("The model is overloaded")
-
-					if (isRetriable) {
-						(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-							`${operationName}: Retriable API Error (Status: ${errorStatus}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
-						)
-						const cooldownSeconds = errorStatus === "RESOURCE_EXHAUSTED" ? 2 : 1
-						_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
-						scheduleRetriableRetry({
-							operationName,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								executeIteration()
-							},
-						})
-						return
-					}
-
-					const finalError = `API Error (Status: ${errorStatus}): ${errorMessage}`
-					handleApiError(finalError)
-					delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-					return
-				}
-
-				const candidate = apiResponse.candidates?.[0]
-				if (!candidate || !candidate.content) {
-					let error
-					if (candidate?.finishReason === "MAX_TOKENS") {
-						error =
-							"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-					} else {
-						error = `Invalid API response: No content found. Finish Reason: ${
-							candidate?.finishReason || "Unknown"
-						}`
-					}
-					handleApiError(error)
-					delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-					return
-				}
-
-				try {
-					const resultText = candidate.content.parts[0].text
-					const cleanedJsonString = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .extractJsonFromString */ .zF)(resultText)
-					parsedResponse = JSON.parse(cleanedJsonString)
-					;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
-				} catch (e) {
-					if (parseRetryCount < 1) {
-						(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-							`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
-						)
-						;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("running", "AI response malformed. Retrying...")
-						scheduleRetriableRetry({
-							operationName: `${operationName} (parse recovery)`,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								parseRetryCount++
-								executeIteration()
-							},
-						})
-						return
-					}
-					const error = `${operationName} failed to process AI response content after retry: ${e.message}`
-					handleApiError(error)
-					delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-					return
-				}
-
-				// On success, advance the key index for the next run
-				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length
-
-				const isVerificationRun = existingResults.length > 0
-
-				if (isVerificationRun) {
-					if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
-						handleApiError(
-							"Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
-						)
-						delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-						return
-					}
-					const verifiedItems = parsedResponse.verified_inconsistencies || []
-					const newItems = parsedResponse.new_inconsistencies || []
-
-					verifiedItems.forEach((item) => {
-						item.isNew = false
-						item.status = "Verified"
-					})
-					newItems.forEach((item) => {
-						item.isNew = true
-					})
-
-					;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-						`${operationName}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
-					)
-
-					const allNewItems = [...verifiedItems, ...newItems]
-					_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .mergeAnalysisResults */ .bd)(
-						_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults,
-						allNewItems,
-					)
-				} else {
-					if (!Array.isArray(parsedResponse)) {
-						handleApiError("Invalid response format for initial run. Expected a JSON array.")
-						delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-						return
-					}
-					parsedResponse.forEach((r) => (r.isNew = true))
-					_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .mergeAnalysisResults */ .bd)(
-						_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults,
-						parsedResponse,
-					)
-				}
-
-				// Save session results after each iteration
-				(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveSessionResults */ .I6)()
-
-				// Continue to next iteration or complete
-				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentIteration = currentDepth + 1
-				if (currentDepth < targetDepth) {
-					// Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
-					setTimeout(() => {
-						findInconsistenciesDeepAnalysis(
-							chapterData,
-							_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults,
-							targetDepth,
-							currentDepth + 1,
-						)
-					}, 1000)
-				} else {
-					// Deep analysis complete for this path
-					delete _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes[iterationKey]
-					_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning = false
-					;(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .updateStatusIndicator */ .LI)("complete", `Complete! (Deep Analysis: ${targetDepth} iterations)`)
-					const continueBtn = document.getElementById("wtr-if-continue-btn")
-					if (continueBtn) {
-						continueBtn.disabled = false
-					}
-					(0,_ui__WEBPACK_IMPORTED_MODULE_1__/* .displayResults */ .Hv)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
-				}
-			},
-			onerror: function (error) {
-				console.error("Inconsistency Finder: Network error:", error)
-				;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
-					`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
-				)
-				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
-
-				scheduleRetriableRetry({
-					operationName,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => {
-						retryCount++
-						executeIteration()
-					},
-				})
-			},
-		})
-	}
-
-	executeIteration()
-}
-
-
-/***/ }),
 
 /***/ 56:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
@@ -1340,7 +423,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
 /* unused harmony exports handleSaveConfig, handleFindInconsistencies, handleContinueAnalysis, handleFileImportAndAnalyze, handleClearSession, handleStatusClick */
 /* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(907);
 /* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(395);
-/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(43);
+/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(817);
 /* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(183);
 /* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(871);
 // src/modules/ui/events.js
@@ -2141,7 +1224,7 @@ function addEventListeners() {
 /* harmony export */ });
 /* unused harmony exports setupConflictObserver, setCollisionMonitoring, getCollisionAvoidanceStatus */
 /* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(907);
-/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(43);
+/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(817);
 /* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(395);
 /* harmony import */ var _events__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(148);
 // src/modules/ui/panel.js
@@ -4636,6 +3719,1255 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section-based Finder layout improve
 `, ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
+
+
+/***/ }),
+
+/***/ 817:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+
+// EXPORTS
+__webpack_require__.d(__webpack_exports__, {
+  Nz: () => (/* reexport */ findInconsistenciesDeepAnalysis),
+  Rq: () => (/* reexport */ getAvailableApiKey)
+});
+
+// UNUSED EXPORTS: ADVANCED_SYSTEM_PROMPT, BASE_BACKOFF_MS, MAX_BACKOFF_MS, MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS, RETRIABLE_STATUSES, buildDeepAnalysisPrompt, buildPrompt, calculateBackoffDelayMs, classifyApiError, createErrorResponse, createRetryHandler, createUserFriendlyErrorMessage, deprecatedHandleApiError, findInconsistencies, generatePrompt, getCooldownDuration, handleApiError, handleRateLimitError, parseApiResponse, scheduleRetriableRetry, validateApiKey
+
+// EXTERNAL MODULE: ./src/modules/state.js
+var state = __webpack_require__(907);
+// EXTERNAL MODULE: ./src/modules/ui/index.js
+var ui = __webpack_require__(201);
+// EXTERNAL MODULE: ./src/modules/utils.js
+var utils = __webpack_require__(395);
+;// ./src/modules/retryLogic.js
+/**
+ * Retry Logic Module
+ * Handles exponential backoff and retry scheduling for API requests
+ */
+
+
+
+
+// Constants for retry configuration
+const MAX_RETRIES_PER_KEY = 3
+
+// Exponential backoff settings (per logical operation, not per key)
+const BASE_BACKOFF_MS = 2000 // 2s
+const MAX_BACKOFF_MS = 60000 // 60s cap
+const MAX_TOTAL_RETRY_DURATION_MS = 5 * 60 * 1000 // 5 minutes safety cap per run
+
+const RETRIABLE_STATUSES = new Set([
+	"RESOURCE_EXHAUSTED", // 429 Rate limit
+	"INTERNAL", // 500 Server error
+	"UNAVAILABLE", // 503 Service overloaded
+	"DEADLINE_EXCEEDED", // 504 Request timed out
+])
+
+/**
+ * Calculate exponential backoff delay with an upper bound.
+ * retryIndex is zero-based: 0 -> BASE_BACKOFF_MS, 1 -> 2x, 2 -> 4x, etc.
+ * @param {number} retryIndex - Zero-based retry attempt index
+ * @returns {number} - Delay in milliseconds
+ */
+function calculateBackoffDelayMs(retryIndex) {
+	const delay = BASE_BACKOFF_MS * Math.pow(2, retryIndex)
+	return Math.min(delay, MAX_BACKOFF_MS)
+}
+
+/**
+ * Schedule a retriable retry with exponential backoff.
+ * @param {Object} options - Retry options
+ * @param {string} options.operationName - Name of the operation for logging
+ * @param {number} options.retryCount - Current retry attempt count
+ * @param {number} options.maxTotalRetries - Maximum total retries allowed
+ * @param {number} options.startedAt - Timestamp when operation started
+ * @param {Function} options.nextStep - Function to call after delay
+ * @param {Function} [options.errorHandler] - Optional error handler function to avoid circular dependencies
+ */
+function scheduleRetriableRetry({
+	operationName,
+	retryCount,
+	maxTotalRetries,
+	startedAt,
+	nextStep,
+	errorHandler = null,
+}) {
+	const now = Date.now()
+
+	// Enforce attempt-based and time-based ceilings
+	if (retryCount >= maxTotalRetries) {
+		const errorMessage = `${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`
+		if (errorHandler) {
+			errorHandler(errorMessage)
+		} else {
+			console.error("Inconsistency Finder:", errorMessage)
+		}
+		return
+	}
+
+	if (now - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+		const errorMessage = `${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`
+		if (errorHandler) {
+			errorHandler(errorMessage)
+		} else {
+			console.error("Inconsistency Finder:", errorMessage)
+		}
+		return
+	}
+
+	const delay = calculateBackoffDelayMs(retryCount)
+	;(0,utils/* log */.Rm)(`${operationName}: Scheduling retry #${retryCount + 1} with exponential backoff delay ${delay}ms.`)
+	;(0,ui/* updateStatusIndicator */.LI)("running", `Retrying in ${Math.round(delay / 1000)}s...`)
+
+	// Ensure no uncaught exceptions propagate from the scheduled callback
+	setTimeout(() => {
+		try {
+			nextStep()
+		} catch (e) {
+			console.error(`Inconsistency Finder: Uncaught error during scheduled retry for ${operationName}:`, e)
+			const errorMessage = `${operationName} encountered an unexpected error during retry. Please try again.`
+			if (errorHandler) {
+				errorHandler(errorMessage)
+			} else {
+				console.error("Inconsistency Finder:", errorMessage)
+			}
+		}
+	}, delay)
+}
+
+/**
+ * Create a retry handler with a specific error handler to avoid circular dependencies
+ * @param {Function} errorHandler - The error handler function to use
+ * @returns {Function} - A retry scheduling function with the error handler bound
+ */
+function createRetryHandler(errorHandler) {
+	return function scheduleRetriableRetryWithHandler(options) {
+		return scheduleRetriableRetry({
+			...options,
+			errorHandler,
+		})
+	}
+}
+
+;// ./src/modules/promptManager.js
+/**
+ * Prompt Manager Module
+ * Handles AI prompt generation and management for translation consistency analysis
+ */
+
+
+
+/**
+ * Advanced system prompt template for AI analysis
+ * Contains comprehensive instructions for detecting translation inconsistencies
+ */
+const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translation Consistency Editor," designed to detect and fix translation inconsistencies in machine-translated novels. Your primary goal is to identify terms (character names, locations, items, abilities, titles, etc.) that have been translated inconsistently across chapters, provide standardization suggestions, and offer contextual analysis for nuances like aliases, stylistic localizations, and cultural honorifics.
+
+## Core Capabilities
+1.  Scanning & Detection: Automatically scan for inconsistent translations of the same entity. Track variations of character names, place names, items, abilities, titles, and other recurring terms. Detect semantic similarities between terms that may be different translations of the same concept.
+2.  Entity Profiling & Alias Linking: Build profiles for key narrative entities (characters, locations, etc.) to link aliases, nicknames, and full names using contextual clues. Recognize component-based naming schemes (e.g., 'Heavy Cavalry' as a shorthand for 'Heavy Cavalry Exoskeleton') and entity-derived names (e.g., a location incorporating a character's name like '[Character] City').
+3.  Username Lexical & Formatting Analysis: Proactively identify potential usernames based on non-English lexical patterns (pinyin, romaji, etc.) and formatting violations (the presence of spaces). If a username triggers both, present both sets of suggestions together in a single, consolidated report item.
+4.  Suggestion Generation: For each identified inconsistency, provide 3 distinct standardization suggestions. Include data-driven metrics for each suggestion (e.g., frequency, first appearance) and explain the reasoning with quantitative support, maintaining the story's context.
+
+## What NOT to Flag (Exclusions)
+- Do not flag or report terms that have been previously confirmed as an alias cluster.
+- Do not flag onomatopoeia (sound words, emotional expressions, or expressive vocalizations like "Wuwuwu", "Aha!", "Huhu", etc.) as these are cute stylistic elements that should remain in their original flavor.
+- Do not flag casual internet expressions or emotional vocalizations that are culturally appropriate and intentionally expressive.
+- Do NOT flag anything related to author notes, author commentary, or translator notes - these are intentional additions that may make the text longer but should not be flagged for inconsistencies.
+- Do NOT flag usernames or character references that are clearly aliases, undercovers, or alternate identifications of the same character.
+- CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes " " ') should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
+- CRITICAL: Do NOT flag systematic chapter title numbering offsets or mismatches that are clearly caused by the source website's structure or template rather than the editable chapter content. In particular:
+    * If multiple consecutive chapters show a consistent pattern where the visible chapter heading (e.g., "--- CHAPTER 302 ---") and the in-title number (e.g., "Chapter 301: Arcane Armor") are offset by the same amount (such as always lagging by one), treat this as a non-user-actionable, site-level issue.
+    * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
+    * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
+    * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
+
+## Focus On
+- In-text content within the chapter body.
+- Character names, locations, items, abilities, techniques, titles, and organizations.
+- Chapter titles and any inconsistencies within them.
+- Potential alias clusters for entities.
+- Usernames for holistic formatting and localization opportunities.
+- Non-English honorifics for cultural nuance handling.
+
+## Prioritization System (Dynamic Impact-Based)
+You will use a dynamic Impact Score to rank all detected issues, ensuring that items most critical to the story are prioritized.
+
+### How the Impact Score is Calculated:
+1.  Frequency & Density (Base Score): The raw count of a term's appearances relative to the total length of the scanned text.
+2.  Narrative Centrality (Context Multiplier): A multiplier based on how tied a term is to the core plot. Boost scores for terms appearing near the protagonist, in chapter titles, or frequently in dialogue.
+3.  Chronological Volatility (Recency & Pattern Score): Prioritize inconsistencies in recent chapters. Lower the score for terms that were inconsistent early on but have since become consistent. Flag "Potential Term Evolutions" (e.g., a title changing after a promotion) for review with a lower error score.
+4.  Dependency & "Root" Status (Architectural Multiplier): Identify "root" inconsistencies (like a sect's name) that cause a cascade of "dependent" inconsistencies (like titles "Sect Elder," "Sect Disciple"). The root term receives a massive priority multiplier.
+
+### Priority Levels (Based on Calculated Impact Score):
+- [Priority: CRITICAL]: High-frequency, high-centrality terms with ongoing volatility. Main character names, core concepts in chapter titles, or major "root" inconsistencies.
+- [Priority: HIGH]: Important secondary characters, key locations, or recurring abilities that are inconsistent in recent chapters.
+- [Priority: MEDIUM]: Supporting elements, items, or inconsistencies that are less frequent or occurred in earlier chapters.
+- [Priority: LOW]: Minor background elements, one-off mentions with variations, or confirmed "Term Evolutions" that just need a final check.
+- [Priority: STYLISTIC]: All localization and formatting suggestions (usernames, honorifics) are grouped here.
+- [Priority: INFO]: Informational notes, such as 'Potential Alias Clusters' or 'Potential Nuance Clusters'.
+
+## Improved Detection Logic
+Think step by step in your analysis: 1. Scan the text for recurring terms. 2. Build entity profiles and link aliases using contextual clues. 3. Calculate impact scores based on frequency, centrality, volatility, and dependencies. 4. Verify each detection for high-confidence errors (reflect: Is this an unintentional inconsistency or a nuance/evolution? Discard if not a true error). 5. Generate data-driven suggestions.
+1.  QUOTE NORMALIZATION (CRITICAL): Before comparing any terms for inconsistencies, first normalize all quotation marks by stripping them. Terms like "Project Doomsday", 'Project Doomsday', and "Project Doomsday" should be treated as the SAME term "Project Doomsday" for comparison purposes. Only flag an inconsistency if the CORE TEXT (excluding quotes) differs.
+2.  Contextual Verification Snippets: For each potential inconsistency, extract and present a brief contextual snippet (1-2 sentences) for each variant to verify the match.
+3.  Disambiguation Logic for Similar Terms: If two similar-sounding terms like "Flame Art" and "Blaze Art" appear in the same chapter or are used by different characters in the same context, treat them as distinct entities.
+4.  Source Term Inference: Infer a probable source term or pinyin as the "Original Concept" anchor for grouping variations (e.g., group "Li Fuchen," "Li Fu Chen," and "Lee Fuchen" under an inferred anchor like \`[Li Fuchen]\`).
+5.  Conceptual Anchoring: If terms with low string similarity share conceptual anchors (e.g., consistently associated with the same character or location), create a high-confidence link.
+6.  Component-Based Matching: Break down long names into core components (e.g., [Azure Dragon] + [Flame/Burning] + [Sword/Blade]) and match based on the core entity and synonymous descriptors.
+7.  Relational Inconsistency Detection: Identify "Relational Clusters" where inconsistencies are linked (e.g., a character's name changing along with their title in the same chapter).
+8.  Track and Flag Chronological Inconsistencies (Term Evolution): If a term disappears and is consistently replaced by a new one from a specific chapter onward, flag it as a "Potential Term Evolution" rather than a simple error.
+9.  Speaker-Based Disambiguation: Associate terms with the characters who use them to avoid false positives.
+10.  Proactively Identify "Root" Inconsistencies: Identify "root" terms that cause multiple dependent inconsistencies and prioritize them.
+11. Advanced Entity Recognition (Aliases & Nicknames): Build a profile for each key entity. Use contextual clues (explicit links like "...friends called him Jon" or implicit links like shared attributes) to link different names to the same entity. CRITICAL: When you encounter terms like 'BattlefieldAtmosphereGroup' and 'BattlefieldOldBro' used for the same character, analyze the context carefully - these are clearly shorthand variants of the same entity. Look for phrases like "also known as", "also called", "alias", "shorthand", "nickname", or contextual patterns where one term consistently refers to the same character as another term. Do NOT flag these as inconsistencies - they are intentional variations used in the story.
+12. Username Analysis Protocol:
+    *   Formatting Trigger: Flag any potential username containing one or more literal space characters (e.g., 'Elderly Abin').
+    *   Lexical Trigger: Flag any potential username matching pinyin, Japanese Romaji, Korean Romanization, or other non-English romanized language patterns. Do not flag fluent, multi-word English usernames.
+    *   Formatting Exemption: You MUST NOT flag potential usernames that are presented as a single, concatenated word (e.g., 'PlayerName', 'AnotherUser'), even if they use internal capitalization (PascalCase). This is a standard and acceptable format.
+    *   Holistic Analysis: If a username is flagged by BOTH triggers, you MUST provide BOTH formatting and localization suggestions.
+    *   Contextual Differentiation: You MUST NOT flag a name for username-style inconsistencies if the context explicitly identifies the character as an NPC (e.g., 'secretary,' 'guard,' 'shopkeeper'). Username analysis should only apply when context strongly suggests a player character (e.g., mentions of 'player,' 'ID,' 'leaderboard').
+13. Non-English Honorifics Handling: Pattern-match for common honorifics, explain their nuance, and present options that align with common genre practices.
+14. Low-Frequency Alias Boosting: Apply a confidence boost to low-frequency terms if they exhibit strong conceptual ties to high-frequency core entities.
+15. Nuance Analysis: When detecting semantically similar terms, analyze usage patterns. If patterns suggest an intentional conceptual distinction (e.g., state vs. government), flag as 'Potential Nuance Cluster' instead of an inconsistency.
+16. Enhanced Alias Recognition Pattern: Look for these specific patterns that indicate intentional aliases, not inconsistencies:
+    - Contextual indicators: "also known as", "alias", "shorthand", "nickname", "undercover", "went by"
+    - Game/online context: References to usernames, player IDs, gaming handles, or online personas
+    - Sequential usage: Same character being referred to with different names in different chapters
+    - Character development: Names changing as part of character progression or identity evolution
+    - Example pattern: A character with full username 'BattlefieldAtmosphereGroup' using shorter variants like 'BattlefieldOldBro' or 'BattlefieldAtmoGroup' - these are deliberate shorthand, not errors
+    - When you see this pattern, mark as 'INFO' priority with explanation about intentional alias usage
+17. Pinyin vs. English Mismatch: Identify and flag pinyin terms used inconsistently within a group of otherwise standardized English terms. For example, if a character's skills are 'Fireball', 'Ice Lance', and 'Shenlong Po', flag 'Shenlong Po' as a potential localization inconsistency and suggest an English equivalent.
+
+16. Localization Suggestions Logic:
+    - Localization suggestions should ONLY appear for terms that are in pinyin, Chinese characters, or other non-English formats
+    - If a term is already in English or appears to be an established English term in context, DO NOT suggest localization
+    - For pinyin terms, provide localization suggestions only if there is no reasonable English equivalent already established in the context
+    - If a pinyin term appears multiple times and all instances suggest the same English meaning, treat it as a proper noun (character name, place name, etc.) and only suggest localization once with full explanation
+    - Avoid duplicate localization suggestions that are still in pinyin format
+    - Only use "localization suggestion" terminology when the context strongly indicates the term needs translation from Chinese/pinyin to English
+
+## Core Directives
+1.  Prioritization is Key: Always process items with the highest Impact Score first.
+2.  Be a Data-Driven Partner: All suggestions must be supported by data (frequency, context, etc.).
+3.  Enhance the Reading Experience: Focus on changes that have the biggest positive impact on story comprehension.
+4.  Ensure Complete Report Population: For all detected items, always populate the 'variations' section with the identified variants, including their appearance counts, chapters, and context snippets.
+5.  Recommend the Best Suggestion: For each inconsistency, you MUST identify the single best suggestion and add the field "is_recommended": true to it. Only one suggestion per group should have this flag.
+6.  Use Plain Text: Do not use any markdown formatting like bold or italics within the JSON fields, especially in 'explanation', 'reasoning', and 'suggestion' fields. Use plain text only to ensure compatibility and reduce token usage.
+7.  Treat Each Finding as a Unique Concept: Each unique term or entity identified as an issue (e.g., an inconsistent name, a username with spaces, a pinyin term needing localization) MUST be treated as its own separate 'concept'. Do NOT group multiple distinct entities under a single generic concept. For example, if you find two usernames 'Player One' and 'Player Two', they must be reported as two separate items in the JSON array, each with its own 'concept' field set to the respective username. Similarly, if 'FangChang' and 'TengTeng' both need localization, they are two separate concepts.
+
+## Examples (Few-Shot Demonstration)
+Example 1: Text: --- CHAPTER 1 --- The hero Li Fuchen fought in Li City. --- CHAPTER 2 --- Lee Fu Chen escaped to Lee City.
+Step-by-Step Analysis: 1. Scan: Terms 'Li Fuchen', 'Lee Fu Chen' (names); 'Li City', 'Lee City' (locations). 2. Profile: Link as same entity via context (hero's journey). 3. Impact: High frequency, central to plot -> CRITICAL. 4. Verify: Unintentional inconsistency, not evolution. 5. Suggestions: Standardize name to 'Li Fuchen' (frequency: 2, first appearance Ch1).
+
+Quote Normalization Example: Text: --- CHAPTER 1 --- The hero said "Project Doomsday" was dangerous. --- CHAPTER 2 --- The villain whispered 'Project Doomsday' again. --- CHAPTER 3 --- The report mentioned "Project Doomsday" frequently.
+Step-by-Step Analysis: 1. Scan: Terms 'Project Doomsday', 'Project Doomsday', 'Project Doomsday' (same term with different quote styles). 2. Normalize: Strip all quotation marks to compare core terms. 3. Verify: All variations are the same term "Project Doomsday" with different quote formatting. 4. Decision: This is NOT an inconsistency - it's a false positive caused by different chapters being processed by different quote conversion scripts. 5. Action: Do NOT flag this as an inconsistency.
+
+Output JSON:
+\`\`\`json
+[
+  {
+    "concept": "Li Fuchen",
+    "priority": "CRITICAL",
+    "explanation": "Inconsistent name translations for the main character.",
+    "suggestions": [
+      {
+        "display_text": "Standardize to 'Li Fuchen'",
+        "suggestion": "Li Fuchen",
+        "reasoning": "This is the first and most frequently used variant.",
+        "is_recommended": true
+      }
+    ],
+    "variations": [
+      {
+        "phrase": "Li Fuchen",
+        "chapter": "1",
+        "context_snippet": "The hero Li Fuchen fought..."
+      },
+      {
+        "phrase": "Lee Fu Chen",
+        "chapter": "2",
+        "context_snippet": "Lee Fu Chen escaped..."
+      }
+    ]
+  }
+]
+\`\`\`
+
+Base all detections exclusively on the provided text; use plain text only in JSON fields.`
+
+/**
+ * Generate AI prompt with chapter text and existing results
+ * @param {string} chapterText - The chapter text to analyze
+ * @param {Array} existingResults - Results from previous analysis for context
+ * @returns {string} - Generated prompt for the AI
+ */
+function promptManager_buildPrompt(chapterText, existingResults = []) {
+	let prompt = ADVANCED_SYSTEM_PROMPT
+	prompt += `\n\nHere is the text to analyze:\n---\n${chapterText}\n---`
+
+	const schemaDefinition = `
+         [
+           {
+             "concept": "The core concept or inferred original term.",
+             "priority": "CRITICAL | HIGH | MEDIUM | LOW | STYLISTIC | INFO",
+             "explanation": "A brief explanation of the inconsistency or issue.",
+             "suggestions": [
+               {
+                 "display_text": "A user-friendly description of the suggestion (e.g., 'Standardize to \\'Term A\\' everywhere.')",
+                 "suggestion": "The exact, clean text to be used for replacement (e.g., 'Term A'). This field MUST NOT contain conversational text like 'Standardize to...'. Use an empty string (\\"\\") for informational suggestions.",
+                 "reasoning": "The detailed reasoning behind this suggestion.",
+                 "is_recommended": "Optional. A boolean (true) indicating if this is the AI's top recommendation. Only one suggestion per concept should have this flag."
+               }
+             ],
+             "variations": [
+               {
+                 "phrase": "The specific incorrect/variant phrase found.",
+                 "chapter": "The chapter number as a string.",
+                 "context_snippet": "A snippet of text showing the context."
+               }
+             ]
+           }
+         ]`
+
+	if (existingResults.length > 0) {
+		// Validate results before processing
+		const validResults = existingResults.filter((result) => {
+			const isValid = (0,utils/* validateResultForContext */.oV)(result)
+			if (!isValid) {
+				(0,utils/* log */.Rm)(`Filtered out invalid result from context: ${result.concept || "Unknown concept"}`)
+			}
+			return isValid
+		})
+
+		if (validResults.length === 0) {
+			(0,utils/* log */.Rm)("All existing results failed validation, proceeding without context")
+		} else {
+			(0,utils/* log */.Rm)(
+				`Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`,
+			)
+		}
+
+		// Apply context summarization to prevent exponential growth
+		const summarizedResults = (0,utils/* summarizeContextResults */.fN)(validResults, 30) // Limit to 30 detailed items
+
+		const existingJson = JSON.stringify(
+			summarizedResults.map(({ concept, explanation, variations }) => ({
+				concept,
+				explanation,
+				variations,
+			})),
+			null,
+			2,
+		)
+		prompt += `\n\n## Senior Editor Verification & Continuation Task
+You are now operating as a Senior Editor. Your task is to perform a rigorous second-pass verification on a list of potential inconsistencies identified in a previous analysis. The provided text may have been updated or corrected since the initial scan. Your judgment must be strict, and your output must be based *exclusively* on the new text provided.
+
+Apply Chain of Verification: 1. For each concept, plan 2-3 critical questions to check accuracy. 2. Verify answers against the text. 3. Resolve any inconsistencies or discard if invalid (e.g., aliases, evolutions). 4. Reflect: Critique your verifications for high confidence; revise if needed.
+
+Your Mandatory Tasks:
+
+1.  Re-Scan and Re-Build Verified Inconsistencies:
+       *   For each concept in the "Previously Identified" list, you must re-scan the entire new text.
+       *   If a concept still represents a genuine, high-confidence, unintentional error that harms readability, you MUST build a completely new, fresh JSON object for it.
+       *   CRUCIAL: Do NOT copy any data from the provided list. All fields—especially \`variations\`, \`context_snippet\`, and \`priority\`—must be re-calculated and re-extracted from the current text. If a variation no longer appears, it must not be included. If new variations are found, they must be added.
+       *   Place these freshly built objects into the \`verified_inconsistencies\` array.
+
+2.  Strictly Discard Invalid Concepts:
+       *   You MUST OMIT any concept from the output if it is no longer a true error. Discard items if your deeper analysis reveals they are:
+           *   Intentional Aliases/Nicknames: (e.g., "Bob" vs. "Robert" used interchangeably).
+           *   Contextual Nuance: Similar terms with distinct meanings (e.g., "Flame Art" used by Character A vs. "Blaze Art" used by Character B).
+           *   Resolved/Corrected: The inconsistency no longer exists in the provided text.
+           *   Confirmed Term Evolution: A term is consistently replaced by another from a specific chapter onward (e.g., "Squire" becomes "Knight" after a promotion).
+           *   Initial False Positive: The original flag was an error upon closer inspection.
+       *   Discarded items should NOT appear in either output array.
+
+3.  Discover New Inconsistencies:
+       *   After completing the verification process, perform a full, fresh analysis of the text to find any NEW inconsistencies that were not on the original list.
+       *   Create a standard JSON object for each new finding.
+       *   Place these new objects into the \`new_inconsistencies\` array.
+
+## Few-Shot Example
+Previously Identified: [{"concept": "Li Fuchen", "variations": [{"phrase": "Lee Fu Chen"}]}]
+New Text: --- CHAPTER 1 --- The hero Li Fuchen fought. --- CHAPTER 2 --- Li Fuchen escaped.
+Step-by-Step Verification: 1. Plan questions: "Does 'Li Fuchen' appear consistently? Is 'Lee Fu Chen' still present?" 2. Verify: Scan text – 'Lee Fu Chen' is gone, inconsistency resolved. 3. Resolve: Discard as corrected. 4. New Scan: Find new 'Magic Sword' vs 'Mystic Blade' inconsistency.
+Output:
+\`\`\`json
+{
+   "verified_inconsistencies": [],
+   "new_inconsistencies": [
+     {
+       "concept": "Magic Sword",
+       "priority": "MEDIUM",
+       "explanation": "The term for the sword is inconsistent.",
+       "suggestions": [
+         {
+           "display_text": "Standardize to 'Magic Sword'",
+           "suggestion": "Magic Sword",
+           "reasoning": "Appears first.",
+           "is_recommended": true
+         }
+       ],
+       "variations": [
+         { "phrase": "Magic Sword", "chapter": "1", "context_snippet": "..." },
+         { "phrase": "Mystic Blade", "chapter": "2", "context_snippet": "..." }
+       ]
+     }
+   ]
+}
+\`\`\`
+
+Previously Identified Inconsistencies for Verification:
+\`\`\`json
+${existingJson}
+\`\`\`
+
+Required Output Format:
+Your response MUST be a single, valid JSON object with two keys: \`verified_inconsistencies\` and \`new_inconsistencies\`. Both arrays must contain objects that strictly follow the provided schema. If no items are found for a category, return an empty array (\`[]\`). Do not add any conversational text outside of the final JSON object.
+
+Schema Reference:
+\`\`\`json
+${schemaDefinition}
+\`\`\`
+`
+	} else {
+		prompt += `\n\nIMPORTANT: Your final output MUST be ONLY a single, valid JSON array matching this specific schema. Do not include any other text, explanations, or markdown formatting outside of the JSON array itself.
+        Schema:
+        ${schemaDefinition}`
+	}
+	return prompt
+}
+
+/**
+ * Build prompt for deep analysis with enhanced context processing
+ * @param {string} chapterText - The chapter text to analyze
+ * @param {Array} existingResults - Results from previous analysis iterations
+ * @returns {string} - Generated prompt for deep analysis
+ */
+function buildDeepAnalysisPrompt(chapterText, existingResults = []) {
+	// For deep analysis, we always want the verification mode which includes both
+	// verification of existing results and discovery of new ones
+	return promptManager_buildPrompt(chapterText, existingResults)
+}
+
+/**
+ * Parse and validate API response content
+ * @param {string} resultText - Raw text response from API
+ * @returns {Object|Array} - Parsed JSON response
+ * @throws {Error} - If parsing fails
+ */
+function parseApiResponse(_resultText) {
+	// This function will be implemented in the analysis engine to avoid circular dependencies
+	// For now, provide a placeholder that throws an error if called directly
+	throw new Error("parseApiResponse should be implemented in the analysis engine module")
+}
+
+;// ./src/modules/apiErrorHandler.js
+/**
+ * API Error Handler Module
+ * Centralizes error handling for API requests and responses
+ */
+
+
+
+
+
+
+/**
+ * Centralized API error handling function
+ * @param {string} errorMessage - The error message to handle
+ */
+function apiErrorHandler_handleApiError(errorMessage) {
+	console.error("Inconsistency Finder:", errorMessage)
+	state/* appState */.XJ.runtime.cumulativeResults.push({ error: errorMessage })
+	state/* appState */.XJ.runtime.isAnalysisRunning = false
+
+	// Reset retry-related state so future runs are clean
+	state/* appState */.XJ.runtime.analysisStartedAt = null
+	if (state/* appState */.XJ.runtime.deepAnalysisStartTimes) {
+		state/* appState */.XJ.runtime.deepAnalysisStartTimes = {}
+	}
+
+	(0,ui/* updateStatusIndicator */.LI)("error", "Error!")
+	;(0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults)
+}
+
+/**
+ * Classify API error by type and status code
+ * @param {Object} apiResponse - The API response object containing error information
+ * @returns {Object} - Error classification information
+ */
+function classifyApiError(apiResponse) {
+	if (!apiResponse.error) {
+		return { type: "none", retriable: false }
+	}
+
+	const errorStatus = apiResponse.error.status
+	const errorMessage = apiResponse.error.message || ""
+
+	const isRetriable = RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes("The model is overloaded")
+
+	return {
+		type: errorStatus || "UNKNOWN",
+		message: errorMessage,
+		retriable: isRetriable,
+		status: errorStatus,
+	}
+}
+
+/**
+ * Create standardized error response object
+ * @param {string} type - Error type classification
+ * @param {string} message - Error message
+ * @param {boolean} retriable - Whether the error is retriable
+ * @param {Object} [additionalData] - Additional error data
+ * @returns {Object} - Standardized error response
+ */
+function createErrorResponse(type, message, retriable = false, additionalData = {}) {
+	return {
+		error: true,
+		type,
+		message,
+		retriable,
+		timestamp: Date.now(),
+		...additionalData,
+	}
+}
+
+/**
+ * Handle rate limit specific errors with cooldown management
+ * @param {number} keyIndex - The API key index that hit rate limit
+ * @param {Object} errorClassification - Error classification from classifyApiError
+ * @param {Function} updateKeyState - Function to update key state
+ */
+function handleRateLimitError(keyIndex, errorClassification, updateKeyState) {
+	if (errorClassification.status === "RESOURCE_EXHAUSTED") {
+		// Mark key as exhausted with 24-hour cooldown (daily reset)
+		const unlockTime = Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+		updateKeyState(keyIndex, "EXHAUSTED", unlockTime, 1)
+		console.log(`Key ${keyIndex} marked as EXHAUSTED. Will reset in 24 hours.`)
+	} else if (errorClassification.status === "UNAVAILABLE" || errorClassification.status === "INTERNAL") {
+		// Temporary server issues - put on short cooldown
+		const unlockTime = Date.now() + 60 * 1000 // 1 minute
+		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
+		console.log(`Key ${keyIndex} on temporary COOLDOWN for 1 minute.`)
+	} else if (errorClassification.status === "DEADLINE_EXCEEDED") {
+		// Request timeout - brief cooldown
+		const unlockTime = Date.now() + 30 * 1000 // 30 seconds
+		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
+		console.log(`Key ${keyIndex} on timeout COOLDOWN for 30 seconds.`)
+	}
+}
+
+/**
+ * Determine appropriate cooldown duration based on error type
+ * @param {Object} errorClassification - Error classification from classifyApiError
+ * @returns {number} - Cooldown duration in milliseconds
+ */
+function getCooldownDuration(errorClassification) {
+	switch (errorClassification.status) {
+		case "RESOURCE_EXHAUSTED":
+			return 24 * 60 * 60 * 1000 // 24 hours
+		case "UNAVAILABLE":
+		case "INTERNAL":
+			return 60 * 1000 // 1 minute
+		case "DEADLINE_EXCEEDED":
+			return 30 * 1000 // 30 seconds
+		default:
+			return 60 * 1000 // Default 1 minute
+	}
+}
+
+/**
+ * Create user-friendly error message based on error type
+ * @param {Object} errorClassification - Error classification from classifyApiError
+ * @returns {string} - User-friendly error message
+ */
+function createUserFriendlyErrorMessage(errorClassification) {
+	switch (errorClassification.type) {
+		case "RESOURCE_EXHAUSTED":
+			return "API rate limit exceeded. Please wait 24 hours before trying again."
+		case "UNAVAILABLE":
+			return "Gemini API service is temporarily unavailable. Please try again in a few minutes."
+		case "INTERNAL":
+			return "Gemini API is experiencing internal server issues. Please try again later."
+		case "DEADLINE_EXCEEDED":
+			return "Request timed out. The text may be too long. Try analyzing fewer chapters."
+		case "MAX_TOKENS":
+			return "Analysis failed: The text from the selected chapters is too long. Please try again with fewer chapters."
+		default:
+			return `API Error: ${errorClassification.message || "Unknown error occurred"}`
+	}
+}
+
+;// ./src/modules/analysisEngine.js
+/**
+ * Analysis Engine Module
+ * Core analysis logic for translation consistency detection using Gemini API
+ */
+
+// Import from state module
+
+
+// Import from ui module
+
+
+// Import from utils module
+
+
+// Import from retryLogic module
+
+
+// Import from promptManager module
+
+
+// Import from apiErrorHandler module
+
+
+/**
+ * Get next available API key from the pool
+ * @returns {Object|null} - API key information or null if none available
+ */
+function getAvailableApiKey() {
+	const apiKeyInfo = (0,state/* getNextAvailableKey */.gb)()
+	if (apiKeyInfo) {
+		return {
+			key: apiKeyInfo.key,
+			index: apiKeyInfo.index,
+			state: apiKeyInfo.state,
+		}
+	}
+	return null
+}
+
+/**
+ * Validate API key for use
+ * @returns {boolean} - True if valid API key is available
+ */
+function validateApiKey() {
+	return getAvailableApiKey() !== null
+}
+
+/**
+ * Parse and validate API response content
+ * @param {string} _resultText - Raw text response from API (unused parameter for compatibility)
+ * @returns {Object|Array} - Parsed JSON response
+ * @throws {Error} - If parsing fails
+ */
+function analysisEngine_parseApiResponse(_resultText) {
+	const cleanedJsonString = (0,utils/* extractJsonFromString */.zF)(_resultText)
+	return JSON.parse(cleanedJsonString)
+}
+
+/**
+ * Main inconsistency analysis function
+ * @param {Array} chapterData - Array of chapter objects with text and chapter numbers
+ * @param {Array} existingResults - Results from previous analysis for context
+ * @param {number} retryCount - Current retry attempt count
+ * @param {number} parseRetryCount - Parse retry attempt count
+ */
+function findInconsistencies(chapterData, existingResults = [], retryCount = 0, parseRetryCount = 0) {
+	const operationName = "Analysis"
+	const maxTotalRetries = Math.max(1, state/* appState */.XJ.config.apiKeys.length) * MAX_RETRIES_PER_KEY
+
+	// Initialize or reuse startedAt to enforce a global safety window for this run
+	const startedAt = state/* appState */.XJ.runtime.analysisStartedAt || Date.now()
+	if (!state/* appState */.XJ.runtime.analysisStartedAt) {
+		state/* appState */.XJ.runtime.analysisStartedAt = startedAt
+	}
+
+	// Hard cap by attempts
+	if (retryCount >= maxTotalRetries) {
+		apiErrorHandler_handleApiError(
+			`${operationName} failed after ${retryCount} attempts across all keys. Please check your API keys or wait a while.`,
+		)
+		return
+	}
+
+	// Hard cap by duration (5-minute safety net)
+	if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+		apiErrorHandler_handleApiError(
+			`${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
+		)
+		return
+	}
+
+	const apiKeyInfo = getAvailableApiKey()
+	if (!apiKeyInfo) {
+		apiErrorHandler_handleApiError("All API keys are currently rate-limited or failing. Please wait a moment before trying again.")
+		return
+	}
+	const currentKey = apiKeyInfo.key
+	const currentKeyIndex = apiKeyInfo.index
+
+	state/* appState */.XJ.runtime.isAnalysisRunning = true
+	;(0,ui/* updateStatusIndicator */.LI)("running", `${operationName} (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`)
+
+	const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
+	;(0,utils/* log */.Rm)(
+		`${operationName}: Sending ${
+			combinedText.length
+		} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
+	)
+
+	const prompt = promptManager_buildPrompt(combinedText, existingResults)
+	const requestData = {
+		contents: [{ parts: [{ text: prompt }] }],
+		generationConfig: {
+			temperature: state/* appState */.XJ.config.temperature,
+		},
+	}
+
+	GM_xmlhttpRequest({
+		method: "POST",
+		url: `https://generativelanguage.googleapis.com/v1beta/${state/* appState */.XJ.config.model}:generateContent?key=${currentKey}`,
+		headers: {
+			"Content-Type": "application/json",
+		},
+		data: JSON.stringify(requestData),
+		onload: function (response) {
+			;(0,utils/* log */.Rm)("Received raw response from API:", response.responseText)
+			let apiResponse
+			let parsedResponse
+
+			// Shell parse errors are treated as retriable (can be transient)
+			try {
+				apiResponse = JSON.parse(response.responseText)
+			} catch (e) {
+				(0,utils/* log */.Rm)(
+					`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+				)
+				const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+				retryHandler({
+					operationName: `${operationName} (shell parse recovery)`,
+					retryCount,
+					maxTotalRetries,
+					startedAt,
+					nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
+				})
+				return
+			}
+
+			// Handle explicit API error responses
+			if (apiResponse.error) {
+				const errorClassification = classifyApiError(apiResponse)
+				const isRetriable = errorClassification.retriable
+
+				if (isRetriable) {
+					(0,utils/* log */.Rm)(
+						`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}.`,
+					)
+
+					handleRateLimitError(currentKeyIndex, errorClassification, state/* updateKeyState */.gH)
+
+					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+					retryHandler({
+						operationName,
+						retryCount,
+						maxTotalRetries,
+						startedAt,
+						nextStep: () =>
+							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
+					})
+					return
+				}
+
+				// Non-retriable API error -> final failure
+				const finalError = `API Error (Status: ${errorClassification.status}): ${errorClassification.message}`
+				apiErrorHandler_handleApiError(finalError)
+				return
+			}
+
+			const candidate = apiResponse.candidates?.[0]
+			if (!candidate || !candidate.content) {
+				let error
+				if (candidate?.finishReason === "MAX_TOKENS") {
+					error =
+						"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
+				} else {
+					error = `Invalid API response: No content found. Finish Reason: ${
+						candidate?.finishReason || "Unknown"
+					}`
+				}
+				apiErrorHandler_handleApiError(error)
+				return
+			}
+
+			// Parse the inner content (model JSON); treat malformed JSON as retriable once
+			try {
+				const resultText = candidate.content.parts[0].text
+				parsedResponse = analysisEngine_parseApiResponse(resultText)
+				;(0,utils/* log */.Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+			} catch (e) {
+				if (parseRetryCount < 1) {
+					(0,utils/* log */.Rm)(
+						`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+					)
+					;(0,ui/* updateStatusIndicator */.LI)("running", "AI response malformed. Retrying...")
+					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+					retryHandler({
+						operationName: `${operationName} (parse recovery)`,
+						retryCount,
+						maxTotalRetries,
+						startedAt,
+						nextStep: () =>
+							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1),
+					})
+					return
+				}
+				const error = `${operationName} failed to process AI response content after retry: ${e.message}`
+				apiErrorHandler_handleApiError(error)
+				return
+			}
+
+			// Success: rotate key index for next invocation
+			state/* appState */.XJ.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % state/* appState */.XJ.config.apiKeys.length
+			state/* appState */.XJ.runtime.isAnalysisRunning = false
+			state/* appState */.XJ.runtime.analysisStartedAt = null
+
+			const isVerificationRun = existingResults.length > 0
+
+			if (isVerificationRun) {
+				if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
+					apiErrorHandler_handleApiError(
+						"Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
+					)
+					return
+				}
+				const verifiedItems = parsedResponse.verified_inconsistencies || []
+				const newItems = parsedResponse.new_inconsistencies || []
+
+				verifiedItems.forEach((item) => {
+					item.isNew = false
+					item.status = "Verified"
+				})
+				newItems.forEach((item) => {
+					item.isNew = true
+				})
+
+				;(0,utils/* log */.Rm)(
+					`Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
+				)
+				state/* appState */.XJ.runtime.cumulativeResults = [...verifiedItems, ...newItems]
+			} else {
+				if (!Array.isArray(parsedResponse)) {
+					apiErrorHandler_handleApiError("Invalid response format for initial run. Expected a JSON array.")
+					return
+				}
+				parsedResponse.forEach((r) => (r.isNew = true))
+				state/* appState */.XJ.runtime.cumulativeResults = parsedResponse
+			}
+
+			(0,state/* saveSessionResults */.I6)()
+			;(0,ui/* updateStatusIndicator */.LI)("complete", "Complete!")
+			const continueBtn = document.getElementById("wtr-if-continue-btn")
+			if (continueBtn) {
+				continueBtn.disabled = false
+			}
+			(0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults)
+		},
+		onerror: function (error) {
+			console.error("Inconsistency Finder: Network error:", error)
+			;(0,utils/* log */.Rm)(
+				`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+			)
+			state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
+
+			const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+			retryHandler({
+				operationName,
+				retryCount,
+				maxTotalRetries,
+				startedAt,
+				nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
+			})
+		},
+	})
+}
+
+/**
+ * Deep analysis coordinator function
+ * @param {Array} chapterData - Array of chapter objects with text and chapter numbers
+ * @param {Array} existingResults - Results from previous analysis for context
+ * @param {number} targetDepth - Target depth for deep analysis
+ * @param {number} currentDepth - Current depth in analysis
+ */
+function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targetDepth = 1, currentDepth = 1) {
+	if (currentDepth > targetDepth) {
+		// Deep analysis complete
+		state/* appState */.XJ.runtime.isAnalysisRunning = false
+		const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : "Complete!"
+		;(0,ui/* updateStatusIndicator */.LI)("complete", statusMessage)
+		document.getElementById("wtr-if-continue-btn").disabled = false
+		;(0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults)
+		return
+	}
+
+	(0,utils/* log */.Rm)(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`)
+
+	// Update status to show iteration progress
+	if (targetDepth > 1) {
+		(0,ui/* updateStatusIndicator */.LI)("running", `Deep Analysis (${currentDepth}/${targetDepth})...`)
+	} else {
+		(0,ui/* updateStatusIndicator */.LI)(
+			"running",
+			currentDepth > 1 ? `Deep Analysis (${currentDepth}/${targetDepth})...` : "Analyzing...",
+		)
+	}
+
+	// Standardized context selection - always use cumulative results for deep analysis
+	const contextResults =
+		state/* appState */.XJ.runtime.cumulativeResults.length > 0 ? state/* appState */.XJ.runtime.cumulativeResults : existingResults
+
+	// Run iteration only if we have a real deep analysis (depth > 1)
+	if (targetDepth > 1) {
+		findInconsistenciesIteration(chapterData, contextResults, targetDepth, currentDepth)
+	} else {
+		// For normal analysis (depth = 1), use the regular analysis function
+		findInconsistencies(chapterData, contextResults)
+	}
+}
+
+/**
+ * Single iteration of deep analysis
+ * @param {Array} chapterData - Array of chapter objects with text and chapter numbers
+ * @param {Array} existingResults - Results from previous analysis iterations
+ * @param {number} targetDepth - Target depth for deep analysis
+ * @param {number} currentDepth - Current depth in analysis
+ */
+function findInconsistenciesIteration(chapterData, existingResults, targetDepth, currentDepth) {
+	const maxTotalRetries = Math.max(1, state/* appState */.XJ.config.apiKeys.length) * MAX_RETRIES_PER_KEY
+	let retryCount = 0
+	let parseRetryCount = 0
+
+	// Track when this deep analysis iteration started to enforce a safety window
+	const iterationKey = `deep_${currentDepth}`
+	const now = Date.now()
+	if (!state/* appState */.XJ.runtime.deepAnalysisStartTimes) {
+		state/* appState */.XJ.runtime.deepAnalysisStartTimes = {}
+	}
+	if (!state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]) {
+		state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey] = now
+	}
+	const startedAt = state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+
+	const operationName = `Deep analysis iteration ${currentDepth}/${targetDepth}`
+
+	const executeIteration = () => {
+		// Attempt-based ceiling
+		if (retryCount >= maxTotalRetries) {
+			apiErrorHandler_handleApiError(
+				`${operationName} failed after ${retryCount} attempts. Please check your API keys or wait a while.`,
+			)
+			delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+			return
+		}
+
+		// Time-based safety ceiling
+		if (Date.now() - startedAt > MAX_TOTAL_RETRY_DURATION_MS) {
+			apiErrorHandler_handleApiError(
+				`${operationName} failed after repeated retries over an extended period. Please wait a while before trying again.`,
+			)
+			delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+			return
+		}
+
+		const apiKeyInfo = getAvailableApiKey()
+		if (!apiKeyInfo) {
+			apiErrorHandler_handleApiError(
+				"All API keys are currently rate-limited or failing. Please wait a moment before trying again.",
+			)
+			delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+			return
+		}
+		const currentKey = apiKeyInfo.key
+		const currentKeyIndex = apiKeyInfo.index
+
+		const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
+		;(0,utils/* log */.Rm)(
+			`${operationName}: Sending ${
+				combinedText.length
+			} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
+		)
+
+		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
+		const requestData = {
+			contents: [{ parts: [{ text: prompt }] }],
+			generationConfig: {
+				temperature: state/* appState */.XJ.config.temperature,
+			},
+		}
+
+		GM_xmlhttpRequest({
+			method: "POST",
+			url: `https://generativelanguage.googleapis.com/v1beta/${state/* appState */.XJ.config.model}:generateContent?key=${currentKey}`,
+			headers: {
+				"Content-Type": "application/json",
+			},
+			data: JSON.stringify(requestData),
+			onload: function (response) {
+				;(0,utils/* log */.Rm)("Received raw response from API:", response.responseText)
+				let apiResponse
+				let parsedResponse
+
+				// Shell parse: treat as retriable (can be transient / truncation)
+				try {
+					apiResponse = JSON.parse(response.responseText)
+				} catch (e) {
+					(0,utils/* log */.Rm)(
+						`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+					)
+					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+					retryHandler({
+						operationName: `${operationName} (shell parse recovery)`,
+						retryCount,
+						maxTotalRetries,
+						startedAt,
+						nextStep: () => {
+							retryCount++
+							executeIteration()
+						},
+					})
+					return
+				}
+
+				if (apiResponse.error) {
+					const errorClassification = classifyApiError(apiResponse)
+					const isRetriable = errorClassification.retriable
+
+					if (isRetriable) {
+						(0,utils/* log */.Rm)(
+							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+						)
+						const cooldownSeconds = errorClassification.status === "RESOURCE_EXHAUSTED" ? 2 : 1
+						state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
+						const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+						retryHandler({
+							operationName,
+							retryCount,
+							maxTotalRetries,
+							startedAt,
+							nextStep: () => {
+								retryCount++
+								executeIteration()
+							},
+						})
+						return
+					}
+
+					const finalError = `API Error (Status: ${errorClassification.status}): ${errorClassification.message}`
+					apiErrorHandler_handleApiError(finalError)
+					delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+					return
+				}
+
+				const candidate = apiResponse.candidates?.[0]
+				if (!candidate || !candidate.content) {
+					let error
+					if (candidate?.finishReason === "MAX_TOKENS") {
+						error =
+							"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
+					} else {
+						error = `Invalid API response: No content found. Finish Reason: ${
+							candidate?.finishReason || "Unknown"
+						}`
+					}
+					apiErrorHandler_handleApiError(error)
+					delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+					return
+				}
+
+				try {
+					const resultText = candidate.content.parts[0].text
+					parsedResponse = analysisEngine_parseApiResponse(resultText)
+					;(0,utils/* log */.Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+				} catch (e) {
+					if (parseRetryCount < 1) {
+						(0,utils/* log */.Rm)(
+							`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+						)
+						;(0,ui/* updateStatusIndicator */.LI)("running", "AI response malformed. Retrying...")
+						const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+						retryHandler({
+							operationName: `${operationName} (parse recovery)`,
+							retryCount,
+							maxTotalRetries,
+							startedAt,
+							nextStep: () => {
+								retryCount++
+								parseRetryCount++
+								executeIteration()
+							},
+						})
+						return
+					}
+					const error = `${operationName} failed to process AI response content after retry: ${e.message}`
+					apiErrorHandler_handleApiError(error)
+					delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+					return
+				}
+
+				// On success, advance the key index for the next run
+				state/* appState */.XJ.runtime.currentApiKeyIndex = (currentKeyIndex + 1) % state/* appState */.XJ.config.apiKeys.length
+
+				const isVerificationRun = existingResults.length > 0
+
+				if (isVerificationRun) {
+					if (!parsedResponse.verified_inconsistencies || !parsedResponse.new_inconsistencies) {
+						apiErrorHandler_handleApiError(
+							"Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.",
+						)
+						delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+						return
+					}
+					const verifiedItems = parsedResponse.verified_inconsistencies || []
+					const newItems = parsedResponse.new_inconsistencies || []
+
+					verifiedItems.forEach((item) => {
+						item.isNew = false
+						item.status = "Verified"
+					})
+					newItems.forEach((item) => {
+						item.isNew = true
+					})
+
+					;(0,utils/* log */.Rm)(
+						`${operationName}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
+					)
+
+					const allNewItems = [...verifiedItems, ...newItems]
+					state/* appState */.XJ.runtime.cumulativeResults = (0,utils/* mergeAnalysisResults */.bd)(
+						state/* appState */.XJ.runtime.cumulativeResults,
+						allNewItems,
+					)
+				} else {
+					if (!Array.isArray(parsedResponse)) {
+						apiErrorHandler_handleApiError("Invalid response format for initial run. Expected a JSON array.")
+						delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+						return
+					}
+					parsedResponse.forEach((r) => (r.isNew = true))
+					state/* appState */.XJ.runtime.cumulativeResults = (0,utils/* mergeAnalysisResults */.bd)(
+						state/* appState */.XJ.runtime.cumulativeResults,
+						parsedResponse,
+					)
+				}
+
+				// Save session results after each iteration
+				(0,state/* saveSessionResults */.I6)()
+
+				// Continue to next iteration or complete
+				state/* appState */.XJ.runtime.currentIteration = currentDepth + 1
+				if (currentDepth < targetDepth) {
+					// Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
+					setTimeout(() => {
+						findInconsistenciesDeepAnalysis(
+							chapterData,
+							state/* appState */.XJ.runtime.cumulativeResults,
+							targetDepth,
+							currentDepth + 1,
+						)
+					}, 1000)
+				} else {
+					// Deep analysis complete for this path
+					delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
+					state/* appState */.XJ.runtime.isAnalysisRunning = false
+					;(0,ui/* updateStatusIndicator */.LI)("complete", `Complete! (Deep Analysis: ${targetDepth} iterations)`)
+					const continueBtn = document.getElementById("wtr-if-continue-btn")
+					if (continueBtn) {
+						continueBtn.disabled = false
+					}
+					(0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults)
+				}
+			},
+			onerror: function (error) {
+				console.error("Inconsistency Finder: Network error:", error)
+				;(0,utils/* log */.Rm)(
+					`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+				)
+				state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
+
+				const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
+				retryHandler({
+					operationName,
+					retryCount,
+					maxTotalRetries,
+					startedAt,
+					nextStep: () => {
+						retryCount++
+						executeIteration()
+					},
+				})
+			},
+		})
+	}
+
+	executeIteration()
+}
+
+;// ./src/modules/geminiApi.js
+/**
+ * Gemini API Facade Module
+ * Maintains 100% backward compatibility by re-exporting functions from modular submodules
+ *
+ * This module serves as a backward-compatible facade that delegates to the new modular structure:
+ * - retryLogic.js: Exponential backoff and retry scheduling
+ * - promptManager.js: AI prompt generation and management
+ * - apiErrorHandler.js: Centralized error handling
+ * - analysisEngine.js: Core analysis logic and API communication
+ */
+
+// ===== BACKWARD COMPATIBILITY RE-EXPORTS =====
+
+// Re-export analysis engine functions for backward compatibility
+
+
+// Re-export retry logic constants and functions
+
+
+// Re-export prompt management functions
+
+
+// Re-export error handling functions
+
+
+// ===== BACKWARD COMPATIBILITY ALIASES =====
+
+/**
+ * Legacy alias for buildPrompt - maintains exact backward compatibility
+ * @param {string} chapterText - The chapter text to analyze
+ * @param {Array} existingResults - Results from previous analysis for context
+ * @returns {string} - Generated prompt for the AI
+ */
+function generatePrompt(chapterText, existingResults = []) {
+	return buildPrompt(chapterText, existingResults)
+}
+
+// ===== DEPRECATED FUNCTIONS (maintained for compatibility) =====
+
+/**
+ * Deprecated: This function is now handled internally by analysisEngine
+ * Kept for backward compatibility but not recommended for new code
+ * @param {string} errorMessage - The error message to handle
+ * @deprecated Use handleApiError from apiErrorHandler module directly
+ */
+function deprecatedHandleApiError(errorMessage) {
+	console.warn("deprecatedHandleApiError is deprecated. Use handleApiError from apiErrorHandler module directly.")
+	handleApiError(errorMessage)
+}
+
+// ===== MODULE INITIALIZATION =====
+
+// Log successful modular structure initialization when module loads
+if (typeof console !== "undefined" && console.log) {
+	console.log("Inconsistency Finder: Modular Gemini API structure loaded successfully")
+	console.log("├── retryLogic.js: Exponential backoff and retry scheduling")
+	console.log("├── promptManager.js: AI prompt generation and management")
+	console.log("├── apiErrorHandler.js: Centralized error handling")
+	console.log("├── analysisEngine.js: Core analysis logic and API communication")
+	console.log("└── geminiApi.js: Backward compatibility facade")
+}
 
 
 /***/ }),
