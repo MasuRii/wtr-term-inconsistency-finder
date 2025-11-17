@@ -9,6 +9,8 @@
  * - analysisEngine.js: Core analysis logic and API communication
  */
 
+import { log } from "./utils"
+
 // ===== BACKWARD COMPATIBILITY RE-EXPORTS =====
 
 // Re-export analysis engine functions for backward compatibility
@@ -72,11 +74,9 @@ export function deprecatedHandleApiError(errorMessage) {
 // ===== MODULE INITIALIZATION =====
 
 // Log successful modular structure initialization when module loads
-if (typeof console !== "undefined" && console.log) {
-	console.log("Inconsistency Finder: Modular Gemini API structure loaded successfully")
-	console.log("├── retryLogic.js: Exponential backoff and retry scheduling")
-	console.log("├── promptManager.js: AI prompt generation and management")
-	console.log("├── apiErrorHandler.js: Centralized error handling")
-	console.log("├── analysisEngine.js: Core analysis logic and API communication")
-	console.log("└── geminiApi.js: Backward compatibility facade")
-}
+log("Modular Gemini API structure loaded successfully")
+log("├── retryLogic.js: Exponential backoff and retry scheduling")
+log("├── promptManager.js: AI prompt generation and management")
+log("├── apiErrorHandler.js: Centralized error handling")
+log("├── analysisEngine.js: Core analysis logic and API communication")
+log("└── geminiApi.js: Backward compatibility facade")

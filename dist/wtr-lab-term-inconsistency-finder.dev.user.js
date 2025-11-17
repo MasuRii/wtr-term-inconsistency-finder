@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.8-dev.1763408834179
+// @version 5.3.8-dev.1763410115835
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -3734,12 +3734,12 @@ __webpack_require__.d(__webpack_exports__, {
 
 // UNUSED EXPORTS: ADVANCED_SYSTEM_PROMPT, BASE_BACKOFF_MS, MAX_BACKOFF_MS, MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS, RETRIABLE_STATUSES, buildDeepAnalysisPrompt, buildPrompt, calculateBackoffDelayMs, classifyApiError, createErrorResponse, createRetryHandler, createUserFriendlyErrorMessage, deprecatedHandleApiError, findInconsistencies, generatePrompt, getCooldownDuration, handleApiError, handleRateLimitError, parseApiResponse, scheduleRetriableRetry, validateApiKey
 
+// EXTERNAL MODULE: ./src/modules/utils.js
+var utils = __webpack_require__(395);
 // EXTERNAL MODULE: ./src/modules/state.js
 var state = __webpack_require__(907);
 // EXTERNAL MODULE: ./src/modules/ui/index.js
 var ui = __webpack_require__(201);
-// EXTERNAL MODULE: ./src/modules/utils.js
-var utils = __webpack_require__(395);
 ;// ./src/modules/retryLogic.js
 /**
  * Retry Logic Module
@@ -3879,6 +3879,7 @@ const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translati
     * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
     * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
     * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
+- CRITICAL: Do NOT flag chapter title punctuation formatting inconsistencies, specifically colon separators in chapter titles. For example, inconsistencies like "Chapter 340 The Advancing Otto" vs "Chapter 341: Pick the Soft Persimmons to Squeeze" vs "Chapter 342: Changing the Rules of Naval Warfare" should NOT be flagged as these are minor, non-actionable stylistic differences in punctuation formatting.
 
 ## Focus On
 - In-text content within the chapter body.
@@ -4856,6 +4857,8 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
  * - analysisEngine.js: Core analysis logic and API communication
  */
 
+
+
 // ===== BACKWARD COMPATIBILITY RE-EXPORTS =====
 
 // Re-export analysis engine functions for backward compatibility
@@ -4898,14 +4901,12 @@ function deprecatedHandleApiError(errorMessage) {
 // ===== MODULE INITIALIZATION =====
 
 // Log successful modular structure initialization when module loads
-if (typeof console !== "undefined" && console.log) {
-	console.log("Inconsistency Finder: Modular Gemini API structure loaded successfully")
-	console.log("├── retryLogic.js: Exponential backoff and retry scheduling")
-	console.log("├── promptManager.js: AI prompt generation and management")
-	console.log("├── apiErrorHandler.js: Centralized error handling")
-	console.log("├── analysisEngine.js: Core analysis logic and API communication")
-	console.log("└── geminiApi.js: Backward compatibility facade")
-}
+(0,utils/* log */.Rm)("Modular Gemini API structure loaded successfully")
+;(0,utils/* log */.Rm)("├── retryLogic.js: Exponential backoff and retry scheduling")
+;(0,utils/* log */.Rm)("├── promptManager.js: AI prompt generation and management")
+;(0,utils/* log */.Rm)("├── apiErrorHandler.js: Centralized error handling")
+;(0,utils/* log */.Rm)("├── analysisEngine.js: Core analysis logic and API communication")
+;(0,utils/* log */.Rm)("└── geminiApi.js: Backward compatibility facade")
 
 
 /***/ }),

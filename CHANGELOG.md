@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - **Mobile CSS Layout**: Removed `flex-direction: column;` from the mobile view rule for `.wtr-if-section-header h3` to correct layout behavior
+- **Chapter Title Punctuation Filtering**: Added exclusion rule to prevent flagging of minor, non-actionable stylistic inconsistencies related to chapter title formatting, specifically the presence or absence of colon separators
+- **Debug Log Leakage**: Corrected the logging mechanism to ensure that initialization and module loading messages are suppressed when the user has disabled debug logging in the configuration settings panel
 
 ### ⚙️ Internal
 - **Comprehensive Documentation**: Added detailed JSDoc documentation to all new modular components
