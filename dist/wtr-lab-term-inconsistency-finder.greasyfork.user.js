@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.7
+// @version 5.3.8
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -3670,7 +3670,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section-based Finder layout improve
 
 	.wtr-if-section-header h3 {
 		align-items: flex-start;
-		flex-direction: column;
 		font-size: 15px;
 		gap: 6px;
 	}
@@ -3777,13 +3776,13 @@ function calculateBackoffDelayMs(retryIndex) {
 }
 
 /**
- * Schedule a retriable retry with exponential backoff.
+ * Schedule an immediate retriable retry with the next available key.
  * @param {Object} options - Retry options
  * @param {string} options.operationName - Name of the operation for logging
  * @param {number} options.retryCount - Current retry attempt count
  * @param {number} options.maxTotalRetries - Maximum total retries allowed
  * @param {number} options.startedAt - Timestamp when operation started
- * @param {Function} options.nextStep - Function to call after delay
+ * @param {Function} options.nextStep - Function to call immediately
  * @param {Function} [options.errorHandler] - Optional error handler function to avoid circular dependencies
  */
 function scheduleRetriableRetry({
@@ -3817,24 +3816,21 @@ function scheduleRetriableRetry({
 		return
 	}
 
-	const delay = calculateBackoffDelayMs(retryCount)
-	;(0,utils/* log */.Rm)(`${operationName}: Scheduling retry #${retryCount + 1} with exponential backoff delay ${delay}ms.`)
-	;(0,ui/* updateStatusIndicator */.LI)("running", `Retrying in ${Math.round(delay / 1000)}s...`)
+	log(`${operationName}: Scheduling immediate retry #${retryCount + 1} with next available key.`)
+	updateStatusIndicator("running", `Retrying immediately...`)
 
-	// Ensure no uncaught exceptions propagate from the scheduled callback
-	setTimeout(() => {
-		try {
-			nextStep()
-		} catch (e) {
-			console.error(`Inconsistency Finder: Uncaught error during scheduled retry for ${operationName}:`, e)
-			const errorMessage = `${operationName} encountered an unexpected error during retry. Please try again.`
-			if (errorHandler) {
-				errorHandler(errorMessage)
-			} else {
-				console.error("Inconsistency Finder:", errorMessage)
-			}
+	// Ensure no uncaught exceptions propagate from the callback
+	try {
+		nextStep()
+	} catch (e) {
+		console.error(`Inconsistency Finder: Uncaught error during immediate retry for ${operationName}:`, e)
+		const errorMessage = `${operationName} encountered an unexpected error during retry. Please try again.`
+		if (errorHandler) {
+			errorHandler(errorMessage)
+		} else {
+			console.error("Inconsistency Finder:", errorMessage)
 		}
-	}, delay)
+	}
 }
 
 /**
@@ -4248,15 +4244,15 @@ function handleRateLimitError(keyIndex, errorClassification, updateKeyState) {
 		updateKeyState(keyIndex, "EXHAUSTED", unlockTime, 1)
 		console.log(`Key ${keyIndex} marked as EXHAUSTED. Will reset in 24 hours.`)
 	} else if (errorClassification.status === "UNAVAILABLE" || errorClassification.status === "INTERNAL") {
-		// Temporary server issues - put on short cooldown
-		const unlockTime = Date.now() + 60 * 1000 // 1 minute
+		// Temporary server issues - put on short cooldown for faster cycling
+		const unlockTime = Date.now() + 5 * 1000 // 5 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on temporary COOLDOWN for 1 minute.`)
+		console.log(`Key ${keyIndex} on temporary COOLDOWN for 5 seconds.`)
 	} else if (errorClassification.status === "DEADLINE_EXCEEDED") {
-		// Request timeout - brief cooldown
-		const unlockTime = Date.now() + 30 * 1000 // 30 seconds
+		// Request timeout - brief cooldown for faster cycling
+		const unlockTime = Date.now() + 2 * 1000 // 2 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on timeout COOLDOWN for 30 seconds.`)
+		console.log(`Key ${keyIndex} on timeout COOLDOWN for 2 seconds.`)
 	}
 }
 
@@ -4271,11 +4267,11 @@ function getCooldownDuration(errorClassification) {
 			return 24 * 60 * 60 * 1000 // 24 hours
 		case "UNAVAILABLE":
 		case "INTERNAL":
-			return 60 * 1000 // 1 minute
+			return 5 * 1000 // 5 seconds for faster cycling
 		case "DEADLINE_EXCEEDED":
-			return 30 * 1000 // 30 seconds
+			return 2 * 1000 // 2 seconds for faster cycling
 		default:
-			return 60 * 1000 // Default 1 minute
+			return 5 * 1000 // Default 5 seconds for faster cycling
 	}
 }
 
@@ -4436,16 +4432,10 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 				apiResponse = JSON.parse(response.responseText)
 			} catch (e) {
 				(0,utils/* log */.Rm)(
-					`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
 				)
-				const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-				retryHandler({
-					operationName: `${operationName} (shell parse recovery)`,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-				})
+				// Immediate retry with next available key
+				findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 				return
 			}
 
@@ -4456,20 +4446,13 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 
 				if (isRetriable) {
 					(0,utils/* log */.Rm)(
-						`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}.`,
+						`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 					)
 
 					handleRateLimitError(currentKeyIndex, errorClassification, state/* updateKeyState */.gH)
 
-					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-					retryHandler({
-						operationName,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-					})
+					// Immediate retry with next available key
+					findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 					return
 				}
 
@@ -4502,18 +4485,11 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 			} catch (e) {
 				if (parseRetryCount < 1) {
 					(0,utils/* log */.Rm)(
-						`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+						`${operationName}: Failed to parse AI response content, retrying immediately with next key. Error: ${e.message}`,
 					)
 					;(0,ui/* updateStatusIndicator */.LI)("running", "AI response malformed. Retrying...")
-					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-					retryHandler({
-						operationName: `${operationName} (parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1),
-					})
+					// Immediate retry with next available key
+					findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1)
 					return
 				}
 				const error = `${operationName} failed to process AI response content after retry: ${e.message}`
@@ -4570,18 +4546,12 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 		onerror: function (error) {
 			console.error("Inconsistency Finder: Network error:", error)
 			;(0,utils/* log */.Rm)(
-				`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+				`${operationName}: Network error with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 			)
 			state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
 
-			const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-			retryHandler({
-				operationName,
-				retryCount,
-				maxTotalRetries,
-				startedAt,
-				nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-			})
+			// Immediate retry with next available key
+			findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 		},
 	})
 }
@@ -4716,19 +4686,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					apiResponse = JSON.parse(response.responseText)
 				} catch (e) {
 					(0,utils/* log */.Rm)(
-						`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
 					)
-					const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-					retryHandler({
-						operationName: `${operationName} (shell parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () => {
-							retryCount++
-							executeIteration()
-						},
-					})
+					// Immediate retry with next available key
+					retryCount++
+					executeIteration()
 					return
 				}
 
@@ -4738,21 +4700,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 					if (isRetriable) {
 						(0,utils/* log */.Rm)(
-							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 						)
 						const cooldownSeconds = errorClassification.status === "RESOURCE_EXHAUSTED" ? 2 : 1
 						state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
-						const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-						retryHandler({
-							operationName,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								executeIteration()
-							},
-						})
+						// Immediate retry with next available key
+						retryCount++
+						executeIteration()
 						return
 					}
 
@@ -4785,21 +4739,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				} catch (e) {
 					if (parseRetryCount < 1) {
 						(0,utils/* log */.Rm)(
-							`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+							`${operationName}: Failed to parse AI response content, retrying immediately with next key. Error: ${e.message}`,
 						)
 						;(0,ui/* updateStatusIndicator */.LI)("running", "AI response malformed. Retrying...")
-						const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-						retryHandler({
-							operationName: `${operationName} (parse recovery)`,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								parseRetryCount++
-								executeIteration()
-							},
-						})
+						// Immediate retry with next available key
+						retryCount++
+						parseRetryCount++
+						executeIteration()
 						return
 					}
 					const error = `${operationName} failed to process AI response content after retry: ${e.message}`
@@ -4884,21 +4830,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 			onerror: function (error) {
 				console.error("Inconsistency Finder: Network error:", error)
 				;(0,utils/* log */.Rm)(
-					`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+					`${operationName}: Network error with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 				)
 				state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
 
-				const retryHandler = createRetryHandler(apiErrorHandler_handleApiError)
-				retryHandler({
-					operationName,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => {
-						retryCount++
-						executeIteration()
-					},
-				})
+				// Immediate retry with next available key
+				retryCount++
+				executeIteration()
 			},
 		})
 	}

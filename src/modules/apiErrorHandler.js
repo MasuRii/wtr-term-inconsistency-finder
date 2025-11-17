@@ -82,15 +82,15 @@ export function handleRateLimitError(keyIndex, errorClassification, updateKeySta
 		updateKeyState(keyIndex, "EXHAUSTED", unlockTime, 1)
 		console.log(`Key ${keyIndex} marked as EXHAUSTED. Will reset in 24 hours.`)
 	} else if (errorClassification.status === "UNAVAILABLE" || errorClassification.status === "INTERNAL") {
-		// Temporary server issues - put on short cooldown
-		const unlockTime = Date.now() + 60 * 1000 // 1 minute
+		// Temporary server issues - put on short cooldown for faster cycling
+		const unlockTime = Date.now() + 5 * 1000 // 5 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on temporary COOLDOWN for 1 minute.`)
+		console.log(`Key ${keyIndex} on temporary COOLDOWN for 5 seconds.`)
 	} else if (errorClassification.status === "DEADLINE_EXCEEDED") {
-		// Request timeout - brief cooldown
-		const unlockTime = Date.now() + 30 * 1000 // 30 seconds
+		// Request timeout - brief cooldown for faster cycling
+		const unlockTime = Date.now() + 2 * 1000 // 2 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on timeout COOLDOWN for 30 seconds.`)
+		console.log(`Key ${keyIndex} on timeout COOLDOWN for 2 seconds.`)
 	}
 }
 
@@ -105,11 +105,11 @@ export function getCooldownDuration(errorClassification) {
 			return 24 * 60 * 60 * 1000 // 24 hours
 		case "UNAVAILABLE":
 		case "INTERNAL":
-			return 60 * 1000 // 1 minute
+			return 5 * 1000 // 5 seconds for faster cycling
 		case "DEADLINE_EXCEEDED":
-			return 30 * 1000 // 30 seconds
+			return 2 * 1000 // 2 seconds for faster cycling
 		default:
-			return 60 * 1000 // Default 1 minute
+			return 5 * 1000 // Default 5 seconds for faster cycling
 	}
 }
 

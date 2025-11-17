@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
-## [5.3.8] - 2025-11-14
+## [5.3.8] - 2025-11-17
 
 ### ♻️ Changed
 - **Major Gemini API Module Refactoring**: Completely modularized the monolithic 908-line `geminiApi.js` file into 5 focused modules following single responsibility principle:
@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced Code Organization**: Improved maintainability, testability, and developer experience through logical separation of concerns
 - **Better Tree-Shaking**: Modular structure enables improved webpack optimization for unused code elimination
 - **Preserved Backward Compatibility**: All existing function signatures and interfaces remain unchanged - no breaking changes
+- **API Key Rotation Logic Refactoring**: Removed exponential backoff mechanism and implemented immediate key-switching with smart cooldown system for faster API key cycling and improved user experience
+
+### 🐛 Fixed
+- **Mobile CSS Layout**: Removed `flex-direction: column;` from the mobile view rule for `.wtr-if-section-header h3` to correct layout behavior
 
 ### ⚙️ Internal
 - **Comprehensive Documentation**: Added detailed JSDoc documentation to all new modular components

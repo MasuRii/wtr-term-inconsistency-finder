@@ -13,7 +13,7 @@ import { displayResults, updateStatusIndicator } from "./ui"
 import { extractJsonFromString, log, mergeAnalysisResults } from "./utils"
 
 // Import from retryLogic module
-import { createRetryHandler, MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS } from "./retryLogic"
+import { MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS } from "./retryLogic"
 
 // Import from promptManager module
 import { buildPrompt, buildDeepAnalysisPrompt } from "./promptManager"
@@ -132,16 +132,10 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				apiResponse = JSON.parse(response.responseText)
 			} catch (e) {
 				log(
-					`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
 				)
-				const retryHandler = createRetryHandler(handleApiError)
-				retryHandler({
-					operationName: `${operationName} (shell parse recovery)`,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-				})
+				// Immediate retry with next available key
+				findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 				return
 			}
 
@@ -152,20 +146,13 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
 				if (isRetriable) {
 					log(
-						`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}.`,
+						`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 					)
 
 					handleRateLimitError(currentKeyIndex, errorClassification, updateKeyState)
 
-					const retryHandler = createRetryHandler(handleApiError)
-					retryHandler({
-						operationName,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-					})
+					// Immediate retry with next available key
+					findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 					return
 				}
 
@@ -198,18 +185,11 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 			} catch (e) {
 				if (parseRetryCount < 1) {
 					log(
-						`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+						`${operationName}: Failed to parse AI response content, retrying immediately with next key. Error: ${e.message}`,
 					)
 					updateStatusIndicator("running", "AI response malformed. Retrying...")
-					const retryHandler = createRetryHandler(handleApiError)
-					retryHandler({
-						operationName: `${operationName} (parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () =>
-							findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1),
-					})
+					// Immediate retry with next available key
+					findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount + 1)
 					return
 				}
 				const error = `${operationName} failed to process AI response content after retry: ${e.message}`
@@ -266,18 +246,12 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 		onerror: function (error) {
 			console.error("Inconsistency Finder: Network error:", error)
 			log(
-				`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+				`${operationName}: Network error with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 			)
 			appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
 
-			const retryHandler = createRetryHandler(handleApiError)
-			retryHandler({
-				operationName,
-				retryCount,
-				maxTotalRetries,
-				startedAt,
-				nextStep: () => findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount),
-			})
+			// Immediate retry with next available key
+			findInconsistencies(chapterData, existingResults, retryCount + 1, parseRetryCount)
 		},
 	})
 }
@@ -412,19 +386,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					apiResponse = JSON.parse(response.responseText)
 				} catch (e) {
 					log(
-						`${operationName}: Failed to parse API response shell: ${e.message}. Scheduling retry with backoff.`,
+						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
 					)
-					const retryHandler = createRetryHandler(handleApiError)
-					retryHandler({
-						operationName: `${operationName} (shell parse recovery)`,
-						retryCount,
-						maxTotalRetries,
-						startedAt,
-						nextStep: () => {
-							retryCount++
-							executeIteration()
-						},
-					})
+					// Immediate retry with next available key
+					retryCount++
+					executeIteration()
 					return
 				}
 
@@ -434,21 +400,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 					if (isRetriable) {
 						log(
-							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 						)
 						const cooldownSeconds = errorClassification.status === "RESOURCE_EXHAUSTED" ? 2 : 1
 						appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
-						const retryHandler = createRetryHandler(handleApiError)
-						retryHandler({
-							operationName,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								executeIteration()
-							},
-						})
+						// Immediate retry with next available key
+						retryCount++
+						executeIteration()
 						return
 					}
 
@@ -481,21 +439,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				} catch (e) {
 					if (parseRetryCount < 1) {
 						log(
-							`${operationName}: Failed to parse AI response content, scheduling retry with backoff. Error: ${e.message}`,
+							`${operationName}: Failed to parse AI response content, retrying immediately with next key. Error: ${e.message}`,
 						)
 						updateStatusIndicator("running", "AI response malformed. Retrying...")
-						const retryHandler = createRetryHandler(handleApiError)
-						retryHandler({
-							operationName: `${operationName} (parse recovery)`,
-							retryCount,
-							maxTotalRetries,
-							startedAt,
-							nextStep: () => {
-								retryCount++
-								parseRetryCount++
-								executeIteration()
-							},
-						})
+						// Immediate retry with next available key
+						retryCount++
+						parseRetryCount++
+						executeIteration()
 						return
 					}
 					const error = `${operationName} failed to process AI response content after retry: ${e.message}`
@@ -580,21 +530,13 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 			onerror: function (error) {
 				console.error("Inconsistency Finder: Network error:", error)
 				log(
-					`${operationName}: Network error with key index ${currentKeyIndex}. Rotating key and scheduling retry with backoff.`,
+					`${operationName}: Network error with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 				)
 				appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + 1000) // 1-second cooldown
 
-				const retryHandler = createRetryHandler(handleApiError)
-				retryHandler({
-					operationName,
-					retryCount,
-					maxTotalRetries,
-					startedAt,
-					nextStep: () => {
-						retryCount++
-						executeIteration()
-					},
-				})
+				// Immediate retry with next available key
+				retryCount++
+				executeIteration()
 			},
 		})
 	}

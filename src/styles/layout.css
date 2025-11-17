@@ -83,7 +83,6 @@
 
 	.wtr-if-section-header h3 {
 		align-items: flex-start;
-		flex-direction: column;
 		font-size: 15px;
 		gap: 6px;
 	}

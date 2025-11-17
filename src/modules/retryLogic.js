@@ -33,13 +33,13 @@ export function calculateBackoffDelayMs(retryIndex) {
 }
 
 /**
- * Schedule a retriable retry with exponential backoff.
+ * Schedule an immediate retriable retry with the next available key.
  * @param {Object} options - Retry options
  * @param {string} options.operationName - Name of the operation for logging
  * @param {number} options.retryCount - Current retry attempt count
  * @param {number} options.maxTotalRetries - Maximum total retries allowed
  * @param {number} options.startedAt - Timestamp when operation started
- * @param {Function} options.nextStep - Function to call after delay
+ * @param {Function} options.nextStep - Function to call immediately
  * @param {Function} [options.errorHandler] - Optional error handler function to avoid circular dependencies
  */
 export function scheduleRetriableRetry({
@@ -73,24 +73,21 @@ export function scheduleRetriableRetry({
 		return
 	}
 
-	const delay = calculateBackoffDelayMs(retryCount)
-	log(`${operationName}: Scheduling retry #${retryCount + 1} with exponential backoff delay ${delay}ms.`)
-	updateStatusIndicator("running", `Retrying in ${Math.round(delay / 1000)}s...`)
+	log(`${operationName}: Scheduling immediate retry #${retryCount + 1} with next available key.`)
+	updateStatusIndicator("running", `Retrying immediately...`)
 
-	// Ensure no uncaught exceptions propagate from the scheduled callback
-	setTimeout(() => {
-		try {
-			nextStep()
-		} catch (e) {
-			console.error(`Inconsistency Finder: Uncaught error during scheduled retry for ${operationName}:`, e)
-			const errorMessage = `${operationName} encountered an unexpected error during retry. Please try again.`
-			if (errorHandler) {
-				errorHandler(errorMessage)
-			} else {
-				console.error("Inconsistency Finder:", errorMessage)
-			}
+	// Ensure no uncaught exceptions propagate from the callback
+	try {
+		nextStep()
+	} catch (e) {
+		console.error(`Inconsistency Finder: Uncaught error during immediate retry for ${operationName}:`, e)
+		const errorMessage = `${operationName} encountered an unexpected error during retry. Please try again.`
+		if (errorHandler) {
+			errorHandler(errorMessage)
+		} else {
+			console.error("Inconsistency Finder:", errorMessage)
 		}
-	}, delay)
+	}
 }
 
 /**
