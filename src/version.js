@@ -1,32 +1,26 @@
 // src/version.js
-// Backward compatibility layer for version information
-// This file will be replaced by the build banner system in production
+// Shared runtime version information for the userscript UI
 
-// Support both Node.js and browser environments
-let VERSION_INFO
-try {
-	const versionModule = require("../config/versions.js")
-	VERSION_INFO = versionModule.VERSION_INFO
-} catch {
-	// Fallback for browser environment or when config is not available
-	VERSION_INFO = {
-		SEMANTIC: "5.3.5",
-		DISPLAY: "v5.3.5",
-		BUILD_ENV: "production",
-		BUILD_DATE: "2025-11-10",
-	}
+const FALLBACK_VERSION_INFO = {
+	SEMANTIC: "5.3.9",
+	DISPLAY: "v5.3.9",
+	BUILD_ENV: "production",
+	BUILD_DATE: "2026-04-04",
 }
 
-// Export VERSION constant for backward compatibility
-const VERSION = VERSION_INFO.SEMANTIC
+let runtimeVersionInfo = FALLBACK_VERSION_INFO
 
-if (typeof module !== "undefined" && module.exports) {
-	module.exports = {
-		VERSION,
-		VERSION_INFO,
-	}
-} else {
-	// Browser environment
+try {
+	const versionModule = require("../config/versions.js")
+	runtimeVersionInfo = versionModule.VERSION_INFO
+} catch {
+	runtimeVersionInfo = FALLBACK_VERSION_INFO
+}
+
+export const VERSION_INFO = runtimeVersionInfo
+export const VERSION = VERSION_INFO.SEMANTIC
+
+if (typeof window !== "undefined") {
 	window.WTR_VERSION = VERSION
 	window.WTR_VERSION_INFO = VERSION_INFO
 }
