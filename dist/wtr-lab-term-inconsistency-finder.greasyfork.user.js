@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.4.0
+// @version 5.4.1
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -2988,6 +2988,7 @@ const appState = {
 		providerModelsPath: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].modelsPath,
 		model: "",
 		useJson: false,
+		useLiveTermReplacerSync: true,
 		loggingEnabled: false,
 		temperature: 0.5,
 		activeTab: "finder",
@@ -3753,51 +3754,80 @@ function displayResults(results) {
 
 
 
-function startAnalysis(isContinuation = false) {
-	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning) {
-		alert("An analysis is already in progress.")
-		return
-	}
-	if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys || _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length === 0 || !_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model) {
-		alert("Please add at least one API key and select a model in the Configuration tab first.")
-		document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click()
-		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true)
-		return
-	}
+async function startAnalysis(isContinuation = false) {
+	try {
+		if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning) {
+			alert("An analysis is already in progress.")
+			return
+		}
+		if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys || _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length === 0 || !_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model) {
+			alert("Please add at least one API key and select a model in the Configuration tab first.")
+			document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click()
+			;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true)
+			return
+		}
 
-	const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1)
+		const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1)
 
-	if (!isContinuation) {
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = []
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.clear()
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentApiKeyIndex = 0
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentIteration = 1
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.totalIterations = deepAnalysisDepth
-		document.getElementById("wtr-if-results").innerHTML = ""
-		document.getElementById("wtr-if-continue-btn").disabled = true
-		document.getElementById("wtr-if-filter-select").value = "all"
-		// Clear session results only when starting a completely new analysis
-		;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .clearSessionResults */ .qk)()
-	}
-	// For continuation analysis, keep the continue button enabled if results exist
-	if (isContinuation && _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.session.hasSavedResults) {
-		document.getElementById("wtr-if-continue-btn").disabled = false
-	}
+		if (!isContinuation) {
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = []
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.clear()
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentApiKeyIndex = 0
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.currentIteration = 1
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.totalIterations = deepAnalysisDepth
+			document.getElementById("wtr-if-results").innerHTML = ""
+			document.getElementById("wtr-if-continue-btn").disabled = true
+			document.getElementById("wtr-if-filter-select").value = "all"
+			// Clear session results only when starting a completely new analysis
+			;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .clearSessionResults */ .qk)()
+		}
+		if (isContinuation && _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.session.hasSavedResults) {
+			document.getElementById("wtr-if-continue-btn").disabled = false
+		}
 
-	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson) {
-		document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
-		document.getElementById("wtr-if-file-input").click()
-	} else {
+		if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson) {
+			document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
+			document.getElementById("wtr-if-file-input").click()
+			return
+		}
+
+		let liveTerms = []
+		if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync && (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()) {
+			const novelSlug = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .getNovelSlug */ .Ir)()
+			const syncedTerms = await (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .requestTermsFromWTRLabTermReplacer */ .dH)(novelSlug)
+
+			if (Array.isArray(syncedTerms)) {
+				liveTerms = syncedTerms
+				;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Using ${liveTerms.length} live terms from WTR Lab Term Replacer for analysis.`)
+			} else {
+				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
+					"Live term sync from WTR Lab Term Replacer was unavailable. Continuing without preloaded replacements.",
+				)
+				const statusEl = document.getElementById("wtr-if-status")
+				if (statusEl) {
+					statusEl.textContent =
+						"Live Term Replacer sync unavailable; analyzing without preloaded replacements."
+					setTimeout(() => {
+						if (statusEl) {
+							statusEl.textContent = ""
+						}
+					}, 3500)
+				}
+			}
+		}
+
 		const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)()
-		// Apply smart quotes replacement first, then term replacements
 		const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
-		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData)
+		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData, liveTerms)
 		;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(
 			processedData,
 			isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [],
 			deepAnalysisDepth,
 		)
 		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false)
+	} catch (error) {
+		(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to start analysis.", error)
+		alert(`Failed to start analysis. ${error instanceof Error ? error.message : String(error)}`)
 	}
 }
 
@@ -3832,6 +3862,7 @@ async function handleSaveConfig() {
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath = providerSettings.chatCompletionsPath
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = providerSettings.modelsPath
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = document.getElementById("wtr-if-model").value
+	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson = document.getElementById("wtr-if-use-json").checked
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
@@ -4404,8 +4435,11 @@ function importConfiguration() {
 				;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)()
 
 				// Update form fields
+				document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
+					_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync
 				document.getElementById("wtr-if-use-json").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson
 				document.getElementById("wtr-if-logging-enabled").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled
+				;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)()
 				document.getElementById("wtr-if-auto-restore").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults
 				document.getElementById("wtr-if-temperature").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature
 				document.getElementById("wtr-if-temp-value").textContent = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature
@@ -4499,31 +4533,7 @@ function addEventListeners() {
 
 			// When switching to config tab, re-evaluate WTR Lab Term Replacer state
 			if (targetTab === "config") {
-				try {
-					const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
-					const useJsonContainer = document.getElementById("wtr-if-use-json-container")
-					const useJsonCheckbox = document.getElementById("wtr-if-use-json")
-					const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-
-					if (useJsonContainer && useJsonCheckbox && modeHint) {
-						if (isExternal) {
-							useJsonContainer.style.display = ""
-							useJsonCheckbox.disabled = false
-							modeHint.textContent =
-								"Detected WTR Lab Term Replacer userscript. You can use JSON mode or direct Apply integration."
-						} else {
-							useJsonContainer.style.display = "none"
-							useJsonCheckbox.checked = false
-							if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson) {
-								_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson = false
-							}
-							modeHint.textContent =
-								"External WTR Lab Term Replacer userscript not detected. JSON integration is disabled; using built-in behavior."
-						}
-					}
-				} catch (err) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.", err)
-				}
+				(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)()
 			}
 		})
 	})
@@ -4539,25 +4549,21 @@ function addEventListeners() {
 		}
 	})
 
+	const liveSyncCheckbox = panel.querySelector("#wtr-if-use-live-term-replacer-sync")
+	if (liveSyncCheckbox) {
+		liveSyncCheckbox.addEventListener("change", (e) => {
+			_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync = e.target.checked
+			;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
+			;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)()
+		})
+	}
+
 	// Delayed-load handling: re-check external userscript presence shortly after init.
 	// This is allowed to call updateApplyCopyButtonsMode(), which no-ops if Finder DOM
 	// is not yet present, so it does not create stale wiring.
 	setTimeout(() => {
 		try {
-			const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
-			const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-			if (modeHint) {
-				if (isExternal) {
-					modeHint.textContent =
-						"Detected WTR Lab Term Replacer userscript. Apply buttons will send terms directly to the external replacer."
-				} else if (!modeHint.textContent) {
-					modeHint.textContent =
-						"External WTR Lab Term Replacer userscript not detected yet. Actions will operate in safe (copy/manual) mode unless the userscript loads."
-				}
-			}
-
-			// Ensure Finder buttons reflect the latest detection state AFTER this delayed check,
-			// but only if the Finder DOM exists (function itself performs this guard).
+			(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)()
 			updateApplyCopyButtonsMode()
 		} catch (err) {
 			(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR Lab Term Replacer delayed detection check failed; continuing safely.", err)
@@ -4607,7 +4613,8 @@ __webpack_require__.d(__webpack_exports__, {
   jH: () => (/* binding */ renderApiKeysUI),
   Nh: () => (/* binding */ syncProviderConfigUI),
   Pj: () => (/* binding */ togglePanel),
-  LI: () => (/* binding */ updateStatusIndicator)
+  LI: () => (/* binding */ updateStatusIndicator),
+  cB: () => (/* binding */ updateTermReplacerIntegrationUI)
 });
 
 // UNUSED EXPORTS: getCollisionAvoidanceStatus, setCollisionMonitoring, setupConflictObserver
@@ -4625,8 +4632,8 @@ var utils = __webpack_require__(395);
 // Shared runtime version information for the userscript UI
 
 const FALLBACK_VERSION_INFO = {
-	SEMANTIC: "5.4.0",
-	DISPLAY: "v5.4.0",
+	SEMANTIC: "5.4.1",
+	DISPLAY: "v5.4.1",
 	BUILD_ENV: "production",
 	BUILD_DATE: "2026-04-04",
 }
@@ -4820,10 +4827,16 @@ function createUI() {
                             <h3><i class="wtr-if-icon">⚙️</i> Advanced Settings</h3>
                         </div>
                         <div class="wtr-if-section-content">
+                            <div class="wtr-if-form-group" id="wtr-if-use-live-term-replacer-sync-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-live-term-replacer-sync">
+                                    Use Live Term Replacer Terms Automatically During Analysis
+                                </label>
+                            </div>
                             <div class="wtr-if-form-group" id="wtr-if-use-json-container">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-json">
-                                    Use Term Replacer JSON File
+                                    Use Imported Term Replacer JSON File (Optional Override)
                                 </label>
                             </div>
                             <div class="wtr-if-form-group">
@@ -5063,6 +5076,44 @@ function addApiKeyRow() {
 	keyRow.querySelector("input").focus()
 }
 
+function updateTermReplacerIntegrationUI() {
+	try {
+		const isExternalReplacerAvailable = (0,utils/* isWTRLabTermReplacerLoaded */.mT)()
+		const liveSyncContainer = document.getElementById("wtr-if-use-live-term-replacer-sync-container")
+		const liveSyncCheckbox = document.getElementById("wtr-if-use-live-term-replacer-sync")
+		const useJsonContainer = document.getElementById("wtr-if-use-json-container")
+		const useJsonCheckbox = document.getElementById("wtr-if-use-json")
+		const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
+
+		if (!liveSyncContainer || !liveSyncCheckbox || !useJsonContainer || !useJsonCheckbox || !modeHint) {
+			return
+		}
+
+		if (isExternalReplacerAvailable) {
+			liveSyncContainer.style.display = ""
+			liveSyncCheckbox.disabled = false
+			liveSyncCheckbox.checked = Boolean(state/* appState */.XJ.config.useLiveTermReplacerSync)
+			useJsonContainer.style.display = ""
+			useJsonCheckbox.disabled = false
+
+			modeHint.textContent = state/* appState */.XJ.config.useLiveTermReplacerSync
+				? "Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Enable JSON mode only if you want to import a backup file instead."
+				: "Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on."
+		} else {
+			liveSyncContainer.style.display = "none"
+			useJsonContainer.style.display = "none"
+			useJsonCheckbox.checked = false
+			if (state/* appState */.XJ.config.useJson) {
+				state/* appState */.XJ.config.useJson = false
+			}
+			modeHint.textContent =
+				"External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
+		}
+	} catch (e) {
+		(0,utils/* log */.Rm)("WTR Lab Term Replacer UI integration update failed; continuing in safe mode.", e)
+	}
+}
+
 async function togglePanel(show = null) {
 	const panel = document.getElementById("wtr-if-panel")
 	if (!panel) {
@@ -5079,6 +5130,7 @@ async function togglePanel(show = null) {
 		document.getElementById("wtr-if-provider-chat-path").value = state/* appState */.XJ.config.providerChatCompletionsPath
 		document.getElementById("wtr-if-provider-models-path").value = state/* appState */.XJ.config.providerModelsPath
 		syncProviderConfigUI()
+		document.getElementById("wtr-if-use-live-term-replacer-sync").checked = state/* appState */.XJ.config.useLiveTermReplacerSync
 		document.getElementById("wtr-if-use-json").checked = state/* appState */.XJ.config.useJson
 		document.getElementById("wtr-if-logging-enabled").checked = state/* appState */.XJ.config.loggingEnabled
 		document.getElementById("wtr-if-auto-restore").checked = state/* appState */.XJ.preferences.autoRestoreResults
@@ -5108,38 +5160,7 @@ async function togglePanel(show = null) {
 		await populateModelSelector()
 
 		// Apply dynamic UI based on WTR Lab Term Replacer detection
-		try {
-			const isExternalReplacerAvailable = (0,utils/* isWTRLabTermReplacerLoaded */.mT)()
-			const useJsonContainer = document.getElementById("wtr-if-use-json-container")
-			const useJsonCheckbox = document.getElementById("wtr-if-use-json")
-			const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-
-			if (useJsonContainer && useJsonCheckbox && modeHint) {
-				if (isExternalReplacerAvailable) {
-					// External userscript present:
-					// - Show the JSON option so users can integrate with its format.
-					// - Keep current checkbox state (from config).
-					useJsonContainer.style.display = ""
-					useJsonCheckbox.disabled = false
-					modeHint.textContent =
-						"Detected WTR Lab Term Replacer userscript. You can use the Term Replacer JSON file format or send suggestions directly via the integration buttons."
-				} else {
-					// Safe mode when external script is not detected:
-					// - Hide JSON option (to avoid confusion with unsupported integration).
-					// - Force config flag off to keep behavior consistent.
-					useJsonContainer.style.display = "none"
-					useJsonCheckbox.checked = false
-					if (state/* appState */.XJ.config.useJson) {
-						state/* appState */.XJ.config.useJson = false
-					}
-					modeHint.textContent =
-						"External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
-				}
-			}
-		} catch (e) {
-			// Never break panel rendering on detection failure
-			(0,utils/* log */.Rm)("WTR Lab Term Replacer UI integration (togglePanel) failed; continuing in safe mode.", e)
-		}
+		updateTermReplacerIntegrationUI()
 
 		// Check for session results and show restore option if available
 		const sessionRestore = document.getElementById("wtr-if-session-restore")
@@ -5591,6 +5612,7 @@ function getCollisionAvoidanceStatus() {
 /* harmony export */   ZD: () => (/* binding */ escapeHtml),
 /* harmony export */   bd: () => (/* binding */ mergeAnalysisResults),
 /* harmony export */   bn: () => (/* binding */ crawlChapterData),
+/* harmony export */   dH: () => (/* binding */ requestTermsFromWTRLabTermReplacer),
 /* harmony export */   eM: () => (/* binding */ truncateForLog),
 /* harmony export */   fN: () => (/* binding */ summarizeContextResults),
 /* harmony export */   mT: () => (/* binding */ isWTRLabTermReplacerLoaded),
@@ -6491,47 +6513,58 @@ function escapeHtml(unsafe) {
  * - Defensive: never throws, always falls back to `false` on errors.
  * - Heuristic-based: checks multiple non-breaking indicators.
  * - Side-effect free: does not modify any external state.
- *
- * Detection heuristics (any passing => detected):
- * - Presence of known global hooks (e.g. window.WTR_LAB_TERM_REPLACER, window.wtrLabTermReplacer)
- * - Presence of a well-known DOM marker element/attribute used by the replacer
- * - Presence of a registered listener for the "wtr:addTerm" CustomEvent on window
- *
- * Note: Listener detection is best-effort. If it cannot be verified reliably,
- *       this helper will not treat it as fatal and will default to safe mode.
  */
 let _wtrReplacerDetectionCache = {
 	lastResult: false,
 	lastCheck: 0,
 }
 
+function normalizeLiveTermReplacerTerms(terms) {
+	if (!Array.isArray(terms)) {
+		return []
+	}
+
+	return terms
+		.filter(
+			(term) =>
+				term &&
+				typeof term === "object" &&
+				typeof term.original === "string" &&
+				Object.prototype.hasOwnProperty.call(term, "replacement"),
+		)
+		.map((term) => ({
+			...term,
+			wholeWord: term.wholeWord ?? false,
+		}))
+}
+
 /**
  * Detect whether the external "WTR Lab Term Replacer" userscript is loaded.
  *
- * Primary rule:
- *   - Returns true iff the well-known settings button injected by the real script exists:
- *       .replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm
+ * Detection heuristics (any passing => detected):
+ * - Presence of a well-known global integration marker
+ * - Presence of the injected settings button used by the replacer UI
  *
  * Behavior:
- *   - Defensive: exceptions are caught and logged; returns false on error.
- *   - Cached: repeated calls within a short window reuse the last result to avoid DOM thrash.
- *   - Side-effect free: does not modify external script state.
+ * - Defensive: exceptions are caught and logged; returns false on error.
+ * - Cached: repeated calls within a short window reuse the last result to avoid DOM thrash.
+ * - Side-effect free: does not modify external script state.
  */
 function isWTRLabTermReplacerLoaded() {
 	try {
 		const now = Date.now()
 		const CACHE_WINDOW_MS = 3000
 
-		// Use cached value if within the cache window
 		if (now - _wtrReplacerDetectionCache.lastCheck < CACHE_WINDOW_MS) {
 			return _wtrReplacerDetectionCache.lastResult
 		}
 
+		const globalMarker = window.WTR_LAB_TERM_REPLACER
 		const marker = document.querySelector(
 			".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm",
 		)
 
-		const detected = Boolean(marker)
+		const detected = Boolean(globalMarker?.ready || marker)
 
 		_wtrReplacerDetectionCache = {
 			lastResult: detected,
@@ -6539,7 +6572,7 @@ function isWTRLabTermReplacerLoaded() {
 		}
 
 		if (detected) {
-			log("WTR Lab Term Replacer detection: positive via settings button marker.")
+			log("WTR Lab Term Replacer detection: positive via global marker or settings button marker.")
 		}
 
 		return detected
@@ -6553,6 +6586,78 @@ function isWTRLabTermReplacerLoaded() {
 	}
 }
 
+/**
+ * Request the live term list for the current novel from the external WTR Lab Term Replacer userscript.
+ *
+ * Returns:
+ * - `Array` of normalized term objects on success (including empty array if no terms exist)
+ * - `null` if the bridge is unavailable, times out, or responds with an error
+ */
+function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
+	if (!novelSlug || !isWTRLabTermReplacerLoaded()) {
+		return Promise.resolve(null)
+	}
+
+	const timeoutMs = Math.max(250, Number(options.timeoutMs) || 1500)
+	const requestId = `wtr-if-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+	return new Promise((resolve) => {
+		let isSettled = false
+		let timeoutId = null
+
+		const cleanup = () => {
+			window.removeEventListener("wtr:termsResponse", handleResponse)
+			if (timeoutId !== null) {
+				window.clearTimeout(timeoutId)
+			}
+		}
+
+		const finish = (value) => {
+			if (isSettled) {
+				return
+			}
+			isSettled = true
+			cleanup()
+			resolve(value)
+		}
+
+		const handleResponse = (event) => {
+			const detail = event?.detail || {}
+			if (detail.requestId !== requestId) {
+				return
+			}
+
+			if (detail.success === false) {
+				log("WTR Lab Term Replacer live term request failed.", detail.error || "Unknown bridge error")
+				finish(null)
+				return
+			}
+
+			finish(normalizeLiveTermReplacerTerms(detail.terms))
+		}
+
+		window.addEventListener("wtr:termsResponse", handleResponse)
+		timeoutId = window.setTimeout(() => {
+			log(`Timed out after ${timeoutMs}ms while requesting live terms from WTR Lab Term Replacer.`)
+			finish(null)
+		}, timeoutMs)
+
+		try {
+			window.dispatchEvent(
+				new CustomEvent("wtr:requestTerms", {
+					detail: {
+						requestId,
+						novelSlug,
+					},
+				}),
+			)
+		} catch (error) {
+			log("Failed to dispatch live term request to WTR Lab Term Replacer.", error)
+			finish(null)
+		}
+	})
+}
+
 
 /***/ },
 
@@ -6560,7 +6665,7 @@ function isWTRLabTermReplacerLoaded() {
 (module) {
 
 "use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.4.0","description":"Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.4.1","description":"Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
 
 /***/ }
 

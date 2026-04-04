@@ -2,8 +2,8 @@
 // Shared runtime version information for the userscript UI
 
 const FALLBACK_VERSION_INFO = {
-	SEMANTIC: "5.4.0",
-	DISPLAY: "v5.4.0",
+	SEMANTIC: "5.4.1",
+	DISPLAY: "v5.4.1",
 	BUILD_ENV: "production",
 	BUILD_DATE: "2026-04-04",
 }
