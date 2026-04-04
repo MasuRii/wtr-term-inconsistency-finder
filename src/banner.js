@@ -1,11 +1,11 @@
 /**
- * WTR Term Inconsistency Finder v5.3.8
+ * WTR Term Inconsistency Finder v5.4.0
  * Built: 2026-04-04 (production)
  *
  * A powerful userscript to find term inconsistencies in WTR Lab chapters
- * using Gemini AI with smart rotation and background processing.
+ * using Gemini and OpenAI-compatible AI providers with smart rotation and background processing.
  *
- * @version 5.3.8
+ * @version 5.4.0
  * @build production
  * @date 2026-04-04
  */
