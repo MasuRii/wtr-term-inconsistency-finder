@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [5.3.9] - 2026-04-04
+
+### ✨ Added
+- **Version Badge in UI Header**: Added a visible version indicator badge to the panel header, making it easy to identify the current script version at a glance. The badge displays the version number (e.g., `v5.3.9`) and includes a tooltip showing the build date and environment.
+- **Node.js Engine Requirement**: Added `engines` field to `package.json` specifying Node.js >=20.19.0 as the minimum required version.
+
+### ♻️ Changed
+- **Dependency Updates**: Updated all dev dependencies to their latest compatible versions:
+  - ESLint 9.39.4 (held at v9 due to `eslint-plugin-import` compatibility)
+  - Prettier 3.8.1
+  - Stylelint 17.6.0 with stylelint-config-standard 40.0.0
+  - Webpack 5.105.4, webpack-cli 7.0.2, webpack-dev-server 5.2.3
+  - css-loader 7.1.4, eslint-plugin-prettier 5.5.5
+- **Build Pipeline Order**: Fixed build script execution order so `version:update` runs before `format` and `lint:fix`, ensuring generated files are properly formatted before linting.
+- **Version Script Enhancement**: Extended `update-versions.js` to automatically sync `src/version.js` fallback values, preventing the UI version badge from showing stale data.
+- **Version Module Refactor**: Converted `src/version.js` to proper ESM exports while maintaining browser globals for backward compatibility.
+
+### 🐛 Fixed
+- **Broken `version:check` Script**: Corrected the command alias from pointing to `version` (invalid) to `check` (valid), restoring `npm run version:check` functionality.
+- **Generated File Formatting**: Fixed formatting issues in generated `banner.js` and `header.js` that caused lint errors after builds.
+
+### ⚙️ Internal
+- **ESLint 10 Compatibility Note**: Intentionally held ESLint at v9.x because `eslint-plugin-import` only supports ESLint ^9 (peer dependency constraint). Will upgrade to ESLint 10 once plugin support is available.
+
+---
 ## [5.3.8] - 2025-11-17
 
 ### ♻️ Changed

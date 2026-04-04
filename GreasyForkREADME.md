@@ -1,5 +1,7 @@
 # 🤖 WTR Lab Term Inconsistency Finder
 
+[![Version](https://img.shields.io/badge/version-5.3.9-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+
 [![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
 
 A powerful userscript that uses Google Gemini AI to find translation inconsistencies in WTR Lab chapters. Keep your translations clean and professional!
