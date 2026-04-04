@@ -1,4 +1,5 @@
 // src/modules/state.js
+import { DEFAULT_PROVIDER_TYPE, PROVIDER_DEFAULTS, AI_PROVIDERS, resolveProviderSettings } from "./providerConfig"
 import { log } from "./utils"
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_"
@@ -11,6 +12,10 @@ export const appState = {
 	// Configuration
 	config: {
 		apiKeys: [],
+		providerType: DEFAULT_PROVIDER_TYPE,
+		providerBaseUrl: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].baseUrl,
+		providerChatCompletionsPath: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].chatCompletionsPath,
+		providerModelsPath: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].modelsPath,
 		model: "",
 		useJson: false,
 		loggingEnabled: false,
@@ -102,6 +107,31 @@ export async function loadConfig() {
 	}
 	// --- End Migration ---
 
+	const looksLikeLegacyGeminiConfig =
+		!savedConfig.providerType &&
+		(Array.isArray(savedConfig.apiKeys) ||
+			typeof savedConfig.apiKey === "string" ||
+			typeof savedConfig.model === "string")
+
+	if (looksLikeLegacyGeminiConfig) {
+		savedConfig.providerType = AI_PROVIDERS.GEMINI
+		log("Migrating legacy Gemini configuration to provider-aware settings.")
+	}
+
+	const providerType = savedConfig.providerType || DEFAULT_PROVIDER_TYPE
+	const providerDefaults =
+		PROVIDER_DEFAULTS[providerType === AI_PROVIDERS.GEMINI ? AI_PROVIDERS.GEMINI : DEFAULT_PROVIDER_TYPE]
+
+	if (!savedConfig.providerBaseUrl) {
+		savedConfig.providerBaseUrl = providerDefaults.baseUrl
+	}
+	if (!savedConfig.providerChatCompletionsPath) {
+		savedConfig.providerChatCompletionsPath = providerDefaults.chatCompletionsPath
+	}
+	if (!savedConfig.providerModelsPath) {
+		savedConfig.providerModelsPath = providerDefaults.modelsPath
+	}
+
 	// Load preferences from saved config if they exist
 	if (savedConfig.preferences) {
 		appState.preferences = {
@@ -115,6 +145,12 @@ export async function loadConfig() {
 		...appState.config,
 		...savedConfig,
 	}
+
+	const resolvedProvider = resolveProviderSettings(appState.config)
+	appState.config.providerType = resolvedProvider.providerType
+	appState.config.providerBaseUrl = resolvedProvider.baseUrl
+	appState.config.providerChatCompletionsPath = resolvedProvider.chatCompletionsPath
+	appState.config.providerModelsPath = resolvedProvider.modelsPath
 
 	// Load session results if available
 	const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY)
@@ -160,8 +196,13 @@ export async function loadConfig() {
 
 export async function saveConfig() {
 	try {
+		const resolvedProvider = resolveProviderSettings(appState.config)
 		const configToSave = {
 			...appState.config,
+			providerType: resolvedProvider.providerType,
+			providerBaseUrl: resolvedProvider.baseUrl,
+			providerChatCompletionsPath: resolvedProvider.chatCompletionsPath,
+			providerModelsPath: resolvedProvider.modelsPath,
 			preferences: appState.preferences,
 		}
 		await GM_setValue(CONFIG_KEY, configToSave)
@@ -170,6 +211,11 @@ export async function saveConfig() {
 		console.error("Inconsistency Finder: Error saving config:", e)
 		return false
 	}
+}
+
+export function getModelsCacheBucket(config = appState.config) {
+	const provider = resolveProviderSettings(config)
+	return [provider.providerType, provider.baseUrl.toLowerCase(), provider.modelsPath].join("|")
 }
 
 export function saveSessionResults() {
@@ -250,9 +296,7 @@ export function loadKeyStates() {
 		const serializedNormalized = JSON.stringify(normalizedStates)
 		if (serializedOriginal !== serializedNormalized) {
 			saveKeyStates(normalizedStates)
-			log(
-				"Inconsistency Finder: Normalized API key states on load to prevent stale cooldown or invalid metadata.",
-			)
+			log("Normalized API key states on load to prevent stale cooldown or invalid metadata.")
 		}
 
 		return normalizedStates

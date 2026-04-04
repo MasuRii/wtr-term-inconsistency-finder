@@ -1,5 +1,6 @@
 // src/modules/ui/events.js
 import { appState, saveConfig, clearSessionResults } from "../state"
+import { AI_PROVIDERS, PROVIDER_DEFAULTS, resolveProviderSettings } from "../providerConfig"
 import {
 	crawlChapterData,
 	applyTermReplacements,
@@ -16,6 +17,7 @@ import {
 	addApiKeyRow,
 	renderApiKeysUI,
 	populateModelSelector,
+	syncProviderConfigUI,
 	updateStatusIndicator,
 } from "./panel"
 import { displayResults } from "./display"
@@ -76,7 +78,7 @@ function safeSetStyle(element, property, value) {
 	return false
 }
 
-export function handleSaveConfig() {
+export async function handleSaveConfig() {
 	const keyInputs = document.querySelectorAll(".wtr-if-api-key-input")
 	const newApiKeys = []
 	keyInputs.forEach((input) => {
@@ -85,14 +87,26 @@ export function handleSaveConfig() {
 			newApiKeys.push(key)
 		}
 	})
+
+	const providerSettings = resolveProviderSettings({
+		providerType: document.getElementById("wtr-if-provider-type").value,
+		providerBaseUrl: document.getElementById("wtr-if-provider-base-url").value,
+		providerChatCompletionsPath: document.getElementById("wtr-if-provider-chat-path").value,
+		providerModelsPath: document.getElementById("wtr-if-provider-models-path").value,
+	})
+
 	appState.config.apiKeys = newApiKeys
+	appState.config.providerType = providerSettings.providerType
+	appState.config.providerBaseUrl = providerSettings.baseUrl
+	appState.config.providerChatCompletionsPath = providerSettings.chatCompletionsPath
+	appState.config.providerModelsPath = providerSettings.modelsPath
 	appState.config.model = document.getElementById("wtr-if-model").value
 	appState.config.useJson = document.getElementById("wtr-if-use-json").checked
 	appState.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	appState.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
 	const statusEl = document.getElementById("wtr-if-status")
 	statusEl.textContent = "Saving..."
-	const success = saveConfig()
+	const success = await saveConfig()
 	statusEl.textContent = success ? "Configuration saved successfully!" : "Failed to save configuration."
 	setTimeout(() => (statusEl.textContent = ""), 3000)
 }
@@ -635,6 +649,11 @@ function importConfiguration() {
 					...appState.config,
 					...data.config,
 				}
+				const importedProviderSettings = resolveProviderSettings(appState.config)
+				appState.config.providerType = importedProviderSettings.providerType
+				appState.config.providerBaseUrl = importedProviderSettings.baseUrl
+				appState.config.providerChatCompletionsPath = importedProviderSettings.chatCompletionsPath
+				appState.config.providerModelsPath = importedProviderSettings.modelsPath
 				if (data.preferences) {
 					appState.preferences = {
 						...appState.preferences,
@@ -646,6 +665,11 @@ function importConfiguration() {
 
 				// Refresh UI
 				renderApiKeysUI()
+				document.getElementById("wtr-if-provider-type").value = appState.config.providerType
+				document.getElementById("wtr-if-provider-base-url").value = appState.config.providerBaseUrl
+				document.getElementById("wtr-if-provider-chat-path").value = appState.config.providerChatCompletionsPath
+				document.getElementById("wtr-if-provider-models-path").value = appState.config.providerModelsPath
+				syncProviderConfigUI()
 				populateModelSelector()
 
 				// Update form fields
@@ -674,7 +698,9 @@ export function addEventListeners() {
 	}
 
 	panel.querySelector(".wtr-if-close-btn").addEventListener("click", () => togglePanel(false))
-	panel.querySelector("#wtr-if-save-config-btn").addEventListener("click", handleSaveConfig)
+	panel.querySelector("#wtr-if-save-config-btn").addEventListener("click", () => {
+		handleSaveConfig()
+	})
 	panel.querySelector("#wtr-if-find-btn").addEventListener("click", handleFindInconsistencies)
 	panel.querySelector("#wtr-if-continue-btn").addEventListener("click", handleContinueAnalysis)
 	panel.querySelector("#wtr-if-refresh-models-btn").addEventListener("click", fetchAndCacheModels)
@@ -702,6 +728,22 @@ export function addEventListeners() {
 	panel.querySelector("#wtr-if-auto-restore").addEventListener("change", (e) => {
 		appState.preferences.autoRestoreResults = e.target.checked
 		saveConfig()
+	})
+
+	panel.querySelector("#wtr-if-provider-type").addEventListener("change", (e) => {
+		const providerType =
+			e.target.value === AI_PROVIDERS.GEMINI ? AI_PROVIDERS.GEMINI : AI_PROVIDERS.OPENAI_COMPATIBLE
+		const defaults = PROVIDER_DEFAULTS[providerType]
+		document.getElementById("wtr-if-provider-base-url").value = defaults.baseUrl
+		document.getElementById("wtr-if-provider-chat-path").value = defaults.chatCompletionsPath
+		document.getElementById("wtr-if-provider-models-path").value = defaults.modelsPath
+		appState.config.providerType = providerType
+		appState.config.providerBaseUrl = defaults.baseUrl
+		appState.config.providerChatCompletionsPath = defaults.chatCompletionsPath
+		appState.config.providerModelsPath = defaults.modelsPath
+		appState.config.model = ""
+		syncProviderConfigUI()
+		populateModelSelector()
 	})
 
 	panel.querySelector("#wtr-if-deep-analysis-depth").addEventListener("change", (e) => {

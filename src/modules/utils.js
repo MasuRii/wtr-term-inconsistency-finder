@@ -2,9 +2,41 @@
 import { appState } from "./state"
 
 // --- UTILITY FUNCTIONS ---
+export function truncateForLog(value, maxLength = 280) {
+	if (typeof value !== "string") {
+		return value
+	}
+
+	if (value.length <= maxLength) {
+		return value
+	}
+
+	return `${value.slice(0, maxLength)}… [truncated ${value.length - maxLength} chars]`
+}
+
+export function summarizeForLog(value, maxStringLength = 280) {
+	if (typeof value === "string") {
+		return truncateForLog(value, maxStringLength)
+	}
+
+	if (Array.isArray(value)) {
+		return {
+			type: "array",
+			length: value.length,
+			preview: value.slice(0, 3),
+		}
+	}
+
+	if (value && typeof value === "object") {
+		return value
+	}
+
+	return value
+}
+
 export function log(...args) {
 	if (appState.config.loggingEnabled) {
-		console.log("Inconsistency Finder:", ...args)
+		console.log("Inconsistency Finder:", ...args.map((arg) => summarizeForLog(arg)))
 	}
 }
 

@@ -1,6 +1,7 @@
 // src/modules/ui/panel.js
-import { appState, MODELS_CACHE_KEY } from "../state"
+import { appState, MODELS_CACHE_KEY, getModelsCacheBucket } from "../state"
 import { getAvailableApiKey } from "../geminiApi"
+import { AI_PROVIDERS, PROVIDER_DEFAULTS, buildModelsRequest, parseModelsResponse } from "../providerConfig"
 import { escapeHtml, log, isWTRLabTermReplacerLoaded } from "../utils"
 import { VERSION_INFO } from "../../version"
 import { addEventListeners, handleRestoreSession } from "./events"
@@ -100,14 +101,36 @@ export function createUI() {
                     </div>
                 </div>
                 <div id="wtr-if-tab-config" class="wtr-if-tab-content">
-                    <!-- API Keys Management Section -->
+                    <!-- Provider & API Keys Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔑</i> API Keys Management</h3>
+                            <h3><i class="wtr-if-icon">🔌</i> Provider Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
-                                <label>Gemini API Keys</label>
+                                <label for="wtr-if-provider-type">AI Provider</label>
+                                <select id="wtr-if-provider-type">
+                                    <option value="openai-compatible">OpenAI-Compatible</option>
+                                    <option value="gemini">Google Gemini</option>
+                                </select>
+                                <small id="wtr-if-provider-hint" class="wtr-if-hint"></small>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-provider-base-url" id="wtr-if-provider-base-url-label">Provider Base URL</label>
+                                <input type="text" id="wtr-if-provider-base-url" placeholder="https://api.openai.com">
+                            </div>
+                            <div id="wtr-if-openai-compatible-fields">
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-provider-chat-path">Chat Completions Path</label>
+                                    <input type="text" id="wtr-if-provider-chat-path" placeholder="/v1/chat/completions">
+                                </div>
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-provider-models-path">Models Path</label>
+                                    <input type="text" id="wtr-if-provider-models-path" placeholder="/v1/models">
+                                </div>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label id="wtr-if-api-key-label">API Keys</label>
                                 <div class="wtr-if-api-keys-container-wrapper">
                                     <div id="wtr-if-api-keys-container"></div>
                                 </div>
@@ -123,7 +146,7 @@ export function createUI() {
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
-                                <label for="wtr-if-model">Gemini Model</label>
+                                <label for="wtr-if-model" id="wtr-if-model-label">OpenAI-Compatible Model</label>
                                 <div class="wtr-if-model-controls">
                                     <select id="wtr-if-model"></select>
                                     <button id="wtr-if-refresh-models-btn" class="wtr-if-btn wtr-if-btn-secondary">Refresh List</button>
@@ -213,6 +236,59 @@ export function createUI() {
 	addEventListeners()
 }
 
+function getCachedModelsData(cacheState, providerBucket) {
+	if (cacheState && Array.isArray(cacheState.models)) {
+		return cacheState
+	}
+
+	if (!cacheState || typeof cacheState !== "object") {
+		return null
+	}
+
+	return cacheState[providerBucket] || null
+}
+
+export function syncProviderConfigUI() {
+	const providerType = document.getElementById("wtr-if-provider-type")?.value || AI_PROVIDERS.OPENAI_COMPATIBLE
+	const defaults = PROVIDER_DEFAULTS[providerType] || PROVIDER_DEFAULTS[AI_PROVIDERS.OPENAI_COMPATIBLE]
+	const apiKeyLabel = document.getElementById("wtr-if-api-key-label")
+	const modelLabel = document.getElementById("wtr-if-model-label")
+	const baseUrlLabel = document.getElementById("wtr-if-provider-base-url-label")
+	const baseUrlInput = document.getElementById("wtr-if-provider-base-url")
+	const providerHint = document.getElementById("wtr-if-provider-hint")
+	const chatPathInput = document.getElementById("wtr-if-provider-chat-path")
+	const modelsPathInput = document.getElementById("wtr-if-provider-models-path")
+	const openAiFields = document.getElementById("wtr-if-openai-compatible-fields")
+	const isGemini = providerType === AI_PROVIDERS.GEMINI
+
+	if (apiKeyLabel) {
+		apiKeyLabel.textContent = defaults.apiKeyLabel
+	}
+	if (modelLabel) {
+		modelLabel.textContent = defaults.modelLabel
+	}
+	if (baseUrlLabel) {
+		baseUrlLabel.textContent = isGemini ? "Gemini Base URL" : "Provider Base URL"
+	}
+	if (baseUrlInput) {
+		baseUrlInput.placeholder = defaults.baseUrl
+	}
+	if (providerHint) {
+		providerHint.textContent = isGemini
+			? "Uses Gemini's native generateContent endpoint and Gemini model catalog."
+			: "Uses a configurable OpenAI-style base URL with chat completions and model discovery paths."
+	}
+	if (chatPathInput) {
+		chatPathInput.placeholder = defaults.chatCompletionsPath
+	}
+	if (modelsPathInput) {
+		modelsPathInput.placeholder = defaults.modelsPath
+	}
+	if (openAiFields) {
+		openAiFields.style.display = isGemini ? "none" : "block"
+	}
+}
+
 export async function populateModelSelector() {
 	const selectEl = document.getElementById("wtr-if-model")
 	if (!selectEl) {
@@ -220,12 +296,20 @@ export async function populateModelSelector() {
 	}
 	selectEl.innerHTML = "<option>Loading from cache...</option>"
 	selectEl.disabled = true
-	const cachedData = await GM_getValue(MODELS_CACHE_KEY, null)
-	if (cachedData && cachedData.models && cachedData.models.length > 0) {
-		selectEl.innerHTML = cachedData.models
-			.map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+	const providerBucket = getModelsCacheBucket(appState.config)
+	const cacheState = await GM_getValue(MODELS_CACHE_KEY, null)
+	const cachedData = getCachedModelsData(cacheState, providerBucket)
+	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
+
+	if (appState.config.model && !cachedModels.includes(appState.config.model)) {
+		cachedModels.unshift(appState.config.model)
+	}
+
+	if (cachedModels.length > 0) {
+		selectEl.innerHTML = cachedModels
+			.map((modelId) => `<option value="${modelId}">${modelId.replace(/^models\//, "")}</option>`)
 			.join("")
-		selectEl.value = appState.config.model
+		selectEl.value = appState.config.model || cachedModels[0]
 	} else {
 		selectEl.innerHTML = '<option value="">No models cached. Please refresh.</option>'
 	}
@@ -241,25 +325,36 @@ export async function fetchAndCacheModels() {
 		return
 	}
 	const apiKey = apiKeyInfo.key
+	const providerBucket = getModelsCacheBucket(appState.config)
+	const requestConfig = buildModelsRequest(appState.config, apiKey)
 	statusEl.textContent = "Fetching model list..."
 	document.getElementById("wtr-if-refresh-models-btn").disabled = true
 	GM_xmlhttpRequest({
-		method: "GET",
-		url: `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+		method: requestConfig.method,
+		url: requestConfig.url,
+		headers: requestConfig.headers,
 		onload: async function (response) {
 			try {
 				const data = JSON.parse(response.responseText)
-				if (data.error) {
-					throw new Error(data.error.message)
+				if (response.status >= 400) {
+					throw new Error(data?.error?.message || response.statusText || `HTTP ${response.status}`)
 				}
-				const filteredModels = data.models
-					.filter((m) => m.supportedGenerationMethods.includes("generateContent"))
-					.map((m) => m.name)
+				if (data.error) {
+					throw new Error(data.error.message || "Failed to fetch models")
+				}
+
+				const filteredModels = parseModelsResponse(appState.config, data)
 				if (filteredModels.length > 0) {
-					await GM_setValue(MODELS_CACHE_KEY, {
+					const existingCache = await GM_getValue(MODELS_CACHE_KEY, null)
+					const nextCacheState =
+						existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
+							? existingCache
+							: {}
+					nextCacheState[providerBucket] = {
 						timestamp: Date.now(),
 						models: filteredModels,
-					})
+					}
+					await GM_setValue(MODELS_CACHE_KEY, nextCacheState)
 					statusEl.textContent = `Success! Found ${filteredModels.length} models.`
 					await populateModelSelector()
 				} else {
@@ -325,6 +420,11 @@ export async function togglePanel(show = null) {
 	if (shouldShow) {
 		// Restore UI state from config
 		renderApiKeysUI()
+		document.getElementById("wtr-if-provider-type").value = appState.config.providerType
+		document.getElementById("wtr-if-provider-base-url").value = appState.config.providerBaseUrl
+		document.getElementById("wtr-if-provider-chat-path").value = appState.config.providerChatCompletionsPath
+		document.getElementById("wtr-if-provider-models-path").value = appState.config.providerModelsPath
+		syncProviderConfigUI()
 		document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 		document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
 		document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
@@ -394,10 +494,8 @@ export async function togglePanel(show = null) {
 			// - Restores results
 			// - Immediately syncs Finder Apply/Copy buttons for restored DOM
 			handleRestoreSession()
-		} else if (appState.session.hasSavedResults) {
-			sessionRestore.style.display = "block"
-		} else {
-			sessionRestore.style.display = "none"
+		} else if (sessionRestore) {
+			sessionRestore.style.display = appState.session.hasSavedResults ? "block" : "none"
 		}
 
 		// Ensure Apply/Copy button modes are synchronized after panel initialization

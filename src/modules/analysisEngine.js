@@ -1,6 +1,6 @@
 /**
  * Analysis Engine Module
- * Core analysis logic for translation consistency detection using Gemini API
+ * Core analysis logic for translation consistency detection across supported AI providers
  */
 
 // Import from state module
@@ -10,13 +10,21 @@ import { appState, saveSessionResults, getNextAvailableKey, updateKeyState } fro
 import { displayResults, updateStatusIndicator } from "./ui"
 
 // Import from utils module
-import { extractJsonFromString, log, mergeAnalysisResults } from "./utils"
+import { extractJsonFromString, log, mergeAnalysisResults, truncateForLog } from "./utils"
 
 // Import from retryLogic module
 import { MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS } from "./retryLogic"
 
 // Import from promptManager module
 import { buildPrompt, buildDeepAnalysisPrompt } from "./promptManager"
+
+// Import from providerConfig module
+import {
+	buildAnalysisRequest,
+	extractResponseText,
+	getResponseFinishReason,
+	resolveProviderSettings,
+} from "./providerConfig"
 
 // Import from apiErrorHandler module
 import { handleApiError, classifyApiError, handleRateLimitError } from "./apiErrorHandler"
@@ -54,6 +62,70 @@ export function validateApiKey() {
 export function parseApiResponse(_resultText) {
 	const cleanedJsonString = extractJsonFromString(_resultText)
 	return JSON.parse(cleanedJsonString)
+}
+
+function normalizeApiResponse(response, apiResponse) {
+	if (apiResponse?.error || response.status < 400) {
+		return apiResponse
+	}
+
+	const fallbackMessage =
+		apiResponse?.message || apiResponse?.detail || response.statusText || `HTTP ${response.status || "Unknown"}`
+
+	return {
+		...apiResponse,
+		error: {
+			message: fallbackMessage,
+			type: apiResponse?.type,
+			code: apiResponse?.code,
+		},
+	}
+}
+
+function buildMissingContentError(apiResponse) {
+	const finishReason = getResponseFinishReason(appState.config, apiResponse)
+	if (finishReason === "MAX_TOKENS" || finishReason === "length") {
+		return "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
+	}
+
+	return `Invalid API response: No content found. Finish Reason: ${finishReason || "Unknown"}`
+}
+
+function getProviderLogContext() {
+	const provider = resolveProviderSettings(appState.config)
+	return {
+		providerType: provider.providerType,
+		model: appState.config.model,
+		baseUrl: provider.baseUrl,
+	}
+}
+
+function summarizeParsedResponse(parsedResponse) {
+	if (Array.isArray(parsedResponse)) {
+		return {
+			resultType: "initial",
+			itemCount: parsedResponse.length,
+			conceptPreview: parsedResponse
+				.slice(0, 3)
+				.map((item) => item?.concept)
+				.filter(Boolean),
+		}
+	}
+
+	return {
+		resultType: "verification",
+		verifiedCount: Array.isArray(parsedResponse?.verified_inconsistencies)
+			? parsedResponse.verified_inconsistencies.length
+			: 0,
+		newCount: Array.isArray(parsedResponse?.new_inconsistencies) ? parsedResponse.new_inconsistencies.length : 0,
+		conceptPreview: [
+			...(parsedResponse?.verified_inconsistencies || []),
+			...(parsedResponse?.new_inconsistencies || []),
+		]
+			.slice(0, 3)
+			.map((item) => item?.concept)
+			.filter(Boolean),
+	}
 }
 
 /**
@@ -101,35 +173,35 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 	updateStatusIndicator("running", `${operationName} (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`)
 
 	const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-	log(
-		`${operationName}: Sending ${
-			combinedText.length
-		} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-	)
+	log(`${operationName}: Dispatching request.`, {
+		...getProviderLogContext(),
+		keyIndex: currentKeyIndex,
+		attempt: retryCount + 1,
+		chapterCount: chapterData.length,
+		characterCount: combinedText.length,
+	})
 
 	const prompt = buildPrompt(combinedText, existingResults)
-	const requestData = {
-		contents: [{ parts: [{ text: prompt }] }],
-		generationConfig: {
-			temperature: appState.config.temperature,
-		},
-	}
+	const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
 
 	GM_xmlhttpRequest({
-		method: "POST",
-		url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-		headers: {
-			"Content-Type": "application/json",
-		},
-		data: JSON.stringify(requestData),
+		method: requestConfig.method,
+		url: requestConfig.url,
+		headers: requestConfig.headers,
+		data: requestConfig.data,
 		onload: function (response) {
-			log("Received raw response from API:", response.responseText)
+			log(`${operationName}: Received API response.`, {
+				...getProviderLogContext(),
+				httpStatus: response.status,
+				responseLength: response.responseText?.length || 0,
+				responsePreview: truncateForLog(response.responseText || "", 320),
+			})
 			let apiResponse
 			let parsedResponse
 
 			// Shell parse errors are treated as retriable (can be transient)
 			try {
-				apiResponse = JSON.parse(response.responseText)
+				apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
 			} catch (e) {
 				log(
 					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -141,7 +213,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
 			// Handle explicit API error responses
 			if (apiResponse.error) {
-				const errorClassification = classifyApiError(apiResponse)
+				const errorClassification = classifyApiError(apiResponse, response.status)
 				const isRetriable = errorClassification.retriable
 
 				if (isRetriable) {
@@ -162,26 +234,19 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				return
 			}
 
-			const candidate = apiResponse.candidates?.[0]
-			if (!candidate || !candidate.content) {
-				let error
-				if (candidate?.finishReason === "MAX_TOKENS") {
-					error =
-						"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-				} else {
-					error = `Invalid API response: No content found. Finish Reason: ${
-						candidate?.finishReason || "Unknown"
-					}`
-				}
-				handleApiError(error)
+			const resultText = extractResponseText(appState.config, apiResponse)
+			if (!resultText) {
+				handleApiError(buildMissingContentError(apiResponse))
 				return
 			}
 
 			// Parse the inner content (model JSON); treat malformed JSON as retriable once
 			try {
-				const resultText = candidate.content.parts[0].text
 				parsedResponse = parseApiResponse(resultText)
-				log(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+				log(`${operationName}: Parsed API response content.`, {
+					...getProviderLogContext(),
+					...summarizeParsedResponse(parsedResponse),
+				})
 			} catch (e) {
 				if (parseRetryCount < 1) {
 					log(
@@ -355,35 +420,35 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 		const currentKeyIndex = apiKeyInfo.index
 
 		const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-		log(
-			`${operationName}: Sending ${
-				combinedText.length
-			} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-		)
+		log(`${operationName}: Dispatching request.`, {
+			...getProviderLogContext(),
+			keyIndex: currentKeyIndex,
+			attempt: retryCount + 1,
+			chapterCount: chapterData.length,
+			characterCount: combinedText.length,
+		})
 
 		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
-		const requestData = {
-			contents: [{ parts: [{ text: prompt }] }],
-			generationConfig: {
-				temperature: appState.config.temperature,
-			},
-		}
+		const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
 
 		GM_xmlhttpRequest({
-			method: "POST",
-			url: `https://generativelanguage.googleapis.com/v1beta/${appState.config.model}:generateContent?key=${currentKey}`,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			data: JSON.stringify(requestData),
+			method: requestConfig.method,
+			url: requestConfig.url,
+			headers: requestConfig.headers,
+			data: requestConfig.data,
 			onload: function (response) {
-				log("Received raw response from API:", response.responseText)
+				log(`${operationName}: Received API response.`, {
+					...getProviderLogContext(),
+					httpStatus: response.status,
+					responseLength: response.responseText?.length || 0,
+					responsePreview: truncateForLog(response.responseText || "", 320),
+				})
 				let apiResponse
 				let parsedResponse
 
 				// Shell parse: treat as retriable (can be transient / truncation)
 				try {
-					apiResponse = JSON.parse(response.responseText)
+					apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
 				} catch (e) {
 					log(
 						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -395,15 +460,14 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				}
 
 				if (apiResponse.error) {
-					const errorClassification = classifyApiError(apiResponse)
+					const errorClassification = classifyApiError(apiResponse, response.status)
 					const isRetriable = errorClassification.retriable
 
 					if (isRetriable) {
 						log(
 							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 						)
-						const cooldownSeconds = errorClassification.status === "RESOURCE_EXHAUSTED" ? 2 : 1
-						appState.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
+						handleRateLimitError(currentKeyIndex, errorClassification, updateKeyState)
 						// Immediate retry with next available key
 						retryCount++
 						executeIteration()
@@ -416,26 +480,19 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					return
 				}
 
-				const candidate = apiResponse.candidates?.[0]
-				if (!candidate || !candidate.content) {
-					let error
-					if (candidate?.finishReason === "MAX_TOKENS") {
-						error =
-							"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-					} else {
-						error = `Invalid API response: No content found. Finish Reason: ${
-							candidate?.finishReason || "Unknown"
-						}`
-					}
-					handleApiError(error)
+				const resultText = extractResponseText(appState.config, apiResponse)
+				if (!resultText) {
+					handleApiError(buildMissingContentError(apiResponse))
 					delete appState.runtime.deepAnalysisStartTimes[iterationKey]
 					return
 				}
 
 				try {
-					const resultText = candidate.content.parts[0].text
 					parsedResponse = parseApiResponse(resultText)
-					log(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+					log(`${operationName}: Parsed API response content.`, {
+						...getProviderLogContext(),
+						...summarizeParsedResponse(parsedResponse),
+					})
 				} catch (e) {
 					if (parseRetryCount < 1) {
 						log(

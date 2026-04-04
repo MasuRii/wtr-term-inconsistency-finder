@@ -3,6 +3,8 @@ import { appState } from "../state"
 import { escapeHtml, log } from "../utils"
 import { handleApplyClick, handleCopyVariationClick, updateApplyCopyButtonsMode } from "./events"
 
+const loggedNonActionableSuggestions = new Set()
+
 export function displayResults(results) {
 	// Ensure we render only into the dedicated results container inside Finder tab.
 	const finderTab = document.getElementById("wtr-if-tab-finder")
@@ -85,12 +87,16 @@ export function displayResults(results) {
 
 				// Debug logging for suggestion validation (only if enabled)
 				if (appState.config.loggingEnabled && !isActionable) {
-					log(`Suggestion validation for "${group.concept}" #${suggIndex}:`, {
-						originalSuggestion: rawSuggestion,
-						displayText: sugg.display_text,
-						finalSuggestionValue: finalSuggestionValue,
-						isActionable: isActionable,
-					})
+					const suggestionLogKey = [group.concept, suggIndex, sugg.display_text || rawSuggestion || ""]
+						.map((part) => part || "")
+						.join("|")
+					if (!loggedNonActionableSuggestions.has(suggestionLogKey)) {
+						loggedNonActionableSuggestions.add(suggestionLogKey)
+						log(`Suggestion validation skipped actionable output for "${group.concept}" #${suggIndex}.`, {
+							originalSuggestion: rawSuggestion,
+							displayText: sugg.display_text,
+						})
+					}
 				}
 
 				const replacementText = isActionable
