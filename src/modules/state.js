@@ -18,6 +18,7 @@ export const appState = {
 		providerModelsPath: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].modelsPath,
 		model: "",
 		useJson: false,
+		useLiveTermReplacerSync: true,
 		loggingEnabled: false,
 		temperature: 0.5,
 		activeTab: "finder",

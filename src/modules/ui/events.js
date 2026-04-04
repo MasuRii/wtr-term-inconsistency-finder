@@ -9,6 +9,7 @@ import {
 	log,
 	escapeRegExp,
 	isWTRLabTermReplacerLoaded,
+	requestTermsFromWTRLabTermReplacer,
 } from "../utils"
 import { findInconsistenciesDeepAnalysis } from "../geminiApi"
 import {
@@ -19,54 +20,84 @@ import {
 	populateModelSelector,
 	syncProviderConfigUI,
 	updateStatusIndicator,
+	updateTermReplacerIntegrationUI,
 } from "./panel"
 import { displayResults } from "./display"
 
-function startAnalysis(isContinuation = false) {
-	if (appState.runtime.isAnalysisRunning) {
-		alert("An analysis is already in progress.")
-		return
-	}
-	if (!appState.config.apiKeys || appState.config.apiKeys.length === 0 || !appState.config.model) {
-		alert("Please add at least one API key and select a model in the Configuration tab first.")
-		document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click()
-		togglePanel(true)
-		return
-	}
+async function startAnalysis(isContinuation = false) {
+	try {
+		if (appState.runtime.isAnalysisRunning) {
+			alert("An analysis is already in progress.")
+			return
+		}
+		if (!appState.config.apiKeys || appState.config.apiKeys.length === 0 || !appState.config.model) {
+			alert("Please add at least one API key and select a model in the Configuration tab first.")
+			document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click()
+			togglePanel(true)
+			return
+		}
 
-	const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
+		const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
 
-	if (!isContinuation) {
-		appState.runtime.cumulativeResults = []
-		appState.runtime.apiKeyCooldowns.clear()
-		appState.runtime.currentApiKeyIndex = 0
-		appState.runtime.currentIteration = 1
-		appState.runtime.totalIterations = deepAnalysisDepth
-		document.getElementById("wtr-if-results").innerHTML = ""
-		document.getElementById("wtr-if-continue-btn").disabled = true
-		document.getElementById("wtr-if-filter-select").value = "all"
-		// Clear session results only when starting a completely new analysis
-		clearSessionResults()
-	}
-	// For continuation analysis, keep the continue button enabled if results exist
-	if (isContinuation && appState.session.hasSavedResults) {
-		document.getElementById("wtr-if-continue-btn").disabled = false
-	}
+		if (!isContinuation) {
+			appState.runtime.cumulativeResults = []
+			appState.runtime.apiKeyCooldowns.clear()
+			appState.runtime.currentApiKeyIndex = 0
+			appState.runtime.currentIteration = 1
+			appState.runtime.totalIterations = deepAnalysisDepth
+			document.getElementById("wtr-if-results").innerHTML = ""
+			document.getElementById("wtr-if-continue-btn").disabled = true
+			document.getElementById("wtr-if-filter-select").value = "all"
+			// Clear session results only when starting a completely new analysis
+			clearSessionResults()
+		}
+		if (isContinuation && appState.session.hasSavedResults) {
+			document.getElementById("wtr-if-continue-btn").disabled = false
+		}
 
-	if (appState.config.useJson) {
-		document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
-		document.getElementById("wtr-if-file-input").click()
-	} else {
+		if (appState.config.useJson) {
+			document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
+			document.getElementById("wtr-if-file-input").click()
+			return
+		}
+
+		let liveTerms = []
+		if (appState.config.useLiveTermReplacerSync && isWTRLabTermReplacerLoaded()) {
+			const novelSlug = getNovelSlug()
+			const syncedTerms = await requestTermsFromWTRLabTermReplacer(novelSlug)
+
+			if (Array.isArray(syncedTerms)) {
+				liveTerms = syncedTerms
+				log(`Using ${liveTerms.length} live terms from WTR Lab Term Replacer for analysis.`)
+			} else {
+				log(
+					"Live term sync from WTR Lab Term Replacer was unavailable. Continuing without preloaded replacements.",
+				)
+				const statusEl = document.getElementById("wtr-if-status")
+				if (statusEl) {
+					statusEl.textContent =
+						"Live Term Replacer sync unavailable; analyzing without preloaded replacements."
+					setTimeout(() => {
+						if (statusEl) {
+							statusEl.textContent = ""
+						}
+					}, 3500)
+				}
+			}
+		}
+
 		const chapterData = crawlChapterData()
-		// Apply smart quotes replacement first, then term replacements
 		const smartQuotesData = applySmartQuotesReplacement(chapterData)
-		const processedData = applyTermReplacements(smartQuotesData)
+		const processedData = applyTermReplacements(smartQuotesData, liveTerms)
 		findInconsistenciesDeepAnalysis(
 			processedData,
 			isContinuation ? appState.runtime.cumulativeResults : [],
 			deepAnalysisDepth,
 		)
 		togglePanel(false)
+	} catch (error) {
+		log("Failed to start analysis.", error)
+		alert(`Failed to start analysis. ${error instanceof Error ? error.message : String(error)}`)
 	}
 }
 
@@ -101,6 +132,7 @@ export async function handleSaveConfig() {
 	appState.config.providerChatCompletionsPath = providerSettings.chatCompletionsPath
 	appState.config.providerModelsPath = providerSettings.modelsPath
 	appState.config.model = document.getElementById("wtr-if-model").value
+	appState.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked
 	appState.config.useJson = document.getElementById("wtr-if-use-json").checked
 	appState.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	appState.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
@@ -673,8 +705,11 @@ function importConfiguration() {
 				populateModelSelector()
 
 				// Update form fields
+				document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
+					appState.config.useLiveTermReplacerSync
 				document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 				document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
+				updateTermReplacerIntegrationUI()
 				document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
 				document.getElementById("wtr-if-temperature").value = appState.config.temperature
 				document.getElementById("wtr-if-temp-value").textContent = appState.config.temperature
@@ -768,31 +803,7 @@ export function addEventListeners() {
 
 			// When switching to config tab, re-evaluate WTR Lab Term Replacer state
 			if (targetTab === "config") {
-				try {
-					const isExternal = isWTRLabTermReplacerLoaded()
-					const useJsonContainer = document.getElementById("wtr-if-use-json-container")
-					const useJsonCheckbox = document.getElementById("wtr-if-use-json")
-					const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-
-					if (useJsonContainer && useJsonCheckbox && modeHint) {
-						if (isExternal) {
-							useJsonContainer.style.display = ""
-							useJsonCheckbox.disabled = false
-							modeHint.textContent =
-								"Detected WTR Lab Term Replacer userscript. You can use JSON mode or direct Apply integration."
-						} else {
-							useJsonContainer.style.display = "none"
-							useJsonCheckbox.checked = false
-							if (appState.config.useJson) {
-								appState.config.useJson = false
-							}
-							modeHint.textContent =
-								"External WTR Lab Term Replacer userscript not detected. JSON integration is disabled; using built-in behavior."
-						}
-					}
-				} catch (err) {
-					log("WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.", err)
-				}
+				updateTermReplacerIntegrationUI()
 			}
 		})
 	})
@@ -808,25 +819,21 @@ export function addEventListeners() {
 		}
 	})
 
+	const liveSyncCheckbox = panel.querySelector("#wtr-if-use-live-term-replacer-sync")
+	if (liveSyncCheckbox) {
+		liveSyncCheckbox.addEventListener("change", (e) => {
+			appState.config.useLiveTermReplacerSync = e.target.checked
+			saveConfig()
+			updateTermReplacerIntegrationUI()
+		})
+	}
+
 	// Delayed-load handling: re-check external userscript presence shortly after init.
 	// This is allowed to call updateApplyCopyButtonsMode(), which no-ops if Finder DOM
 	// is not yet present, so it does not create stale wiring.
 	setTimeout(() => {
 		try {
-			const isExternal = isWTRLabTermReplacerLoaded()
-			const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-			if (modeHint) {
-				if (isExternal) {
-					modeHint.textContent =
-						"Detected WTR Lab Term Replacer userscript. Apply buttons will send terms directly to the external replacer."
-				} else if (!modeHint.textContent) {
-					modeHint.textContent =
-						"External WTR Lab Term Replacer userscript not detected yet. Actions will operate in safe (copy/manual) mode unless the userscript loads."
-				}
-			}
-
-			// Ensure Finder buttons reflect the latest detection state AFTER this delayed check,
-			// but only if the Finder DOM exists (function itself performs this guard).
+			updateTermReplacerIntegrationUI()
 			updateApplyCopyButtonsMode()
 		} catch (err) {
 			log("WTR Lab Term Replacer delayed detection check failed; continuing safely.", err)

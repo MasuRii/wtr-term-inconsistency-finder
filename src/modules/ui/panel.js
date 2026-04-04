@@ -166,10 +166,16 @@ export function createUI() {
                             <h3><i class="wtr-if-icon">⚙️</i> Advanced Settings</h3>
                         </div>
                         <div class="wtr-if-section-content">
+                            <div class="wtr-if-form-group" id="wtr-if-use-live-term-replacer-sync-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-live-term-replacer-sync">
+                                    Use Live Term Replacer Terms Automatically During Analysis
+                                </label>
+                            </div>
                             <div class="wtr-if-form-group" id="wtr-if-use-json-container">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-json">
-                                    Use Term Replacer JSON File
+                                    Use Imported Term Replacer JSON File (Optional Override)
                                 </label>
                             </div>
                             <div class="wtr-if-form-group">
@@ -409,6 +415,44 @@ export function addApiKeyRow() {
 	keyRow.querySelector("input").focus()
 }
 
+export function updateTermReplacerIntegrationUI() {
+	try {
+		const isExternalReplacerAvailable = isWTRLabTermReplacerLoaded()
+		const liveSyncContainer = document.getElementById("wtr-if-use-live-term-replacer-sync-container")
+		const liveSyncCheckbox = document.getElementById("wtr-if-use-live-term-replacer-sync")
+		const useJsonContainer = document.getElementById("wtr-if-use-json-container")
+		const useJsonCheckbox = document.getElementById("wtr-if-use-json")
+		const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
+
+		if (!liveSyncContainer || !liveSyncCheckbox || !useJsonContainer || !useJsonCheckbox || !modeHint) {
+			return
+		}
+
+		if (isExternalReplacerAvailable) {
+			liveSyncContainer.style.display = ""
+			liveSyncCheckbox.disabled = false
+			liveSyncCheckbox.checked = Boolean(appState.config.useLiveTermReplacerSync)
+			useJsonContainer.style.display = ""
+			useJsonCheckbox.disabled = false
+
+			modeHint.textContent = appState.config.useLiveTermReplacerSync
+				? "Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Enable JSON mode only if you want to import a backup file instead."
+				: "Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on."
+		} else {
+			liveSyncContainer.style.display = "none"
+			useJsonContainer.style.display = "none"
+			useJsonCheckbox.checked = false
+			if (appState.config.useJson) {
+				appState.config.useJson = false
+			}
+			modeHint.textContent =
+				"External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
+		}
+	} catch (e) {
+		log("WTR Lab Term Replacer UI integration update failed; continuing in safe mode.", e)
+	}
+}
+
 export async function togglePanel(show = null) {
 	const panel = document.getElementById("wtr-if-panel")
 	if (!panel) {
@@ -425,6 +469,7 @@ export async function togglePanel(show = null) {
 		document.getElementById("wtr-if-provider-chat-path").value = appState.config.providerChatCompletionsPath
 		document.getElementById("wtr-if-provider-models-path").value = appState.config.providerModelsPath
 		syncProviderConfigUI()
+		document.getElementById("wtr-if-use-live-term-replacer-sync").checked = appState.config.useLiveTermReplacerSync
 		document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 		document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
 		document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
@@ -454,38 +499,7 @@ export async function togglePanel(show = null) {
 		await populateModelSelector()
 
 		// Apply dynamic UI based on WTR Lab Term Replacer detection
-		try {
-			const isExternalReplacerAvailable = isWTRLabTermReplacerLoaded()
-			const useJsonContainer = document.getElementById("wtr-if-use-json-container")
-			const useJsonCheckbox = document.getElementById("wtr-if-use-json")
-			const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
-
-			if (useJsonContainer && useJsonCheckbox && modeHint) {
-				if (isExternalReplacerAvailable) {
-					// External userscript present:
-					// - Show the JSON option so users can integrate with its format.
-					// - Keep current checkbox state (from config).
-					useJsonContainer.style.display = ""
-					useJsonCheckbox.disabled = false
-					modeHint.textContent =
-						"Detected WTR Lab Term Replacer userscript. You can use the Term Replacer JSON file format or send suggestions directly via the integration buttons."
-				} else {
-					// Safe mode when external script is not detected:
-					// - Hide JSON option (to avoid confusion with unsupported integration).
-					// - Force config flag off to keep behavior consistent.
-					useJsonContainer.style.display = "none"
-					useJsonCheckbox.checked = false
-					if (appState.config.useJson) {
-						appState.config.useJson = false
-					}
-					modeHint.textContent =
-						"External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
-				}
-			}
-		} catch (e) {
-			// Never break panel rendering on detection failure
-			log("WTR Lab Term Replacer UI integration (togglePanel) failed; continuing in safe mode.", e)
-		}
+		updateTermReplacerIntegrationUI()
 
 		// Check for session results and show restore option if available
 		const sessionRestore = document.getElementById("wtr-if-session-restore")

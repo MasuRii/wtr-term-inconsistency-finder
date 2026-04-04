@@ -889,47 +889,58 @@ export function escapeHtml(unsafe) {
  * - Defensive: never throws, always falls back to `false` on errors.
  * - Heuristic-based: checks multiple non-breaking indicators.
  * - Side-effect free: does not modify any external state.
- *
- * Detection heuristics (any passing => detected):
- * - Presence of known global hooks (e.g. window.WTR_LAB_TERM_REPLACER, window.wtrLabTermReplacer)
- * - Presence of a well-known DOM marker element/attribute used by the replacer
- * - Presence of a registered listener for the "wtr:addTerm" CustomEvent on window
- *
- * Note: Listener detection is best-effort. If it cannot be verified reliably,
- *       this helper will not treat it as fatal and will default to safe mode.
  */
 let _wtrReplacerDetectionCache = {
 	lastResult: false,
 	lastCheck: 0,
 }
 
+function normalizeLiveTermReplacerTerms(terms) {
+	if (!Array.isArray(terms)) {
+		return []
+	}
+
+	return terms
+		.filter(
+			(term) =>
+				term &&
+				typeof term === "object" &&
+				typeof term.original === "string" &&
+				Object.prototype.hasOwnProperty.call(term, "replacement"),
+		)
+		.map((term) => ({
+			...term,
+			wholeWord: term.wholeWord ?? false,
+		}))
+}
+
 /**
  * Detect whether the external "WTR Lab Term Replacer" userscript is loaded.
  *
- * Primary rule:
- *   - Returns true iff the well-known settings button injected by the real script exists:
- *       .replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm
+ * Detection heuristics (any passing => detected):
+ * - Presence of a well-known global integration marker
+ * - Presence of the injected settings button used by the replacer UI
  *
  * Behavior:
- *   - Defensive: exceptions are caught and logged; returns false on error.
- *   - Cached: repeated calls within a short window reuse the last result to avoid DOM thrash.
- *   - Side-effect free: does not modify external script state.
+ * - Defensive: exceptions are caught and logged; returns false on error.
+ * - Cached: repeated calls within a short window reuse the last result to avoid DOM thrash.
+ * - Side-effect free: does not modify external script state.
  */
 export function isWTRLabTermReplacerLoaded() {
 	try {
 		const now = Date.now()
 		const CACHE_WINDOW_MS = 3000
 
-		// Use cached value if within the cache window
 		if (now - _wtrReplacerDetectionCache.lastCheck < CACHE_WINDOW_MS) {
 			return _wtrReplacerDetectionCache.lastResult
 		}
 
+		const globalMarker = window.WTR_LAB_TERM_REPLACER
 		const marker = document.querySelector(
 			".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm",
 		)
 
-		const detected = Boolean(marker)
+		const detected = Boolean(globalMarker?.ready || marker)
 
 		_wtrReplacerDetectionCache = {
 			lastResult: detected,
@@ -937,7 +948,7 @@ export function isWTRLabTermReplacerLoaded() {
 		}
 
 		if (detected) {
-			log("WTR Lab Term Replacer detection: positive via settings button marker.")
+			log("WTR Lab Term Replacer detection: positive via global marker or settings button marker.")
 		}
 
 		return detected
@@ -949,4 +960,76 @@ export function isWTRLabTermReplacerLoaded() {
 		}
 		return false
 	}
+}
+
+/**
+ * Request the live term list for the current novel from the external WTR Lab Term Replacer userscript.
+ *
+ * Returns:
+ * - `Array` of normalized term objects on success (including empty array if no terms exist)
+ * - `null` if the bridge is unavailable, times out, or responds with an error
+ */
+export function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
+	if (!novelSlug || !isWTRLabTermReplacerLoaded()) {
+		return Promise.resolve(null)
+	}
+
+	const timeoutMs = Math.max(250, Number(options.timeoutMs) || 1500)
+	const requestId = `wtr-if-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+	return new Promise((resolve) => {
+		let isSettled = false
+		let timeoutId = null
+
+		const cleanup = () => {
+			window.removeEventListener("wtr:termsResponse", handleResponse)
+			if (timeoutId !== null) {
+				window.clearTimeout(timeoutId)
+			}
+		}
+
+		const finish = (value) => {
+			if (isSettled) {
+				return
+			}
+			isSettled = true
+			cleanup()
+			resolve(value)
+		}
+
+		const handleResponse = (event) => {
+			const detail = event?.detail || {}
+			if (detail.requestId !== requestId) {
+				return
+			}
+
+			if (detail.success === false) {
+				log("WTR Lab Term Replacer live term request failed.", detail.error || "Unknown bridge error")
+				finish(null)
+				return
+			}
+
+			finish(normalizeLiveTermReplacerTerms(detail.terms))
+		}
+
+		window.addEventListener("wtr:termsResponse", handleResponse)
+		timeoutId = window.setTimeout(() => {
+			log(`Timed out after ${timeoutMs}ms while requesting live terms from WTR Lab Term Replacer.`)
+			finish(null)
+		}, timeoutMs)
+
+		try {
+			window.dispatchEvent(
+				new CustomEvent("wtr:requestTerms", {
+					detail: {
+						requestId,
+						novelSlug,
+					},
+				}),
+			)
+		} catch (error) {
+			log("Failed to dispatch live term request to WTR Lab Term Replacer.", error)
+			finish(null)
+		}
+	})
 }
