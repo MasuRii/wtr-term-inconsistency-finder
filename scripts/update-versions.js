@@ -25,6 +25,14 @@ const FILES_TO_UPDATE = [
     patterns: [
       { search: /!\[Version\]\(https:\/\/img\.shields\.io\/badge\/version-[^)]+\)/g, replace: `![Version](https://img.shields.io/badge/version-${VERSION_INFO.BADGE}-blue)` }
     ]
+  },
+  {
+    file: "src/version.js",
+    patterns: [
+      { search: /SEMANTIC:\s*"[^"]*"/g, replace: `SEMANTIC: "${VERSION_INFO.SEMANTIC}"` },
+      { search: /DISPLAY:\s*"[^"]*"/g, replace: `DISPLAY: "v${VERSION_INFO.SEMANTIC}"` },
+      { search: /BUILD_DATE:\s*"[^"]*"/g, replace: `BUILD_DATE: "${VERSION_INFO.BUILD_DATE}"` }
+    ]
   }
 ];
 
@@ -74,14 +82,15 @@ function generateBanner() {
   const banner = `/**
  * WTR Term Inconsistency Finder v${VERSION_INFO.SEMANTIC}
  * Built: ${VERSION_INFO.BUILD_DATE} (${VERSION_INFO.BUILD_ENV})
- * 
+ *
  * A powerful userscript to find term inconsistencies in WTR Lab chapters
  * using Gemini AI with smart rotation and background processing.
- * 
+ *
  * @version ${VERSION_INFO.SEMANTIC}
  * @build ${VERSION_INFO.BUILD_ENV}
  * @date ${VERSION_INFO.BUILD_DATE}
- */`;
+ */
+`;
 
   const bannerPath = path.join(__dirname, "../src/banner.js");
   fs.writeFileSync(bannerPath, banner, "utf8");
@@ -109,7 +118,6 @@ function generateHeader() {
 // @supportURL   https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @website      https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==
-
 `;
 
   const headerPath = path.join(__dirname, "../src/header.js");
@@ -179,6 +187,7 @@ switch (command) {
     break;
 
   case "check":
+  case "version":
     checkVersion();
     break;
 
@@ -205,6 +214,7 @@ switch (command) {
     console.log("📖 Available commands:");
     console.log("   update  - Update all versioned files (default)");
     console.log("   check   - Display current version information");
+    console.log("   version - Alias for check (backward compatible)");
     console.log("   banner  - Generate build banner only");
     console.log("   header  - Generate script header only");
     process.exit(1);
