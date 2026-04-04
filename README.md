@@ -2,11 +2,11 @@
 
 [![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
 
-[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.1-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
-A sophisticated userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini or OpenAI-compatible AI providers. Perfect for translators and proofreaders who want to ensure term consistency across entire novels.
+A sophisticated userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini or OpenAI-compatible AI providers. It can also integrate directly with WTR Lab Term Replacer by reusing live stored terms during analysis, while still supporting a Finder-only workflow. Perfect for translators and proofreaders who want to ensure term consistency across entire novels.
 
 ---
 
@@ -37,6 +37,8 @@ A sophisticated userscript that finds translation inconsistencies in WTR Lab cha
 -   **💾 Session Persistence**: Automatically saves and restores analysis results, allowing you to pick up where you left off.
 -   **🎛️ Advanced Filtering**: Filter results by priority (`CRITICAL`, `HIGH`, `MEDIUM`, etc.) and status (`New`, `Verified`).
 -   **🛠️ Term Replacer Integration**: Seamlessly apply suggested fixes with the external [WTR Lab Term Replacer](https://greasyfork.org/en/scripts/452202-wtr-lab-term-replacer) userscript.
+-   **🔗 Live Term Sync**: Automatically reuses the current novel's live term list from WTR Lab Term Replacer during analysis when both scripts are installed.
+-   **🎚️ Optional Integration Toggle**: Disable live sync at any time if you want Finder to behave independently, even while Term Replacer is installed.
 -   **📊 Real-time Status**: A clean UI with live progress indicators and detailed status messages.
 -   **📱 Modern & Responsive**: The interface is designed to work smoothly on all screen sizes.
 
@@ -56,9 +58,10 @@ The easiest way to install is directly from Greasy Fork.
 1.  **Navigate** to any WTR Lab chapter.
 2.  **Click the Finder icon (🔍)** in the top-right corner to open the panel.
 3.  **Configure**: In the "Configuration" tab, select your provider type, paste your API key(s), and click "Save". For custom providers, adjust the base URL as needed.
-4.  **Analyze**: Go back to the "Analysis" tab, select your chapters, and click "Start Analysis".
-5.  **Review**: Once the analysis is complete, review the found inconsistencies.
-6.  **Apply/Copy**: Use the "Apply" buttons to send terms to the WTR Lab Term Replacer script, or "Copy" buttons to copy them to your clipboard.
+4.  **Choose Integration Mode (Optional)**: If WTR Lab Term Replacer is installed, Finder can automatically reuse its live term list during analysis. You can disable that behavior in Configuration if you want Finder-only analysis, or enable JSON mode as a manual override.
+5.  **Analyze**: Go back to the "Analysis" tab, select your chapters, and click "Start Analysis".
+6.  **Review**: Once the analysis is complete, review the found inconsistencies.
+7.  **Apply/Copy**: Use the "Apply" buttons to send terms to the WTR Lab Term Replacer script, or "Copy" buttons to copy them to your clipboard.
 
 ## ⚙️ For Developers
 

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [5.4.1] - 2026-04-04
+
+### ✨ Added
+- **Live Term Replacer Sync**: When the external WTR Lab Term Replacer userscript is installed, Finder can now request the current novel's live term list directly at analysis time instead of requiring an exported JSON file.
+- **Live Sync Preference Toggle**: Added a configuration toggle so users can explicitly choose whether Finder should reuse Term Replacer terms automatically or operate independently even when both scripts are installed.
+
+### ♻️ Changed
+- **JSON Integration Positioning**: Reframed the Term Replacer JSON option as an optional manual override/backup import path instead of the primary integration workflow.
+- **Configuration Messaging**: Updated the configuration panel hints to explain the three supported modes clearly: Finder-only, live sync with Term Replacer, and optional JSON import.
+
+### 🐛 Fixed
+- **Dual-Script Workflow Friction**: Removed the need to export a Term Replacer JSON file before running Finder analysis in the common case where both userscripts are installed together.
+- **Finder-Only Control**: Preserved the ability to ignore Term Replacer data by disabling the new live sync toggle, preventing unwanted automatic reuse of external terms.
+
+---
 ## [5.4.0] - 2026-04-04
 
 ### ✨ Added

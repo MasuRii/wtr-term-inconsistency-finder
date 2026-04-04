@@ -1,10 +1,10 @@
 # 🤖 WTR Lab Term Inconsistency Finder
 
-[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.1-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 
 [![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
 
-A powerful userscript that uses AI (Google Gemini or OpenAI-compatible APIs) to find translation inconsistencies in WTR Lab chapters. Keep your translations clean and professional!
+A powerful userscript that uses AI (Google Gemini or OpenAI-compatible APIs) to find translation inconsistencies in WTR Lab chapters. When WTR Lab Term Replacer is also installed, Finder can reuse its live term list automatically during analysis, while still letting you keep Finder fully independent if you prefer.
 
 ---
 
@@ -40,14 +40,17 @@ That's it! You're ready to start analyzing.
 -   **Smart Filtering**: Filter results by priority (Critical, High, Medium, Low).
 -   **Session Memory**: Saves your analysis so you can continue later.
 -   **Easy Fixes**: Integrates with the [WTR Lab Term Replacer](https://github.com/MasuRii/wtr-lab-term-replacer) script to apply fixes directly.
+-   **Live Term Sync**: Automatically reuses the current novel's live Term Replacer list during analysis when both scripts are installed.
+-   **Optional Toggle**: Turn live sync off if you want Finder to ignore Term Replacer and operate on its own.
 
 ## 💡 How to Use
 
 1.  **Open Chapters**: Navigate to the WTR Lab novel you want to check.
 2.  **Launch Panel**: Click the Finder icon (🔍) in the top-right corner.
 3.  **Start Analysis**: Select the chapters you want to analyze and click "Start Analysis".
-4.  **Review Results**: The script will display a list of potential inconsistencies, sorted by priority.
-5.  **Apply or Copy Fixes**: Click the suggested term to apply it (if using the Term Replacer script) or copy it.
+4.  **Choose Integration Mode (Optional)**: If Term Replacer is installed, you can let Finder reuse live terms automatically, disable that behavior, or enable JSON mode as a manual override.
+5.  **Review Results**: The script will display a list of potential inconsistencies, sorted by priority.
+6.  **Apply or Copy Fixes**: Click the suggested term to apply it (if using the Term Replacer script) or copy it.
 
 ## 🐛 Troubleshooting
 
