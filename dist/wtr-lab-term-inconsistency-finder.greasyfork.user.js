@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.9
+// @version 5.4.0
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -4625,8 +4625,8 @@ var utils = __webpack_require__(395);
 // Shared runtime version information for the userscript UI
 
 const FALLBACK_VERSION_INFO = {
-	SEMANTIC: "5.3.9",
-	DISPLAY: "v5.3.9",
+	SEMANTIC: "5.4.0",
+	DISPLAY: "v5.4.0",
 	BUILD_ENV: "production",
 	BUILD_DATE: "2026-04-04",
 }
@@ -6560,7 +6560,7 @@ function isWTRLabTermReplacerLoaded() {
 (module) {
 
 "use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.9","description":"Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.4.0","description":"Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
 
 /***/ }
 
