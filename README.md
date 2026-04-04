@@ -2,11 +2,11 @@
 
 [![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
 
-[![Version](https://img.shields.io/badge/version-5.3.9-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
-A sophisticated userscript that finds translation inconsistencies in WTR Lab chapters using the Google Gemini AI. Perfect for translators and proofreaders who want to ensure term consistency across entire novels.
+A sophisticated userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini or OpenAI-compatible AI providers. Perfect for translators and proofreaders who want to ensure term consistency across entire novels.
 
 ---
 
@@ -30,7 +30,8 @@ A sophisticated userscript that finds translation inconsistencies in WTR Lab cha
 
 ## 🚀 Features
 
--   **🤖 AI-Powered Analysis**: Leverages Google Gemini to intelligently detect contextual term inconsistencies.
+-   **🤖 AI-Powered Analysis**: Leverages Google Gemini or OpenAI-compatible APIs to intelligently detect contextual term inconsistencies.
+-   **🔀 Multi-Provider Support**: Choose between Google Gemini or any OpenAI-compatible API (OpenAI, Ollama, local models, self-hosted solutions).
 -   **🔄 Multi-API Key Support**: Automatically rotates keys to manage rate limits, with smart cooldowns and persistent state.
 -   **🔍 Deep Analysis**: Performs multiple analysis iterations (1-5) for more comprehensive and accurate results.
 -   **💾 Session Persistence**: Automatically saves and restores analysis results, allowing you to pick up where you left off.
@@ -46,14 +47,15 @@ The easiest way to install is directly from Greasy Fork.
 1.  **Install a Userscript Manager**: You need an extension like [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
 2.  **Install the Script**: Click the link below to install.
     -   <a href="https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Install from Greasy Fork</a>
-3.  **Get a Gemini API Key**: This script requires a free Google Gemini API key.
-    -   Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to create one.
+3.  **Get an API Key**: This script requires an API key to work.
+    -   **Google Gemini** (Free): Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to create one.
+    -   **OpenAI-Compatible**: Use any compatible provider (OpenAI, Ollama, local models, etc.) with custom base URL.
 
 ## 💡 Usage
 
 1.  **Navigate** to any WTR Lab chapter.
 2.  **Click the Finder icon (🔍)** in the top-right corner to open the panel.
-3.  **Configure**: In the "Configuration" tab, paste your Gemini API key(s) and click "Save".
+3.  **Configure**: In the "Configuration" tab, select your provider type, paste your API key(s), and click "Save". For custom providers, adjust the base URL as needed.
 4.  **Analyze**: Go back to the "Analysis" tab, select your chapters, and click "Start Analysis".
 5.  **Review**: Once the analysis is complete, review the found inconsistencies.
 6.  **Apply/Copy**: Use the "Apply" buttons to send terms to the WTR Lab Term Replacer script, or "Copy" buttons to copy them to your clipboard.
