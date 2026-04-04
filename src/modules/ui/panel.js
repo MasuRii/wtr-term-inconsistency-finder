@@ -2,6 +2,7 @@
 import { appState, MODELS_CACHE_KEY } from "../state"
 import { getAvailableApiKey } from "../geminiApi"
 import { escapeHtml, log, isWTRLabTermReplacerLoaded } from "../utils"
+import { VERSION_INFO } from "../../version"
 import { addEventListeners, handleRestoreSession } from "./events"
 
 export function createUI() {
@@ -12,7 +13,15 @@ export function createUI() {
 	const panel = document.createElement("div")
 	panel.id = "wtr-if-panel"
 	panel.innerHTML = `
-            <div class="wtr-if-header"><h2>Term Inconsistency Finder</h2><button class="wtr-if-close-btn">&times;</button></div>
+            <div class="wtr-if-header">
+                <div class="wtr-if-title-group">
+                    <h2>Term Inconsistency Finder</h2>
+                    <span class="wtr-if-version-badge" title="Build ${escapeHtml(VERSION_INFO.BUILD_DATE)} (${escapeHtml(VERSION_INFO.BUILD_ENV)})">
+                        ${escapeHtml(VERSION_INFO.DISPLAY)}
+                    </span>
+                </div>
+                <button class="wtr-if-close-btn" aria-label="Close Term Inconsistency Finder">&times;</button>
+            </div>
             <div class="wtr-if-tabs">
                 <button class="wtr-if-tab-btn" data-tab="finder">Finder</button>
                 <button class="wtr-if-tab-btn" data-tab="config">Configuration</button>

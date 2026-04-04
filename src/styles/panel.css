@@ -36,9 +36,29 @@
 	padding: 12px 16px;
 }
 
+.wtr-if-title-group {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
 .wtr-if-header h2 {
 	font-size: 18px;
 	margin: 0;
+}
+
+.wtr-if-version-badge {
+	background: rgb(253 126 20 / 10%);
+	border: 1px solid rgb(253 126 20 / 30%);
+	border-radius: 999px;
+	color: var(--bs-primary, #fd7e14);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1;
+	padding: 4px 8px;
+	white-space: nowrap;
 }
 
 .wtr-if-close-btn {
