@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
-// @description Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.3.8-dev.1775312136367
+// @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
+// @version 5.3.9-dev.1775317471519
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
-// @connect generativelanguage.googleapis.com
+// @connect *
 // @grant GM_setValue
 // @grant GM_getValue
 // @grant GM_addStyle
@@ -1827,11 +1827,14 @@ function parseApiResponse(_resultText) {
 	throw new Error("parseApiResponse should be implemented in the analysis engine module")
 }
 
+// EXTERNAL MODULE: ./src/modules/providerConfig.js
+var providerConfig = __webpack_require__(107);
 ;// ./src/modules/apiErrorHandler.js
 /**
  * API Error Handler Module
  * Centralizes error handling for API requests and responses
  */
+
 
 
 
@@ -1862,15 +1865,44 @@ function apiErrorHandler_handleApiError(errorMessage) {
  * @param {Object} apiResponse - The API response object containing error information
  * @returns {Object} - Error classification information
  */
-function classifyApiError(apiResponse) {
+function classifyApiError(apiResponse, httpStatus = null) {
 	if (!apiResponse.error) {
 		return { type: "none", retriable: false }
 	}
 
-	const errorStatus = apiResponse.error.status
 	const errorMessage = apiResponse.error.message || ""
+	const errorSignals = [apiResponse.error.status, apiResponse.error.type, apiResponse.error.code, errorMessage]
+		.filter(Boolean)
+		.join(" ")
+		.toLowerCase()
 
-	const isRetriable = RETRIABLE_STATUSES.has(errorStatus) || errorMessage.includes("The model is overloaded")
+	let errorStatus = apiResponse.error.status
+	if (!errorStatus) {
+		if (errorSignals.includes("insufficient_quota") || errorSignals.includes("quota")) {
+			errorStatus = "RESOURCE_EXHAUSTED"
+		} else if (httpStatus === 429) {
+			errorStatus = "RATE_LIMIT"
+		} else if (httpStatus === 408 || httpStatus === 504) {
+			errorStatus = "DEADLINE_EXCEEDED"
+		} else if (httpStatus === 500 || httpStatus === 502) {
+			errorStatus = "INTERNAL"
+		} else if (httpStatus === 503) {
+			errorStatus = "UNAVAILABLE"
+		} else if (httpStatus === 401) {
+			errorStatus = "UNAUTHORIZED"
+		} else if (httpStatus === 403) {
+			errorStatus = "FORBIDDEN"
+		} else if (httpStatus) {
+			errorStatus = `HTTP_${httpStatus}`
+		} else {
+			errorStatus = "UNKNOWN"
+		}
+	}
+
+	const isRetriable =
+		RETRIABLE_STATUSES.has(errorStatus) ||
+		errorStatus === "RATE_LIMIT" ||
+		errorMessage.includes("The model is overloaded")
 
 	return {
 		type: errorStatus || "UNKNOWN",
@@ -1910,17 +1942,37 @@ function handleRateLimitError(keyIndex, errorClassification, updateKeyState) {
 		// Mark key as exhausted with 24-hour cooldown (daily reset)
 		const unlockTime = Date.now() + 24 * 60 * 60 * 1000 // 24 hours
 		updateKeyState(keyIndex, "EXHAUSTED", unlockTime, 1)
-		console.log(`Key ${keyIndex} marked as EXHAUSTED. Will reset in 24 hours.`)
+		;(0,utils/* log */.Rm)("API key marked exhausted.", {
+			keyIndex,
+			status: errorClassification.status,
+			cooldownMs: 24 * 60 * 60 * 1000,
+		})
+	} else if (errorClassification.status === "RATE_LIMIT") {
+		const unlockTime = Date.now() + 60 * 1000 // 60 seconds
+		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
+		;(0,utils/* log */.Rm)("API key entered cooldown.", {
+			keyIndex,
+			status: errorClassification.status,
+			cooldownMs: 60 * 1000,
+		})
 	} else if (errorClassification.status === "UNAVAILABLE" || errorClassification.status === "INTERNAL") {
 		// Temporary server issues - put on short cooldown for faster cycling
 		const unlockTime = Date.now() + 5 * 1000 // 5 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on temporary COOLDOWN for 5 seconds.`)
+		;(0,utils/* log */.Rm)("API key entered cooldown.", {
+			keyIndex,
+			status: errorClassification.status,
+			cooldownMs: 5 * 1000,
+		})
 	} else if (errorClassification.status === "DEADLINE_EXCEEDED") {
 		// Request timeout - brief cooldown for faster cycling
 		const unlockTime = Date.now() + 2 * 1000 // 2 seconds
 		updateKeyState(keyIndex, "ON_COOLDOWN", unlockTime, 1)
-		console.log(`Key ${keyIndex} on timeout COOLDOWN for 2 seconds.`)
+		;(0,utils/* log */.Rm)("API key entered cooldown.", {
+			keyIndex,
+			status: errorClassification.status,
+			cooldownMs: 2 * 1000,
+		})
 	}
 }
 
@@ -1933,6 +1985,8 @@ function getCooldownDuration(errorClassification) {
 	switch (errorClassification.status) {
 		case "RESOURCE_EXHAUSTED":
 			return 24 * 60 * 60 * 1000 // 24 hours
+		case "RATE_LIMIT":
+			return 60 * 1000 // 60 seconds
 		case "UNAVAILABLE":
 		case "INTERNAL":
 			return 5 * 1000 // 5 seconds for faster cycling
@@ -1951,11 +2005,13 @@ function getCooldownDuration(errorClassification) {
 function createUserFriendlyErrorMessage(errorClassification) {
 	switch (errorClassification.type) {
 		case "RESOURCE_EXHAUSTED":
-			return "API rate limit exceeded. Please wait 24 hours before trying again."
+			return "API quota exhausted. Please wait before trying again or switch to another key."
+		case "RATE_LIMIT":
+			return "API rate limit exceeded. Please wait a moment before trying again."
 		case "UNAVAILABLE":
-			return "Gemini API service is temporarily unavailable. Please try again in a few minutes."
+			return "The AI provider is temporarily unavailable. Please try again in a few minutes."
 		case "INTERNAL":
-			return "Gemini API is experiencing internal server issues. Please try again later."
+			return "The AI provider returned an internal server error. Please try again later."
 		case "DEADLINE_EXCEEDED":
 			return "Request timed out. The text may be too long. Try analyzing fewer chapters."
 		case "MAX_TOKENS":
@@ -1968,7 +2024,7 @@ function createUserFriendlyErrorMessage(errorClassification) {
 ;// ./src/modules/analysisEngine.js
 /**
  * Analysis Engine Module
- * Core analysis logic for translation consistency detection using Gemini API
+ * Core analysis logic for translation consistency detection across supported AI providers
  */
 
 // Import from state module
@@ -1984,6 +2040,9 @@ function createUserFriendlyErrorMessage(errorClassification) {
 
 
 // Import from promptManager module
+
+
+// Import from providerConfig module
 
 
 // Import from apiErrorHandler module
@@ -2022,6 +2081,70 @@ function validateApiKey() {
 function analysisEngine_parseApiResponse(_resultText) {
 	const cleanedJsonString = (0,utils/* extractJsonFromString */.zF)(_resultText)
 	return JSON.parse(cleanedJsonString)
+}
+
+function normalizeApiResponse(response, apiResponse) {
+	if (apiResponse?.error || response.status < 400) {
+		return apiResponse
+	}
+
+	const fallbackMessage =
+		apiResponse?.message || apiResponse?.detail || response.statusText || `HTTP ${response.status || "Unknown"}`
+
+	return {
+		...apiResponse,
+		error: {
+			message: fallbackMessage,
+			type: apiResponse?.type,
+			code: apiResponse?.code,
+		},
+	}
+}
+
+function buildMissingContentError(apiResponse) {
+	const finishReason = (0,providerConfig/* getResponseFinishReason */.$i)(state/* appState */.XJ.config, apiResponse)
+	if (finishReason === "MAX_TOKENS" || finishReason === "length") {
+		return "Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
+	}
+
+	return `Invalid API response: No content found. Finish Reason: ${finishReason || "Unknown"}`
+}
+
+function getProviderLogContext() {
+	const provider = (0,providerConfig/* resolveProviderSettings */.vy)(state/* appState */.XJ.config)
+	return {
+		providerType: provider.providerType,
+		model: state/* appState */.XJ.config.model,
+		baseUrl: provider.baseUrl,
+	}
+}
+
+function summarizeParsedResponse(parsedResponse) {
+	if (Array.isArray(parsedResponse)) {
+		return {
+			resultType: "initial",
+			itemCount: parsedResponse.length,
+			conceptPreview: parsedResponse
+				.slice(0, 3)
+				.map((item) => item?.concept)
+				.filter(Boolean),
+		}
+	}
+
+	return {
+		resultType: "verification",
+		verifiedCount: Array.isArray(parsedResponse?.verified_inconsistencies)
+			? parsedResponse.verified_inconsistencies.length
+			: 0,
+		newCount: Array.isArray(parsedResponse?.new_inconsistencies) ? parsedResponse.new_inconsistencies.length : 0,
+		conceptPreview: [
+			...(parsedResponse?.verified_inconsistencies || []),
+			...(parsedResponse?.new_inconsistencies || []),
+		]
+			.slice(0, 3)
+			.map((item) => item?.concept)
+			.filter(Boolean),
+	}
 }
 
 /**
@@ -2069,35 +2192,35 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 	;(0,ui/* updateStatusIndicator */.LI)("running", `${operationName} (Key ${currentKeyIndex + 1}, Attempt ${retryCount + 1})...`)
 
 	const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-	;(0,utils/* log */.Rm)(
-		`${operationName}: Sending ${
-			combinedText.length
-		} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-	)
+	;(0,utils/* log */.Rm)(`${operationName}: Dispatching request.`, {
+		...getProviderLogContext(),
+		keyIndex: currentKeyIndex,
+		attempt: retryCount + 1,
+		chapterCount: chapterData.length,
+		characterCount: combinedText.length,
+	})
 
 	const prompt = promptManager_buildPrompt(combinedText, existingResults)
-	const requestData = {
-		contents: [{ parts: [{ text: prompt }] }],
-		generationConfig: {
-			temperature: state/* appState */.XJ.config.temperature,
-		},
-	}
+	const requestConfig = (0,providerConfig/* buildAnalysisRequest */.g)(state/* appState */.XJ.config, currentKey, prompt)
 
 	GM_xmlhttpRequest({
-		method: "POST",
-		url: `https://generativelanguage.googleapis.com/v1beta/${state/* appState */.XJ.config.model}:generateContent?key=${currentKey}`,
-		headers: {
-			"Content-Type": "application/json",
-		},
-		data: JSON.stringify(requestData),
+		method: requestConfig.method,
+		url: requestConfig.url,
+		headers: requestConfig.headers,
+		data: requestConfig.data,
 		onload: function (response) {
-			;(0,utils/* log */.Rm)("Received raw response from API:", response.responseText)
+			;(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
+				...getProviderLogContext(),
+				httpStatus: response.status,
+				responseLength: response.responseText?.length || 0,
+				responsePreview: (0,utils/* truncateForLog */.eM)(response.responseText || "", 320),
+			})
 			let apiResponse
 			let parsedResponse
 
 			// Shell parse errors are treated as retriable (can be transient)
 			try {
-				apiResponse = JSON.parse(response.responseText)
+				apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
 			} catch (e) {
 				(0,utils/* log */.Rm)(
 					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -2109,7 +2232,7 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 
 			// Handle explicit API error responses
 			if (apiResponse.error) {
-				const errorClassification = classifyApiError(apiResponse)
+				const errorClassification = classifyApiError(apiResponse, response.status)
 				const isRetriable = errorClassification.retriable
 
 				if (isRetriable) {
@@ -2130,26 +2253,19 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 				return
 			}
 
-			const candidate = apiResponse.candidates?.[0]
-			if (!candidate || !candidate.content) {
-				let error
-				if (candidate?.finishReason === "MAX_TOKENS") {
-					error =
-						"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-				} else {
-					error = `Invalid API response: No content found. Finish Reason: ${
-						candidate?.finishReason || "Unknown"
-					}`
-				}
-				apiErrorHandler_handleApiError(error)
+			const resultText = (0,providerConfig/* extractResponseText */.Qk)(state/* appState */.XJ.config, apiResponse)
+			if (!resultText) {
+				apiErrorHandler_handleApiError(buildMissingContentError(apiResponse))
 				return
 			}
 
 			// Parse the inner content (model JSON); treat malformed JSON as retriable once
 			try {
-				const resultText = candidate.content.parts[0].text
 				parsedResponse = analysisEngine_parseApiResponse(resultText)
-				;(0,utils/* log */.Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+				;(0,utils/* log */.Rm)(`${operationName}: Parsed API response content.`, {
+					...getProviderLogContext(),
+					...summarizeParsedResponse(parsedResponse),
+				})
 			} catch (e) {
 				if (parseRetryCount < 1) {
 					(0,utils/* log */.Rm)(
@@ -2323,35 +2439,35 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 		const currentKeyIndex = apiKeyInfo.index
 
 		const combinedText = chapterData.map((d) => `--- CHAPTER ${d.chapter} ---\n${d.text}`).join("\n\n")
-		;(0,utils/* log */.Rm)(
-			`${operationName}: Sending ${
-				combinedText.length
-			} characters to the AI. Using key index: ${currentKeyIndex}. (Total Attempt ${retryCount + 1})`,
-		)
+		;(0,utils/* log */.Rm)(`${operationName}: Dispatching request.`, {
+			...getProviderLogContext(),
+			keyIndex: currentKeyIndex,
+			attempt: retryCount + 1,
+			chapterCount: chapterData.length,
+			characterCount: combinedText.length,
+		})
 
 		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
-		const requestData = {
-			contents: [{ parts: [{ text: prompt }] }],
-			generationConfig: {
-				temperature: state/* appState */.XJ.config.temperature,
-			},
-		}
+		const requestConfig = (0,providerConfig/* buildAnalysisRequest */.g)(state/* appState */.XJ.config, currentKey, prompt)
 
 		GM_xmlhttpRequest({
-			method: "POST",
-			url: `https://generativelanguage.googleapis.com/v1beta/${state/* appState */.XJ.config.model}:generateContent?key=${currentKey}`,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			data: JSON.stringify(requestData),
+			method: requestConfig.method,
+			url: requestConfig.url,
+			headers: requestConfig.headers,
+			data: requestConfig.data,
 			onload: function (response) {
-				;(0,utils/* log */.Rm)("Received raw response from API:", response.responseText)
+				;(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
+					...getProviderLogContext(),
+					httpStatus: response.status,
+					responseLength: response.responseText?.length || 0,
+					responsePreview: (0,utils/* truncateForLog */.eM)(response.responseText || "", 320),
+				})
 				let apiResponse
 				let parsedResponse
 
 				// Shell parse: treat as retriable (can be transient / truncation)
 				try {
-					apiResponse = JSON.parse(response.responseText)
+					apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
 				} catch (e) {
 					(0,utils/* log */.Rm)(
 						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -2363,15 +2479,14 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				}
 
 				if (apiResponse.error) {
-					const errorClassification = classifyApiError(apiResponse)
+					const errorClassification = classifyApiError(apiResponse, response.status)
 					const isRetriable = errorClassification.retriable
 
 					if (isRetriable) {
 						(0,utils/* log */.Rm)(
 							`${operationName}: Retriable API Error (Status: ${errorClassification.status}) with key index ${currentKeyIndex}. Putting key on cooldown and retrying immediately with next key.`,
 						)
-						const cooldownSeconds = errorClassification.status === "RESOURCE_EXHAUSTED" ? 2 : 1
-						state/* appState */.XJ.runtime.apiKeyCooldowns.set(currentKey, Date.now() + cooldownSeconds * 1000)
+						handleRateLimitError(currentKeyIndex, errorClassification, state/* updateKeyState */.gH)
 						// Immediate retry with next available key
 						retryCount++
 						executeIteration()
@@ -2384,26 +2499,19 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					return
 				}
 
-				const candidate = apiResponse.candidates?.[0]
-				if (!candidate || !candidate.content) {
-					let error
-					if (candidate?.finishReason === "MAX_TOKENS") {
-						error =
-							"Analysis failed: The text from the selected chapters is too long, and the AI's response was cut off. Please try again with fewer chapters."
-					} else {
-						error = `Invalid API response: No content found. Finish Reason: ${
-							candidate?.finishReason || "Unknown"
-						}`
-					}
-					apiErrorHandler_handleApiError(error)
+				const resultText = (0,providerConfig/* extractResponseText */.Qk)(state/* appState */.XJ.config, apiResponse)
+				if (!resultText) {
+					apiErrorHandler_handleApiError(buildMissingContentError(apiResponse))
 					delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey]
 					return
 				}
 
 				try {
-					const resultText = candidate.content.parts[0].text
 					parsedResponse = analysisEngine_parseApiResponse(resultText)
-					;(0,utils/* log */.Rm)(`${operationName}: Successfully parsed API response content.`, parsedResponse)
+					;(0,utils/* log */.Rm)(`${operationName}: Parsed API response content.`, {
+						...getProviderLogContext(),
+						...summarizeParsedResponse(parsedResponse),
+					})
 				} catch (e) {
 					if (parseRetryCount < 1) {
 						(0,utils/* log */.Rm)(
@@ -2578,6 +2686,270 @@ function deprecatedHandleApiError(errorMessage) {
 
 /***/ },
 
+/***/ 107
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   $i: () => (/* binding */ getResponseFinishReason),
+/* harmony export */   Q2: () => (/* binding */ AI_PROVIDERS),
+/* harmony export */   Qk: () => (/* binding */ extractResponseText),
+/* harmony export */   V1: () => (/* binding */ DEFAULT_PROVIDER_TYPE),
+/* harmony export */   Zi: () => (/* binding */ parseModelsResponse),
+/* harmony export */   g: () => (/* binding */ buildAnalysisRequest),
+/* harmony export */   hV: () => (/* binding */ PROVIDER_DEFAULTS),
+/* harmony export */   vy: () => (/* binding */ resolveProviderSettings),
+/* harmony export */   yd: () => (/* binding */ buildModelsRequest)
+/* harmony export */ });
+/* unused harmony exports normalizeBaseUrl, normalizeApiPath, getProviderDefaults, parseModelIdsFromCatalogPayload */
+/**
+ * Provider configuration and request helpers.
+ *
+ * Inspired by the provider/base URL + path normalization approach used in:
+ * - C:/Repository/proxx/src/lib/config.ts
+ * - C:/Repository/proxx/src/lib/provider-routing.ts
+ */
+
+const AI_PROVIDERS = Object.freeze({
+	OPENAI_COMPATIBLE: "openai-compatible",
+	GEMINI: "gemini",
+})
+
+const DEFAULT_PROVIDER_TYPE = AI_PROVIDERS.OPENAI_COMPATIBLE
+
+const PROVIDER_DEFAULTS = Object.freeze({
+	[AI_PROVIDERS.OPENAI_COMPATIBLE]: Object.freeze({
+		baseUrl: "https://api.openai.com",
+		chatCompletionsPath: "/v1/chat/completions",
+		modelsPath: "/v1/models",
+		modelLabel: "OpenAI-Compatible Model",
+		apiKeyLabel: "API Keys",
+	}),
+	[AI_PROVIDERS.GEMINI]: Object.freeze({
+		baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+		chatCompletionsPath: "/v1/chat/completions",
+		modelsPath: "/v1/models",
+		modelLabel: "Gemini Model",
+		apiKeyLabel: "Gemini API Keys",
+	}),
+})
+
+function ensureProviderType(providerType) {
+	return providerType === AI_PROVIDERS.GEMINI ? AI_PROVIDERS.GEMINI : AI_PROVIDERS.OPENAI_COMPATIBLE
+}
+
+function normalizeBaseUrl(value, fallback) {
+	const candidate = typeof value === "string" ? value.trim() : ""
+	return (candidate || fallback).replace(/\/+$/, "")
+}
+
+function normalizeApiPath(value, fallback) {
+	const candidate = typeof value === "string" ? value.trim() : ""
+	const normalized = candidate || fallback
+	const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`
+	return withLeadingSlash === "/" ? fallback : withLeadingSlash.replace(/\/+$/, "")
+}
+
+function getProviderDefaults(providerType) {
+	return PROVIDER_DEFAULTS[ensureProviderType(providerType)]
+}
+
+function resolveProviderSettings(config = {}) {
+	const providerType = ensureProviderType(config.providerType)
+	const defaults = getProviderDefaults(providerType)
+
+	return {
+		providerType,
+		baseUrl: normalizeBaseUrl(config.providerBaseUrl, defaults.baseUrl),
+		chatCompletionsPath: normalizeApiPath(config.providerChatCompletionsPath, defaults.chatCompletionsPath),
+		modelsPath: normalizeApiPath(config.providerModelsPath, defaults.modelsPath),
+		modelLabel: defaults.modelLabel,
+		apiKeyLabel: defaults.apiKeyLabel,
+	}
+}
+
+function buildAnalysisRequest(config, apiKey, prompt) {
+	const provider = resolveProviderSettings(config)
+
+	if (provider.providerType === AI_PROVIDERS.GEMINI) {
+		return {
+			method: "POST",
+			url: `${provider.baseUrl}/${config.model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+			headers: {
+				"Content-Type": "application/json",
+			},
+			data: JSON.stringify({
+				contents: [{ parts: [{ text: prompt }] }],
+				generationConfig: {
+					temperature: config.temperature,
+				},
+			}),
+		}
+	}
+
+	return {
+		method: "POST",
+		url: `${provider.baseUrl}${provider.chatCompletionsPath}`,
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		},
+		data: JSON.stringify({
+			model: config.model,
+			temperature: config.temperature,
+			messages: [{ role: "user", content: prompt }],
+		}),
+	}
+}
+
+function extractOpenAiMessageText(content) {
+	if (typeof content === "string") {
+		return content
+	}
+
+	if (!Array.isArray(content)) {
+		return null
+	}
+
+	const textParts = content
+		.map((item) => {
+			if (typeof item === "string") {
+				return item
+			}
+
+			if (!item || typeof item !== "object") {
+				return ""
+			}
+
+			if (typeof item.text === "string") {
+				return item.text
+			}
+
+			if (typeof item.content === "string") {
+				return item.content
+			}
+
+			return ""
+		})
+		.filter(Boolean)
+
+	return textParts.length > 0 ? textParts.join("\n") : null
+}
+
+function extractResponseText(config, apiResponse) {
+	const provider = resolveProviderSettings(config)
+
+	if (provider.providerType === AI_PROVIDERS.GEMINI) {
+		return apiResponse?.candidates?.[0]?.content?.parts?.[0]?.text ?? null
+	}
+
+	const choice = apiResponse?.choices?.[0]
+	if (!choice) {
+		return null
+	}
+
+	if (typeof choice.text === "string") {
+		return choice.text
+	}
+
+	return extractOpenAiMessageText(choice.message?.content)
+}
+
+function getResponseFinishReason(config, apiResponse) {
+	const provider = resolveProviderSettings(config)
+	if (provider.providerType === AI_PROVIDERS.GEMINI) {
+		return apiResponse?.candidates?.[0]?.finishReason ?? null
+	}
+	return apiResponse?.choices?.[0]?.finish_reason ?? null
+}
+
+function buildModelsRequest(config, apiKey) {
+	const provider = resolveProviderSettings(config)
+
+	if (provider.providerType === AI_PROVIDERS.GEMINI) {
+		return {
+			method: "GET",
+			url: `${provider.baseUrl}/models?key=${encodeURIComponent(apiKey)}`,
+			headers: {},
+		}
+	}
+
+	return {
+		method: "GET",
+		url: `${provider.baseUrl}${provider.modelsPath}`,
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+		},
+	}
+}
+
+function parseModelIdsFromCatalogPayload(payload) {
+	if (Array.isArray(payload)) {
+		return Array.from(new Set(payload.filter((entry) => typeof entry === "string" && entry.trim()))).map((entry) =>
+			entry.trim(),
+		)
+	}
+
+	if (!payload || typeof payload !== "object") {
+		return []
+	}
+
+	if (Array.isArray(payload.data)) {
+		return Array.from(
+			new Set(
+				payload.data
+					.map((entry) => (entry && typeof entry === "object" ? entry.id : null))
+					.filter((entry) => typeof entry === "string" && entry.trim())
+					.map((entry) => entry.trim()),
+			),
+		)
+	}
+
+	if (Array.isArray(payload.models)) {
+		return Array.from(
+			new Set(
+				payload.models
+					.map((entry) => {
+						if (typeof entry === "string") {
+							return entry
+						}
+
+						if (!entry || typeof entry !== "object") {
+							return null
+						}
+
+						return entry.id || entry.name || entry.model || null
+					})
+					.filter((entry) => typeof entry === "string" && entry.trim())
+					.map((entry) => entry.trim()),
+			),
+		)
+	}
+
+	return []
+}
+
+function parseModelsResponse(config, payload) {
+	const provider = resolveProviderSettings(config)
+
+	if (provider.providerType === AI_PROVIDERS.GEMINI) {
+		return Array.isArray(payload?.models)
+			? payload.models
+					.filter(
+						(model) =>
+							Array.isArray(model?.supportedGenerationMethods) &&
+							model.supportedGenerationMethods.includes("generateContent"),
+					)
+					.map((model) => model.name)
+			: []
+	}
+
+	return parseModelIdsFromCatalogPayload(payload)
+}
+
+
+/***/ },
+
 /***/ 907
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -2589,12 +2961,15 @@ function deprecatedHandleApiError(errorMessage) {
 /* harmony export */   Z9: () => (/* binding */ loadConfig),
 /* harmony export */   gH: () => (/* binding */ updateKeyState),
 /* harmony export */   gb: () => (/* binding */ getNextAvailableKey),
+/* harmony export */   ne: () => (/* binding */ getModelsCacheBucket),
 /* harmony export */   qk: () => (/* binding */ clearSessionResults),
 /* harmony export */   ql: () => (/* binding */ saveConfig)
 /* harmony export */ });
 /* unused harmony exports CONFIG_KEY, SESSION_RESULTS_KEY, KEY_STATE_KEY, loadKeyStates, saveKeyStates, initializeKeyStates */
-/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(395);
+/* harmony import */ var _providerConfig__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(107);
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(395);
 // src/modules/state.js
+
 
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_"
@@ -2607,6 +2982,10 @@ const appState = {
 	// Configuration
 	config: {
 		apiKeys: [],
+		providerType: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1,
+		providerBaseUrl: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].baseUrl,
+		providerChatCompletionsPath: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].chatCompletionsPath,
+		providerModelsPath: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].modelsPath,
 		model: "",
 		useJson: false,
 		loggingEnabled: false,
@@ -2692,11 +3071,36 @@ async function loadConfig() {
 
 	// --- Migration for single API key to multiple ---
 	if (savedConfig.apiKey && !savedConfig.apiKeys) {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Migrating legacy single API key to new array format.")
+		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Migrating legacy single API key to new array format.")
 		savedConfig.apiKeys = [savedConfig.apiKey]
 		delete savedConfig.apiKey
 	}
 	// --- End Migration ---
+
+	const looksLikeLegacyGeminiConfig =
+		!savedConfig.providerType &&
+		(Array.isArray(savedConfig.apiKeys) ||
+			typeof savedConfig.apiKey === "string" ||
+			typeof savedConfig.model === "string")
+
+	if (looksLikeLegacyGeminiConfig) {
+		savedConfig.providerType = _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .AI_PROVIDERS */ .Q2.GEMINI
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Migrating legacy Gemini configuration to provider-aware settings.")
+	}
+
+	const providerType = savedConfig.providerType || _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1
+	const providerDefaults =
+		_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[providerType === _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .AI_PROVIDERS */ .Q2.GEMINI ? _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .AI_PROVIDERS */ .Q2.GEMINI : _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1]
+
+	if (!savedConfig.providerBaseUrl) {
+		savedConfig.providerBaseUrl = providerDefaults.baseUrl
+	}
+	if (!savedConfig.providerChatCompletionsPath) {
+		savedConfig.providerChatCompletionsPath = providerDefaults.chatCompletionsPath
+	}
+	if (!savedConfig.providerModelsPath) {
+		savedConfig.providerModelsPath = providerDefaults.modelsPath
+	}
 
 	// Load preferences from saved config if they exist
 	if (savedConfig.preferences) {
@@ -2704,13 +3108,19 @@ async function loadConfig() {
 			...appState.preferences,
 			...savedConfig.preferences,
 		}
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Loaded preferences from config:", appState.preferences)
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Loaded preferences from config:", appState.preferences)
 	}
 
 	appState.config = {
 		...appState.config,
 		...savedConfig,
 	}
+
+	const resolvedProvider = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .resolveProviderSettings */ .vy)(appState.config)
+	appState.config.providerType = resolvedProvider.providerType
+	appState.config.providerBaseUrl = resolvedProvider.baseUrl
+	appState.config.providerChatCompletionsPath = resolvedProvider.chatCompletionsPath
+	appState.config.providerModelsPath = resolvedProvider.modelsPath
 
 	// Load session results if available
 	const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY)
@@ -2725,11 +3135,11 @@ async function loadConfig() {
 			appState.runtime.cumulativeResults = sanitizedResults
 			appState.session.hasSavedResults = true
 			appState.session.lastAnalysisTime = parsed.timestamp
-			;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Session results loaded and sanitized:", appState.runtime.cumulativeResults.length, "items")
+			;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Session results loaded and sanitized:", appState.runtime.cumulativeResults.length, "items")
 
 			// Log any sanitization that was performed
 			if (sanitizedResults.length !== rawResults.length) {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("🔧 Data sanitization: Results count changed during cleanup")
+				(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("🔧 Data sanitization: Results count changed during cleanup")
 			} else {
 				// Check if any suggestions were modified
 				let modifiedSuggestions = 0
@@ -2745,19 +3155,24 @@ async function loadConfig() {
 					}
 				}
 				if (modifiedSuggestions > 0) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`🔧 Data sanitization: Fixed ${modifiedSuggestions} corrupted suggestion fields`)
+					(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`🔧 Data sanitization: Fixed ${modifiedSuggestions} corrupted suggestion fields`)
 				}
 			}
 		} catch (e) {
-			(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Failed to parse session results:", e)
+			(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Failed to parse session results:", e)
 		}
 	}
 }
 
 async function saveConfig() {
 	try {
+		const resolvedProvider = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .resolveProviderSettings */ .vy)(appState.config)
 		const configToSave = {
 			...appState.config,
+			providerType: resolvedProvider.providerType,
+			providerBaseUrl: resolvedProvider.baseUrl,
+			providerChatCompletionsPath: resolvedProvider.chatCompletionsPath,
+			providerModelsPath: resolvedProvider.modelsPath,
 			preferences: appState.preferences,
 		}
 		await GM_setValue(CONFIG_KEY, configToSave)
@@ -2766,6 +3181,11 @@ async function saveConfig() {
 		console.error("Inconsistency Finder: Error saving config:", e)
 		return false
 	}
+}
+
+function getModelsCacheBucket(config = appState.config) {
+	const provider = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .resolveProviderSettings */ .vy)(config)
+	return [provider.providerType, provider.baseUrl.toLowerCase(), provider.modelsPath].join("|")
 }
 
 function saveSessionResults() {
@@ -2781,7 +3201,7 @@ function saveSessionResults() {
 		sessionStorage.setItem(SESSION_RESULTS_KEY, JSON.stringify(sessionData))
 		appState.session.hasSavedResults = true
 		appState.session.lastAnalysisTime = sessionData.timestamp
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Session results saved")
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Session results saved")
 	} catch (e) {
 		console.error("Inconsistency Finder: Error saving session results:", e)
 	}
@@ -2792,7 +3212,7 @@ function clearSessionResults() {
 		sessionStorage.removeItem(SESSION_RESULTS_KEY)
 		appState.session.hasSavedResults = false
 		appState.session.lastAnalysisTime = null
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Session results cleared")
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Session results cleared")
 	} catch (e) {
 		console.error("Inconsistency Finder: Error clearing session results:", e)
 	}
@@ -2846,9 +3266,7 @@ function loadKeyStates() {
 		const serializedNormalized = JSON.stringify(normalizedStates)
 		if (serializedOriginal !== serializedNormalized) {
 			saveKeyStates(normalizedStates)
-			;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(
-				"Inconsistency Finder: Normalized API key states on load to prevent stale cooldown or invalid metadata.",
-			)
+			;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Normalized API key states on load to prevent stale cooldown or invalid metadata.")
 		}
 
 		return normalizedStates
@@ -3002,7 +3420,7 @@ function getNextAvailableKey() {
 	}
 	if (refreshNeeded) {
 		saveKeyStates(keyStates)
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Inconsistency Finder: Refreshed API key cooldown states before selection.")
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Inconsistency Finder: Refreshed API key cooldown states before selection.")
 	}
 
 	// First pass: look for AVAILABLE keys
@@ -3054,11 +3472,11 @@ function getNextAvailableKey() {
 	if (soonestKey !== null) {
 		const waitTime = Math.max(0, soonestTime - now)
 		const minutes = Math.ceil(waitTime / (60 * 1000))
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(
 			`All keys are currently unavailable. Next key (index ${soonestKey}) will be available in ${minutes} minutes.`,
 		)
 	} else {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("All available API keys are permanently invalid or exhausted.")
+		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("All available API keys are permanently invalid or exhausted.")
 	}
 
 	return null // No keys currently available
@@ -3081,6 +3499,8 @@ function getNextAvailableKey() {
 
 
 
+
+const loggedNonActionableSuggestions = new Set()
 
 function displayResults(results) {
 	// Ensure we render only into the dedicated results container inside Finder tab.
@@ -3164,12 +3584,16 @@ function displayResults(results) {
 
 				// Debug logging for suggestion validation (only if enabled)
 				if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled && !isActionable) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Suggestion validation for "${group.concept}" #${suggIndex}:`, {
-						originalSuggestion: rawSuggestion,
-						displayText: sugg.display_text,
-						finalSuggestionValue: finalSuggestionValue,
-						isActionable: isActionable,
-					})
+					const suggestionLogKey = [group.concept, suggIndex, sugg.display_text || rawSuggestion || ""]
+						.map((part) => part || "")
+						.join("|")
+					if (!loggedNonActionableSuggestions.has(suggestionLogKey)) {
+						loggedNonActionableSuggestions.add(suggestionLogKey)
+						;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Suggestion validation skipped actionable output for "${group.concept}" #${suggIndex}.`, {
+							originalSuggestion: rawSuggestion,
+							displayText: sugg.display_text,
+						})
+					}
 				}
 
 				const replacementText = isActionable
@@ -3316,11 +3740,13 @@ function displayResults(results) {
 /* harmony export */ });
 /* unused harmony exports handleSaveConfig, handleFindInconsistencies, handleContinueAnalysis, handleFileImportAndAnalyze, handleClearSession, handleStatusClick */
 /* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(907);
-/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(395);
-/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(817);
-/* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37);
-/* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(871);
+/* harmony import */ var _providerConfig__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(107);
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(395);
+/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(817);
+/* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(37);
+/* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(871);
 // src/modules/ui/events.js
+
 
 
 
@@ -3335,7 +3761,7 @@ function startAnalysis(isContinuation = false) {
 	if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys || _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length === 0 || !_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model) {
 		alert("Please add at least one API key and select a model in the Configuration tab first.")
 		document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click()
-		;(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .togglePanel */ .Pj)(true)
+		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true)
 		return
 	}
 
@@ -3362,16 +3788,16 @@ function startAnalysis(isContinuation = false) {
 		document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
 		document.getElementById("wtr-if-file-input").click()
 	} else {
-		const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .crawlChapterData */ .bn)()
+		const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)()
 		// Apply smart quotes replacement first, then term replacements
-		const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
-		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .applyTermReplacements */ .sz)(smartQuotesData)
-		;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_2__/* .findInconsistenciesDeepAnalysis */ .Nz)(
+		const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
+		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData)
+		;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(
 			processedData,
 			isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [],
 			deepAnalysisDepth,
 		)
-		;(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .togglePanel */ .Pj)(false)
+		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false)
 	}
 }
 
@@ -3383,7 +3809,7 @@ function safeSetStyle(element, property, value) {
 	return false
 }
 
-function handleSaveConfig() {
+async function handleSaveConfig() {
 	const keyInputs = document.querySelectorAll(".wtr-if-api-key-input")
 	const newApiKeys = []
 	keyInputs.forEach((input) => {
@@ -3392,14 +3818,26 @@ function handleSaveConfig() {
 			newApiKeys.push(key)
 		}
 	})
+
+	const providerSettings = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .resolveProviderSettings */ .vy)({
+		providerType: document.getElementById("wtr-if-provider-type").value,
+		providerBaseUrl: document.getElementById("wtr-if-provider-base-url").value,
+		providerChatCompletionsPath: document.getElementById("wtr-if-provider-chat-path").value,
+		providerModelsPath: document.getElementById("wtr-if-provider-models-path").value,
+	})
+
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys = newApiKeys
+	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType = providerSettings.providerType
+	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl = providerSettings.baseUrl
+	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath = providerSettings.chatCompletionsPath
+	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = providerSettings.modelsPath
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = document.getElementById("wtr-if-model").value
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson = document.getElementById("wtr-if-use-json").checked
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
 	const statusEl = document.getElementById("wtr-if-status")
 	statusEl.textContent = "Saving..."
-	const success = (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
+	const success = await (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
 	statusEl.textContent = success ? "Configuration saved successfully!" : "Failed to save configuration."
 	setTimeout(() => (statusEl.textContent = ""), 3000)
 }
@@ -3422,8 +3860,8 @@ function handleFileImportAndAnalyze(event) {
 	reader.onload = (e) => {
 		try {
 			const data = JSON.parse(e.target.result)
-			const novelSlug = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .getNovelSlug */ .Ir)()
-			;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Detected novel slug: "${novelSlug}"`)
+			const novelSlug = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .getNovelSlug */ .Ir)()
+			;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Detected novel slug: "${novelSlug}"`)
 
 			// --- JSON Validation ---
 			if (!data || typeof data !== "object") {
@@ -3434,7 +3872,7 @@ function handleFileImportAndAnalyze(event) {
 			}
 			const terms = data.terms[novelSlug]
 			if (terms === undefined) {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`No replacement terms found for novel slug "${novelSlug}" in the JSON file.`)
+				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`No replacement terms found for novel slug "${novelSlug}" in the JSON file.`)
 				alert(
 					`No terms found for the current novel ("${novelSlug}") in this file. Analysis will proceed without replacements.`,
 				)
@@ -3449,17 +3887,17 @@ function handleFileImportAndAnalyze(event) {
 			}
 			// --- End Validation ---
 
-			const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .crawlChapterData */ .bn)()
+			const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)()
 			// Apply smart quotes replacement first, then term replacements
-			const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
-			const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .applyTermReplacements */ .sz)(smartQuotesData, terms || [])
+			const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
+			const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData, terms || [])
 			const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1)
-			;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_2__/* .findInconsistenciesDeepAnalysis */ .Nz)(
+			;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(
 				processedData,
 				isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [],
 				deepAnalysisDepth,
 			)
-			;(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .togglePanel */ .Pj)(false)
+			;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false)
 		} catch (err) {
 			alert("Failed to read or parse the JSON file. Error: " + err.message)
 		} finally {
@@ -3472,7 +3910,7 @@ function handleFileImportAndAnalyze(event) {
 function handleRestoreSession() {
 	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.session.hasSavedResults) {
 		// 1) Build Finder UI for restored results
-		(0,_display__WEBPACK_IMPORTED_MODULE_4__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
+		(0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
 
 		// 2) Immediately sync Apply/Copy mode on the actual rendered Finder buttons
 		//    This ensures restored sessions respect the current external integration state.
@@ -3532,7 +3970,7 @@ function handleStatusClick() {
 	const indicator = document.getElementById("wtr-if-status-indicator")
 	if (indicator.classList.contains("complete") || indicator.classList.contains("error")) {
 		// Show panel
-		(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .togglePanel */ .Pj)(true)
+		(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true)
 
 		// Activate Finder tab
 		const finderTabBtn = document.querySelector('.wtr-if-tab-btn[data-tab="finder"]')
@@ -3542,11 +3980,11 @@ function handleStatusClick() {
 
 		// Re-render results (if any) into Finder tab
 		if (Array.isArray(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults) && _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults.length > 0) {
-			(0,_display__WEBPACK_IMPORTED_MODULE_4__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
+			(0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
 		}
 
 		// Ensure status indicator is hidden after navigation
-		(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .updateStatusIndicator */ .LI)("hidden")
+		(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("hidden")
 
 		// IMPORTANT:
 		// Run after Finder DOM is present so button modes match current detection state.
@@ -3576,9 +4014,9 @@ function updateApplyCopyButtonsMode() {
 	let externalAvailable = false
 
 	try {
-		externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .isWTRLabTermReplacerLoaded */ .mT)()
+		externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
 	} catch (err) {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(
+		(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(
 			"WTR Lab Term Replacer detection failed in updateApplyCopyButtonsMode; falling back to safe copy mode.",
 			err,
 		)
@@ -3651,14 +4089,14 @@ function handleApplyClick(event) {
 
 	let externalAvailable = false
 	try {
-		externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .isWTRLabTermReplacerLoaded */ .mT)()
+		externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
 	} catch {
 		// If detection explodes for any reason, treat as not available for safety.
 		externalAvailable = false
 	}
 
 	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled) {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Apply/Copy button click", {
+		(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Apply/Copy button click", {
 			action,
 			replacementValue: replacement,
 			replacementLength: replacement ? replacement.length : "empty",
@@ -3672,7 +4110,7 @@ function handleApplyClick(event) {
 		try {
 			variationsToApply = JSON.parse(button.dataset.variations || "[]")
 		} catch (e) {
-			(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Failed to parse variations for apply-all/copy-all.", e)
+			(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to parse variations for apply-all/copy-all.", e)
 			variationsToApply = []
 		}
 	} else if (action === "apply-selected" || action === "copy-selected") {
@@ -3707,7 +4145,7 @@ function handleApplyClick(event) {
 		if (!finalReplacement) {
 			// If we somehow lack a valid suggestion, degrade gracefully and use variations only.
 			if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled) {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Copy action invoked without a valid suggestion; falling back to variations-only output.", {
+				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Copy action invoked without a valid suggestion; falling back to variations-only output.", {
 					uniqueVariations,
 				})
 			}
@@ -3778,7 +4216,7 @@ function handleApplyClick(event) {
 				}, 1500)
 			})
 			.catch((err) => {
-				(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Failed to copy terms payload.", err)
+				(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to copy terms payload.", err)
 				if (!button) {
 					return
 				}
@@ -3801,12 +4239,12 @@ function handleApplyClick(event) {
 
 	// Apply actions must only operate when the external replacer is available.
 	if (!externalAvailable) {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Apply action attempted while external replacer is not available; ignoring.", { action, uniqueVariations })
+		(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Apply action attempted while external replacer is not available; ignoring.", { action, uniqueVariations })
 		return
 	}
 
 	if (!finalReplacement) {
-		(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("ERROR: Empty or invalid replacement value detected. Aborting term addition.", {
+		(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("ERROR: Empty or invalid replacement value detected. Aborting term addition.", {
 			originalReplacement: replacement,
 			variations: uniqueVariations,
 		})
@@ -3829,13 +4267,13 @@ function handleApplyClick(event) {
 
 	if (uniqueVariations.length > 1) {
 		uniqueVariations.sort((a, b) => b.length - a.length)
-		originalTerm = uniqueVariations.map((v) => (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeRegExp */ .Nt)(v)).join("|")
+		originalTerm = uniqueVariations.map((v) => (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .escapeRegExp */ .Nt)(v)).join("|")
 		isRegex = true
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`)
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Applying suggestion "${finalReplacement}" via multi-term regex: /${originalTerm}/gi`)
 	} else {
 		originalTerm = uniqueVariations[0]
 		isRegex = false
-		;(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`)
+		;(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`)
 	}
 
 	const customEvent = new CustomEvent("wtr:addTerm", {
@@ -3942,6 +4380,11 @@ function importConfiguration() {
 					..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config,
 					...data.config,
 				}
+				const importedProviderSettings = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .resolveProviderSettings */ .vy)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config)
+				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType = importedProviderSettings.providerType
+				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl = importedProviderSettings.baseUrl
+				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath = importedProviderSettings.chatCompletionsPath
+				_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = importedProviderSettings.modelsPath
 				if (data.preferences) {
 					_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences = {
 						..._state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences,
@@ -3952,8 +4395,13 @@ function importConfiguration() {
 				(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
 
 				// Refresh UI
-				;(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .renderApiKeysUI */ .jH)()
-				;(0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .populateModelSelector */ .rT)()
+				;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .renderApiKeysUI */ .jH)()
+				document.getElementById("wtr-if-provider-type").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType
+				document.getElementById("wtr-if-provider-base-url").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl
+				document.getElementById("wtr-if-provider-chat-path").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath
+				document.getElementById("wtr-if-provider-models-path").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath
+				;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)()
+				;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)()
 
 				// Update form fields
 				document.getElementById("wtr-if-use-json").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson
@@ -3980,11 +4428,13 @@ function addEventListeners() {
 		return
 	}
 
-	panel.querySelector(".wtr-if-close-btn").addEventListener("click", () => (0,_panel__WEBPACK_IMPORTED_MODULE_3__/* .togglePanel */ .Pj)(false))
-	panel.querySelector("#wtr-if-save-config-btn").addEventListener("click", handleSaveConfig)
+	panel.querySelector(".wtr-if-close-btn").addEventListener("click", () => (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false))
+	panel.querySelector("#wtr-if-save-config-btn").addEventListener("click", () => {
+		handleSaveConfig()
+	})
 	panel.querySelector("#wtr-if-find-btn").addEventListener("click", handleFindInconsistencies)
 	panel.querySelector("#wtr-if-continue-btn").addEventListener("click", handleContinueAnalysis)
-	panel.querySelector("#wtr-if-refresh-models-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_3__/* .fetchAndCacheModels */ .mc)
+	panel.querySelector("#wtr-if-refresh-models-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_4__/* .fetchAndCacheModels */ .mc)
 	panel.querySelector("#wtr-if-file-input").addEventListener("change", handleFileImportAndAnalyze)
 	panel.querySelector("#wtr-if-export-config-btn").addEventListener("click", exportConfiguration)
 	panel.querySelector("#wtr-if-import-config-btn").addEventListener("click", importConfiguration)
@@ -3993,7 +4443,7 @@ function addEventListeners() {
 
 	const filterSelect = panel.querySelector("#wtr-if-filter-select")
 	filterSelect.addEventListener("change", () => {
-		;(0,_display__WEBPACK_IMPORTED_MODULE_4__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
+		;(0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults)
 		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.activeFilter = filterSelect.value
 		;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
 
@@ -4009,6 +4459,22 @@ function addEventListeners() {
 	panel.querySelector("#wtr-if-auto-restore").addEventListener("change", (e) => {
 		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults = e.target.checked
 		;(0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)()
+	})
+
+	panel.querySelector("#wtr-if-provider-type").addEventListener("change", (e) => {
+		const providerType =
+			e.target.value === _providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .AI_PROVIDERS */ .Q2.GEMINI ? _providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .AI_PROVIDERS */ .Q2.GEMINI : _providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .AI_PROVIDERS */ .Q2.OPENAI_COMPATIBLE
+		const defaults = _providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .PROVIDER_DEFAULTS */ .hV[providerType]
+		document.getElementById("wtr-if-provider-base-url").value = defaults.baseUrl
+		document.getElementById("wtr-if-provider-chat-path").value = defaults.chatCompletionsPath
+		document.getElementById("wtr-if-provider-models-path").value = defaults.modelsPath
+		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType = providerType
+		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl = defaults.baseUrl
+		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath = defaults.chatCompletionsPath
+		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = defaults.modelsPath
+		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = ""
+		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)()
+		;(0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)()
 	})
 
 	panel.querySelector("#wtr-if-deep-analysis-depth").addEventListener("change", (e) => {
@@ -4034,7 +4500,7 @@ function addEventListeners() {
 			// When switching to config tab, re-evaluate WTR Lab Term Replacer state
 			if (targetTab === "config") {
 				try {
-					const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .isWTRLabTermReplacerLoaded */ .mT)()
+					const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
 					const useJsonContainer = document.getElementById("wtr-if-use-json-container")
 					const useJsonCheckbox = document.getElementById("wtr-if-use-json")
 					const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
@@ -4056,13 +4522,13 @@ function addEventListeners() {
 						}
 					}
 				} catch (err) {
-					(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.", err)
+					(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR Lab Term Replacer detection failed on tab switch; keeping existing configuration UI.", err)
 				}
 			}
 		})
 	})
 
-	panel.querySelector("#wtr-if-add-key-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_3__/* .addApiKeyRow */ .$1)
+	panel.querySelector("#wtr-if-add-key-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_4__/* .addApiKeyRow */ .$1)
 	panel.querySelector("#wtr-if-api-keys-container").addEventListener("click", (e) => {
 		if (e.target.classList.contains("wtr-if-remove-key-btn")) {
 			if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {
@@ -4078,7 +4544,7 @@ function addEventListeners() {
 	// is not yet present, so it does not create stale wiring.
 	setTimeout(() => {
 		try {
-			const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .isWTRLabTermReplacerLoaded */ .mT)()
+			const isExternal = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)()
 			const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
 			if (modeHint) {
 				if (isExternal) {
@@ -4094,7 +4560,7 @@ function addEventListeners() {
 			// but only if the Finder DOM exists (function itself performs this guard).
 			updateApplyCopyButtonsMode()
 		} catch (err) {
-			(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("WTR Lab Term Replacer delayed detection check failed; continuing safely.", err)
+			(0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR Lab Term Replacer delayed detection check failed; continuing safely.", err)
 		}
 	}, 2000)
 }
@@ -4139,6 +4605,7 @@ __webpack_require__.d(__webpack_exports__, {
   rz: () => (/* binding */ injectControlButton),
   rT: () => (/* binding */ populateModelSelector),
   jH: () => (/* binding */ renderApiKeysUI),
+  Nh: () => (/* binding */ syncProviderConfigUI),
   Pj: () => (/* binding */ togglePanel),
   LI: () => (/* binding */ updateStatusIndicator)
 });
@@ -4149,6 +4616,8 @@ __webpack_require__.d(__webpack_exports__, {
 var state = __webpack_require__(907);
 // EXTERNAL MODULE: ./src/modules/geminiApi.js + 4 modules
 var geminiApi = __webpack_require__(817);
+// EXTERNAL MODULE: ./src/modules/providerConfig.js
+var providerConfig = __webpack_require__(107);
 // EXTERNAL MODULE: ./src/modules/utils.js
 var utils = __webpack_require__(395);
 ;// ./src/version.js
@@ -4156,8 +4625,8 @@ var utils = __webpack_require__(395);
 // Shared runtime version information for the userscript UI
 
 const FALLBACK_VERSION_INFO = {
-	SEMANTIC: "5.3.8",
-	DISPLAY: "v5.3.8",
+	SEMANTIC: "5.3.9",
+	DISPLAY: "v5.3.9",
 	BUILD_ENV: "production",
 	BUILD_DATE: "2026-04-04",
 }
@@ -4184,6 +4653,7 @@ var events = __webpack_require__(148);
 ;// ./src/modules/ui/panel.js
 /* unused harmony import specifier */ var log;
 // src/modules/ui/panel.js
+
 
 
 
@@ -4285,14 +4755,36 @@ function createUI() {
                     </div>
                 </div>
                 <div id="wtr-if-tab-config" class="wtr-if-tab-content">
-                    <!-- API Keys Management Section -->
+                    <!-- Provider & API Keys Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔑</i> API Keys Management</h3>
+                            <h3><i class="wtr-if-icon">🔌</i> Provider Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
-                                <label>Gemini API Keys</label>
+                                <label for="wtr-if-provider-type">AI Provider</label>
+                                <select id="wtr-if-provider-type">
+                                    <option value="openai-compatible">OpenAI-Compatible</option>
+                                    <option value="gemini">Google Gemini</option>
+                                </select>
+                                <small id="wtr-if-provider-hint" class="wtr-if-hint"></small>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-provider-base-url" id="wtr-if-provider-base-url-label">Provider Base URL</label>
+                                <input type="text" id="wtr-if-provider-base-url" placeholder="https://api.openai.com">
+                            </div>
+                            <div id="wtr-if-openai-compatible-fields">
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-provider-chat-path">Chat Completions Path</label>
+                                    <input type="text" id="wtr-if-provider-chat-path" placeholder="/v1/chat/completions">
+                                </div>
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-provider-models-path">Models Path</label>
+                                    <input type="text" id="wtr-if-provider-models-path" placeholder="/v1/models">
+                                </div>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label id="wtr-if-api-key-label">API Keys</label>
                                 <div class="wtr-if-api-keys-container-wrapper">
                                     <div id="wtr-if-api-keys-container"></div>
                                 </div>
@@ -4308,7 +4800,7 @@ function createUI() {
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
-                                <label for="wtr-if-model">Gemini Model</label>
+                                <label for="wtr-if-model" id="wtr-if-model-label">OpenAI-Compatible Model</label>
                                 <div class="wtr-if-model-controls">
                                     <select id="wtr-if-model"></select>
                                     <button id="wtr-if-refresh-models-btn" class="wtr-if-btn wtr-if-btn-secondary">Refresh List</button>
@@ -4398,6 +4890,59 @@ function createUI() {
 	;(0,events/* addEventListeners */.lQ)()
 }
 
+function getCachedModelsData(cacheState, providerBucket) {
+	if (cacheState && Array.isArray(cacheState.models)) {
+		return cacheState
+	}
+
+	if (!cacheState || typeof cacheState !== "object") {
+		return null
+	}
+
+	return cacheState[providerBucket] || null
+}
+
+function syncProviderConfigUI() {
+	const providerType = document.getElementById("wtr-if-provider-type")?.value || providerConfig/* AI_PROVIDERS */.Q2.OPENAI_COMPATIBLE
+	const defaults = providerConfig/* PROVIDER_DEFAULTS */.hV[providerType] || providerConfig/* PROVIDER_DEFAULTS */.hV[providerConfig/* AI_PROVIDERS */.Q2.OPENAI_COMPATIBLE]
+	const apiKeyLabel = document.getElementById("wtr-if-api-key-label")
+	const modelLabel = document.getElementById("wtr-if-model-label")
+	const baseUrlLabel = document.getElementById("wtr-if-provider-base-url-label")
+	const baseUrlInput = document.getElementById("wtr-if-provider-base-url")
+	const providerHint = document.getElementById("wtr-if-provider-hint")
+	const chatPathInput = document.getElementById("wtr-if-provider-chat-path")
+	const modelsPathInput = document.getElementById("wtr-if-provider-models-path")
+	const openAiFields = document.getElementById("wtr-if-openai-compatible-fields")
+	const isGemini = providerType === providerConfig/* AI_PROVIDERS */.Q2.GEMINI
+
+	if (apiKeyLabel) {
+		apiKeyLabel.textContent = defaults.apiKeyLabel
+	}
+	if (modelLabel) {
+		modelLabel.textContent = defaults.modelLabel
+	}
+	if (baseUrlLabel) {
+		baseUrlLabel.textContent = isGemini ? "Gemini Base URL" : "Provider Base URL"
+	}
+	if (baseUrlInput) {
+		baseUrlInput.placeholder = defaults.baseUrl
+	}
+	if (providerHint) {
+		providerHint.textContent = isGemini
+			? "Uses Gemini's native generateContent endpoint and Gemini model catalog."
+			: "Uses a configurable OpenAI-style base URL with chat completions and model discovery paths."
+	}
+	if (chatPathInput) {
+		chatPathInput.placeholder = defaults.chatCompletionsPath
+	}
+	if (modelsPathInput) {
+		modelsPathInput.placeholder = defaults.modelsPath
+	}
+	if (openAiFields) {
+		openAiFields.style.display = isGemini ? "none" : "block"
+	}
+}
+
 async function populateModelSelector() {
 	const selectEl = document.getElementById("wtr-if-model")
 	if (!selectEl) {
@@ -4405,12 +4950,20 @@ async function populateModelSelector() {
 	}
 	selectEl.innerHTML = "<option>Loading from cache...</option>"
 	selectEl.disabled = true
-	const cachedData = await GM_getValue(state/* MODELS_CACHE_KEY */.ES, null)
-	if (cachedData && cachedData.models && cachedData.models.length > 0) {
-		selectEl.innerHTML = cachedData.models
-			.map((m) => `<option value="${m}">${m.replace("models/", "")}</option>`)
+	const providerBucket = (0,state/* getModelsCacheBucket */.ne)(state/* appState */.XJ.config)
+	const cacheState = await GM_getValue(state/* MODELS_CACHE_KEY */.ES, null)
+	const cachedData = getCachedModelsData(cacheState, providerBucket)
+	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
+
+	if (state/* appState */.XJ.config.model && !cachedModels.includes(state/* appState */.XJ.config.model)) {
+		cachedModels.unshift(state/* appState */.XJ.config.model)
+	}
+
+	if (cachedModels.length > 0) {
+		selectEl.innerHTML = cachedModels
+			.map((modelId) => `<option value="${modelId}">${modelId.replace(/^models\//, "")}</option>`)
 			.join("")
-		selectEl.value = state/* appState */.XJ.config.model
+		selectEl.value = state/* appState */.XJ.config.model || cachedModels[0]
 	} else {
 		selectEl.innerHTML = '<option value="">No models cached. Please refresh.</option>'
 	}
@@ -4426,25 +4979,36 @@ async function fetchAndCacheModels() {
 		return
 	}
 	const apiKey = apiKeyInfo.key
+	const providerBucket = (0,state/* getModelsCacheBucket */.ne)(state/* appState */.XJ.config)
+	const requestConfig = (0,providerConfig/* buildModelsRequest */.yd)(state/* appState */.XJ.config, apiKey)
 	statusEl.textContent = "Fetching model list..."
 	document.getElementById("wtr-if-refresh-models-btn").disabled = true
 	GM_xmlhttpRequest({
-		method: "GET",
-		url: `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+		method: requestConfig.method,
+		url: requestConfig.url,
+		headers: requestConfig.headers,
 		onload: async function (response) {
 			try {
 				const data = JSON.parse(response.responseText)
-				if (data.error) {
-					throw new Error(data.error.message)
+				if (response.status >= 400) {
+					throw new Error(data?.error?.message || response.statusText || `HTTP ${response.status}`)
 				}
-				const filteredModels = data.models
-					.filter((m) => m.supportedGenerationMethods.includes("generateContent"))
-					.map((m) => m.name)
+				if (data.error) {
+					throw new Error(data.error.message || "Failed to fetch models")
+				}
+
+				const filteredModels = (0,providerConfig/* parseModelsResponse */.Zi)(state/* appState */.XJ.config, data)
 				if (filteredModels.length > 0) {
-					await GM_setValue(state/* MODELS_CACHE_KEY */.ES, {
+					const existingCache = await GM_getValue(state/* MODELS_CACHE_KEY */.ES, null)
+					const nextCacheState =
+						existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
+							? existingCache
+							: {}
+					nextCacheState[providerBucket] = {
 						timestamp: Date.now(),
 						models: filteredModels,
-					})
+					}
+					await GM_setValue(state/* MODELS_CACHE_KEY */.ES, nextCacheState)
 					statusEl.textContent = `Success! Found ${filteredModels.length} models.`
 					await populateModelSelector()
 				} else {
@@ -4510,6 +5074,11 @@ async function togglePanel(show = null) {
 	if (shouldShow) {
 		// Restore UI state from config
 		renderApiKeysUI()
+		document.getElementById("wtr-if-provider-type").value = state/* appState */.XJ.config.providerType
+		document.getElementById("wtr-if-provider-base-url").value = state/* appState */.XJ.config.providerBaseUrl
+		document.getElementById("wtr-if-provider-chat-path").value = state/* appState */.XJ.config.providerChatCompletionsPath
+		document.getElementById("wtr-if-provider-models-path").value = state/* appState */.XJ.config.providerModelsPath
+		syncProviderConfigUI()
 		document.getElementById("wtr-if-use-json").checked = state/* appState */.XJ.config.useJson
 		document.getElementById("wtr-if-logging-enabled").checked = state/* appState */.XJ.config.loggingEnabled
 		document.getElementById("wtr-if-auto-restore").checked = state/* appState */.XJ.preferences.autoRestoreResults
@@ -4579,10 +5148,8 @@ async function togglePanel(show = null) {
 			// - Restores results
 			// - Immediately syncs Finder Apply/Copy buttons for restored DOM
 			(0,events/* handleRestoreSession */.Zo)()
-		} else if (state/* appState */.XJ.session.hasSavedResults) {
-			sessionRestore.style.display = "block"
-		} else {
-			sessionRestore.style.display = "none"
+		} else if (sessionRestore) {
+			sessionRestore.style.display = state/* appState */.XJ.session.hasSavedResults ? "block" : "none"
 		}
 
 		// Ensure Apply/Copy button modes are synchronized after panel initialization
@@ -5024,21 +5591,54 @@ function getCollisionAvoidanceStatus() {
 /* harmony export */   ZD: () => (/* binding */ escapeHtml),
 /* harmony export */   bd: () => (/* binding */ mergeAnalysisResults),
 /* harmony export */   bn: () => (/* binding */ crawlChapterData),
+/* harmony export */   eM: () => (/* binding */ truncateForLog),
 /* harmony export */   fN: () => (/* binding */ summarizeContextResults),
 /* harmony export */   mT: () => (/* binding */ isWTRLabTermReplacerLoaded),
 /* harmony export */   oV: () => (/* binding */ validateResultForContext),
 /* harmony export */   sz: () => (/* binding */ applyTermReplacements),
 /* harmony export */   zF: () => (/* binding */ extractJsonFromString)
 /* harmony export */ });
-/* unused harmony exports calculateResultQuality, areSemanticallySimilar */
+/* unused harmony exports summarizeForLog, calculateResultQuality, areSemanticallySimilar */
 /* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(907);
 // src/modules/utils.js
 
 
 // --- UTILITY FUNCTIONS ---
+function truncateForLog(value, maxLength = 280) {
+	if (typeof value !== "string") {
+		return value
+	}
+
+	if (value.length <= maxLength) {
+		return value
+	}
+
+	return `${value.slice(0, maxLength)}… [truncated ${value.length - maxLength} chars]`
+}
+
+function summarizeForLog(value, maxStringLength = 280) {
+	if (typeof value === "string") {
+		return truncateForLog(value, maxStringLength)
+	}
+
+	if (Array.isArray(value)) {
+		return {
+			type: "array",
+			length: value.length,
+			preview: value.slice(0, 3),
+		}
+	}
+
+	if (value && typeof value === "object") {
+		return value
+	}
+
+	return value
+}
+
 function log(...args) {
 	if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled) {
-		console.log("Inconsistency Finder:", ...args)
+		console.log("Inconsistency Finder:", ...args.map((arg) => summarizeForLog(arg)))
 	}
 }
 
@@ -5960,7 +6560,7 @@ function isWTRLabTermReplacerLoaded() {
 (module) {
 
 "use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.8","description":"Finds term inconsistencies in WTR Lab chapters using Gemini AI. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"wtr-lab-term-inconsistency-finder","version":"5.3.9","description":"Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.","author":"MasuRii","license":"MIT","private":true,"main":"dist/main.js","engines":{"node":">=20.19.0"},"repository":{"type":"git","url":"https://github.com/MasuRii/wtr-term-inconsistency-finder.git"},"bugs":{"url":"https://github.com/MasuRii/wtr-term-inconsistency-finder/issues"},"files":["dist/","src/"],"scripts":{"build":"npm run version:update && npm run format && npm run lint:fix && webpack --mode=production","build:performance":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:greasyfork":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=production","build:devbundle":"npm run version:update && npm run format && npm run lint:fix && webpack --config webpack.config.js --mode=development","dev":"webpack serve --config webpack.config.js --mode=development","lint":"npm run lint:js && npm run lint:css","lint:check":"npm run lint:js && npm run lint:css","lint:fix":"npm run lint:js:fix && npm run lint:css:fix","lint:js":"eslint src/ --ext .js --max-warnings 0","lint:js:fix":"eslint src/ --ext .js --fix","lint:css":"stylelint \\"src/styles/**/*.css\\" --max-warnings 0","lint:css:fix":"stylelint \\"src/styles/**/*.css\\" --fix","format":"prettier --write \\"src/**/*.{js,css}\\"","version:update":"node scripts/update-versions.js update","version:check":"node scripts/update-versions.js check","version:banner":"node scripts/update-versions.js banner","version:header":"node scripts/update-versions.js header"},"devDependencies":{"@eslint/js":"^9.39.4","css-loader":"^7.1.4","eslint":"^9.39.4","eslint-config-prettier":"^10.1.8","eslint-plugin-import":"^2.32.0","eslint-plugin-prettier":"^5.5.5","prettier":"^3.8.1","style-loader":"^4.0.0","stylelint":"^17.6.0","stylelint-config-standard":"^40.0.0","stylelint-prettier":"^5.0.3","webpack":"^5.105.4","webpack-cli":"^7.0.2","webpack-dev-server":"^5.2.3","webpack-userscript":"^3.2.3"}}');
 
 /***/ }
 
