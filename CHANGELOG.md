@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [5.4.0] - 2026-04-04
+
+### ✨ Added
+- **Multi-Provider Support**: Added support for OpenAI-compatible API providers in addition to Google Gemini. Users can now choose between Gemini and any OpenAI-compatible API (OpenAI, local models, self-hosted solutions like Ollama, etc.).
+- **Flexible API Configuration**: New configuration options for provider type, base URL, and custom API endpoints, enabling integration with various AI backends.
+- **Dynamic Model Discovery**: Enhanced model fetching system that works with both Gemini and OpenAI-compatible model catalogs.
+- **Provider-Aware Request Building**: Automatic request formatting based on provider type, handling authentication and payload differences transparently.
+
+### 📦 New Module
+- **providerConfig.js**: New module providing provider configuration, URL/path normalization, request builders, and response parsers for both Gemini and OpenAI-compatible APIs.
+
+---
 ## [5.3.9] - 2026-04-04
 
 ### ✨ Added
