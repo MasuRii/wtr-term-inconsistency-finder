@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.4.1-dev.1775322844957
+// @version 5.4.1-dev.1775364575061
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -2147,6 +2147,62 @@ function summarizeParsedResponse(parsedResponse) {
 	}
 }
 
+function createStreamingRequestState(config) {
+	if (!(0,providerConfig/* providerUsesStreaming */._C)(config)) {
+		return null
+	}
+
+	return {
+		...(0,providerConfig/* createOpenAiStreamState */.ac)(),
+		lastStatusUpdateAt: 0,
+		lastStatusLength: 0,
+	}
+}
+
+function handleStreamingProgress(operationName, streamState, response) {
+	if (!streamState) {
+		return
+	}
+
+	(0,providerConfig/* consumeOpenAiStreamResponse */.yU)(streamState, response.responseText || "")
+
+	const currentLength = streamState.text.length
+	if (currentLength <= 0 || currentLength === streamState.lastStatusLength) {
+		return
+	}
+
+	const now = Date.now()
+	if (now - streamState.lastStatusUpdateAt < 250) {
+		return
+	}
+
+	streamState.lastStatusUpdateAt = now
+	streamState.lastStatusLength = currentLength
+	;(0,ui/* updateStatusIndicator */.LI)("running", `${operationName}: Streaming response (${currentLength} chars)...`)
+}
+
+function resolveStreamedApiResponse(response, streamState) {
+	const streamResult = (0,providerConfig/* finalizeOpenAiStreamResponse */.o_)(streamState, response.responseText || "")
+	if (!streamResult.isStreamResponse) {
+		return null
+	}
+
+	if (streamResult.errorPayload) {
+		return streamResult.errorPayload
+	}
+
+	return {
+		choices: [
+			{
+				message: {
+					content: streamResult.text || "",
+				},
+				finish_reason: streamResult.finishReason,
+			},
+		],
+	}
+}
+
 /**
  * Main inconsistency analysis function
  * @param {Array} chapterData - Array of chapter objects with text and chapter numbers
@@ -2202,14 +2258,18 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 
 	const prompt = promptManager_buildPrompt(combinedText, existingResults)
 	const requestConfig = (0,providerConfig/* buildAnalysisRequest */.g)(state/* appState */.XJ.config, currentKey, prompt)
+	const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config)
 
 	GM_xmlhttpRequest({
 		method: requestConfig.method,
 		url: requestConfig.url,
 		headers: requestConfig.headers,
 		data: requestConfig.data,
+		onprogress: function (response) {
+			handleStreamingProgress(operationName, streamingRequestState, response)
+		},
 		onload: function (response) {
-			;(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
+			(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
 				...getProviderLogContext(),
 				httpStatus: response.status,
 				responseLength: response.responseText?.length || 0,
@@ -2220,7 +2280,8 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
 
 			// Shell parse errors are treated as retriable (can be transient)
 			try {
-				apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
+				const streamedApiResponse = resolveStreamedApiResponse(response, streamingRequestState)
+				apiResponse = normalizeApiResponse(response, streamedApiResponse || JSON.parse(response.responseText))
 			} catch (e) {
 				(0,utils/* log */.Rm)(
 					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -2449,14 +2510,18 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
 		const requestConfig = (0,providerConfig/* buildAnalysisRequest */.g)(state/* appState */.XJ.config, currentKey, prompt)
+		const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config)
 
 		GM_xmlhttpRequest({
 			method: requestConfig.method,
 			url: requestConfig.url,
 			headers: requestConfig.headers,
 			data: requestConfig.data,
+			onprogress: function (response) {
+				handleStreamingProgress(operationName, streamingRequestState, response)
+			},
 			onload: function (response) {
-				;(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
+				(0,utils/* log */.Rm)(`${operationName}: Received API response.`, {
 					...getProviderLogContext(),
 					httpStatus: response.status,
 					responseLength: response.responseText?.length || 0,
@@ -2467,7 +2532,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 				// Shell parse: treat as retriable (can be transient / truncation)
 				try {
-					apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
+					const streamedApiResponse = resolveStreamedApiResponse(response, streamingRequestState)
+					apiResponse = normalizeApiResponse(
+						response,
+						streamedApiResponse || JSON.parse(response.responseText),
+					)
 				} catch (e) {
 					(0,utils/* log */.Rm)(
 						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -2696,9 +2765,13 @@ function deprecatedHandleApiError(errorMessage) {
 /* harmony export */   Qk: () => (/* binding */ extractResponseText),
 /* harmony export */   V1: () => (/* binding */ DEFAULT_PROVIDER_TYPE),
 /* harmony export */   Zi: () => (/* binding */ parseModelsResponse),
+/* harmony export */   _C: () => (/* binding */ providerUsesStreaming),
+/* harmony export */   ac: () => (/* binding */ createOpenAiStreamState),
 /* harmony export */   g: () => (/* binding */ buildAnalysisRequest),
 /* harmony export */   hV: () => (/* binding */ PROVIDER_DEFAULTS),
+/* harmony export */   o_: () => (/* binding */ finalizeOpenAiStreamResponse),
 /* harmony export */   vy: () => (/* binding */ resolveProviderSettings),
+/* harmony export */   yU: () => (/* binding */ consumeOpenAiStreamResponse),
 /* harmony export */   yd: () => (/* binding */ buildModelsRequest)
 /* harmony export */ });
 /* unused harmony exports normalizeBaseUrl, normalizeApiPath, getProviderDefaults, parseModelIdsFromCatalogPayload */
@@ -2768,6 +2841,11 @@ function resolveProviderSettings(config = {}) {
 	}
 }
 
+function providerUsesStreaming(config) {
+	const provider = resolveProviderSettings(config)
+	return provider.providerType === AI_PROVIDERS.OPENAI_COMPATIBLE
+}
+
 function buildAnalysisRequest(config, apiKey, prompt) {
 	const provider = resolveProviderSettings(config)
 
@@ -2797,6 +2875,7 @@ function buildAnalysisRequest(config, apiKey, prompt) {
 		data: JSON.stringify({
 			model: config.model,
 			temperature: config.temperature,
+			stream: true,
 			messages: [{ role: "user", content: prompt }],
 		}),
 	}
@@ -2834,6 +2913,110 @@ function extractOpenAiMessageText(content) {
 		.filter(Boolean)
 
 	return textParts.length > 0 ? textParts.join("\n") : null
+}
+
+function extractOpenAiDeltaText(delta) {
+	return extractOpenAiMessageText(delta?.content)
+}
+
+function consumeOpenAiStreamLine(streamState, line) {
+	const trimmedLine = typeof line === "string" ? line.trim() : ""
+	if (!trimmedLine || trimmedLine.startsWith(":")) {
+		return
+	}
+
+	if (!trimmedLine.startsWith("data:")) {
+		return
+	}
+
+	const payloadText = trimmedLine.slice(5).trim()
+	if (!payloadText) {
+		return
+	}
+
+	if (payloadText === "[DONE]") {
+		streamState.done = true
+		return
+	}
+
+	let payload
+	try {
+		payload = JSON.parse(payloadText)
+	} catch {
+		return
+	}
+
+	streamState.eventCount += 1
+
+	if (payload?.error) {
+		streamState.errorPayload = payload
+		return
+	}
+
+	const choice = payload?.choices?.[0]
+	const deltaText = extractOpenAiDeltaText(choice?.delta)
+	if (deltaText) {
+		streamState.text += deltaText
+	}
+
+	if (choice?.finish_reason) {
+		streamState.finishReason = choice.finish_reason
+	}
+}
+
+function createOpenAiStreamState() {
+	return {
+		processedLength: 0,
+		pendingLine: "",
+		text: "",
+		finishReason: null,
+		done: false,
+		eventCount: 0,
+		errorPayload: null,
+	}
+}
+
+function consumeOpenAiStreamResponse(streamState, responseText) {
+	if (!streamState || typeof responseText !== "string" || responseText.length === 0) {
+		return streamState
+	}
+
+	const nextChunk = responseText.slice(streamState.processedLength)
+	if (!nextChunk) {
+		return streamState
+	}
+
+	streamState.processedLength = responseText.length
+	const bufferedChunk = `${streamState.pendingLine}${nextChunk}`
+	const lines = bufferedChunk.split(/\r?\n/)
+	streamState.pendingLine = lines.pop() || ""
+	lines.forEach((line) => consumeOpenAiStreamLine(streamState, line))
+	return streamState
+}
+
+function finalizeOpenAiStreamResponse(streamState, responseText) {
+	if (!streamState) {
+		return {
+			isStreamResponse: false,
+			text: null,
+			finishReason: null,
+			errorPayload: null,
+		}
+	}
+
+	consumeOpenAiStreamResponse(streamState, responseText)
+
+	if (streamState.pendingLine.trim()) {
+		consumeOpenAiStreamLine(streamState, streamState.pendingLine)
+		streamState.pendingLine = ""
+	}
+
+	return {
+		isStreamResponse: streamState.eventCount > 0 || streamState.done,
+		text: streamState.text || null,
+		finishReason: streamState.finishReason || null,
+		errorPayload: streamState.errorPayload,
+	}
 }
 
 function extractResponseText(config, apiResponse) {
@@ -3189,6 +3372,42 @@ function getModelsCacheBucket(config = appState.config) {
 	return [provider.providerType, provider.baseUrl.toLowerCase(), provider.modelsPath].join("|")
 }
 
+function getKeyStateScope(config = appState.config) {
+	const provider = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .resolveProviderSettings */ .vy)(config)
+	return [
+		provider.providerType,
+		provider.baseUrl.toLowerCase(),
+		provider.chatCompletionsPath,
+		provider.modelsPath,
+	].join("|")
+}
+
+function getKeyFingerprint(apiKey) {
+	const normalizedKey = typeof apiKey === "string" ? apiKey.trim() : ""
+	if (!normalizedKey) {
+		return "empty"
+	}
+
+	let hash = 5381
+	for (let i = 0; i < normalizedKey.length; i++) {
+		hash = (hash * 33) ^ normalizedKey.charCodeAt(i)
+	}
+
+	return `${normalizedKey.length}:${(hash >>> 0).toString(16)}`
+}
+
+function createInitialKeyState(apiKey, scope, now = Date.now()) {
+	return {
+		status: "AVAILABLE",
+		unlockTime: 0,
+		lastUsed: null,
+		failureCount: 0,
+		lastReset: now,
+		keyFingerprint: getKeyFingerprint(apiKey),
+		scope,
+	}
+}
+
 function saveSessionResults() {
 	try {
 		const sessionData = {
@@ -3240,6 +3459,8 @@ function loadKeyStates() {
 			const unlockTime =
 				typeof raw.unlockTime === "number" && Number.isFinite(raw.unlockTime) ? raw.unlockTime : 0
 			const failureCount = typeof raw.failureCount === "number" && raw.failureCount >= 0 ? raw.failureCount : 0
+			const keyFingerprint = typeof raw.keyFingerprint === "string" ? raw.keyFingerprint : null
+			const scope = typeof raw.scope === "string" ? raw.scope : null
 
 			let normalizedStatus = status
 			let normalizedUnlockTime = unlockTime
@@ -3259,6 +3480,8 @@ function loadKeyStates() {
 					typeof raw.lastReset === "number" && Number.isFinite(raw.lastReset)
 						? raw.lastReset
 						: raw.lastReset || null,
+				keyFingerprint,
+				scope,
 			}
 		})
 
@@ -3294,39 +3517,39 @@ function saveKeyStates(keyStates) {
 function initializeKeyStates() {
 	const keyStates = loadKeyStates()
 	const now = Date.now()
+	const scope = getKeyStateScope()
 	let hasChanges = false
 
 	if (appState.config.apiKeys) {
 		appState.config.apiKeys.forEach((key, index) => {
-			if (!keyStates[index]) {
-				keyStates[index] = {
-					status: "AVAILABLE",
-					unlockTime: 0,
-					lastUsed: null,
-					failureCount: 0,
-				}
+			const expectedFingerprint = getKeyFingerprint(key)
+			const existingState = keyStates[index]
+			const keyIdentityChanged =
+				!existingState || existingState.scope !== scope || existingState.keyFingerprint !== expectedFingerprint
+
+			if (keyIdentityChanged) {
+				keyStates[index] = createInitialKeyState(key, scope, now)
 				hasChanges = true
-			} else {
-				// Check if cooldown has expired
-				if (keyStates[index].status === "ON_COOLDOWN" && now > keyStates[index].unlockTime) {
-					keyStates[index].status = "AVAILABLE"
-					keyStates[index].unlockTime = 0
-					hasChanges = true
+				if (existingState) {
+					(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Reset API key state for slot ${index + 1} after key/provider change.`)
 				}
-				// Check if daily reset has occurred (for exhausted keys)
-				if (keyStates[index].status === "EXHAUSTED") {
-					const lastReset = keyStates[index].lastReset || now
-					const daysSinceReset = Math.floor((now - lastReset) / (24 * 60 * 60 * 1000))
-					if (daysSinceReset >= 1) {
-						keyStates[index] = {
-							status: "AVAILABLE",
-							unlockTime: 0,
-							lastUsed: null,
-							failureCount: 0,
-							lastReset: now,
-						}
-						hasChanges = true
-					}
+				return
+			}
+
+			// Check if cooldown has expired
+			if (keyStates[index].status === "ON_COOLDOWN" && now > keyStates[index].unlockTime) {
+				keyStates[index].status = "AVAILABLE"
+				keyStates[index].unlockTime = 0
+				keyStates[index].failureCount = 0
+				hasChanges = true
+			}
+			// Check if daily reset has occurred (for exhausted keys)
+			if (keyStates[index].status === "EXHAUSTED") {
+				const lastReset = keyStates[index].lastReset || now
+				const daysSinceReset = Math.floor((now - lastReset) / (24 * 60 * 60 * 1000))
+				if (daysSinceReset >= 1) {
+					keyStates[index] = createInitialKeyState(key, scope, now)
+					hasChanges = true
 				}
 			}
 		})
@@ -3345,14 +3568,16 @@ function initializeKeyStates() {
 function updateKeyState(keyIndex, status, unlockTime = null, failureCount = 0) {
 	const keyStates = loadKeyStates()
 	const now = Date.now()
+	const scope = getKeyStateScope()
+	const apiKey = appState.config.apiKeys?.[keyIndex] || ""
+	const keyFingerprint = getKeyFingerprint(apiKey)
 
-	if (!keyStates[keyIndex]) {
-		keyStates[keyIndex] = {
-			status: "AVAILABLE",
-			unlockTime: 0,
-			lastUsed: null,
-			failureCount: 0,
-		}
+	if (
+		!keyStates[keyIndex] ||
+		keyStates[keyIndex].scope !== scope ||
+		keyStates[keyIndex].keyFingerprint !== keyFingerprint
+	) {
+		keyStates[keyIndex] = createInitialKeyState(apiKey, scope, now)
 	}
 
 	// Ensure unlockTime is numeric
@@ -3367,8 +3592,12 @@ function updateKeyState(keyIndex, status, unlockTime = null, failureCount = 0) {
 	}
 
 	const prevFailureCount = typeof keyStates[keyIndex].failureCount === "number" ? keyStates[keyIndex].failureCount : 0
-
-	const nextFailureCount = Math.max(0, prevFailureCount + failureCount)
+	const nextFailureCount =
+		nextStatus === "AVAILABLE"
+			? 0
+			: nextStatus === "INVALID"
+				? Math.max(1, prevFailureCount + failureCount)
+				: Math.max(0, prevFailureCount + failureCount)
 
 	keyStates[keyIndex] = {
 		...keyStates[keyIndex],
@@ -3376,11 +3605,9 @@ function updateKeyState(keyIndex, status, unlockTime = null, failureCount = 0) {
 		unlockTime: nextUnlockTime,
 		lastUsed: now,
 		failureCount: nextFailureCount,
-	}
-
-	// Mark as permanently invalid after 3 consecutive failures (unless explicitly set INVALID)
-	if (keyStates[keyIndex].failureCount >= 3 && status !== "INVALID") {
-		keyStates[keyIndex].status = "INVALID"
+		lastReset: nextStatus === "EXHAUSTED" ? now : keyStates[keyIndex].lastReset,
+		keyFingerprint,
+		scope,
 	}
 
 	saveKeyStates(keyStates)
@@ -3817,8 +4044,7 @@ async function startAnalysis(isContinuation = false) {
 		}
 
 		const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)()
-		const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
-		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData, liveTerms)
+		const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms)
 		;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(
 			processedData,
 			isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [],
@@ -3919,9 +4145,7 @@ function handleFileImportAndAnalyze(event) {
 			// --- End Validation ---
 
 			const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)()
-			// Apply smart quotes replacement first, then term replacements
-			const smartQuotesData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applySmartQuotesReplacement */ .Jf)(chapterData)
-			const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(smartQuotesData, terms || [])
+			const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, terms || [])
 			const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1)
 			;(0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(
 				processedData,
@@ -4635,7 +4859,7 @@ const FALLBACK_VERSION_INFO = {
 	SEMANTIC: "5.4.1",
 	DISPLAY: "v5.4.1",
 	BUILD_ENV: "production",
-	BUILD_DATE: "2026-04-04",
+	BUILD_DATE: "2026-04-05",
 }
 
 let runtimeVersionInfo = FALLBACK_VERSION_INFO
@@ -4968,7 +5192,7 @@ async function populateModelSelector() {
 	const cachedData = getCachedModelsData(cacheState, providerBucket)
 	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
 
-	if (state/* appState */.XJ.config.model && !cachedModels.includes(state/* appState */.XJ.config.model)) {
+	if (cachedModels.length > 0 && state/* appState */.XJ.config.model && !cachedModels.includes(state/* appState */.XJ.config.model)) {
 		cachedModels.unshift(state/* appState */.XJ.config.model)
 	}
 
@@ -5606,7 +5830,6 @@ function getCollisionAvoidanceStatus() {
 "use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Ir: () => (/* binding */ getNovelSlug),
-/* harmony export */   Jf: () => (/* binding */ applySmartQuotesReplacement),
 /* harmony export */   Nt: () => (/* binding */ escapeRegExp),
 /* harmony export */   Rm: () => (/* binding */ log),
 /* harmony export */   ZD: () => (/* binding */ escapeHtml),
@@ -5693,238 +5916,6 @@ function crawlChapterData() {
 		`Successfully collected data for ${chapterData.length} chapters: [${chapterData.map((d) => d.chapter).join(", ")}]`,
 	)
 	return chapterData
-}
-
-/**
- * Safely converts straight quotes to curly quotes and double hyphens to em-dashes.
- * Conservative implementation inspired by SmartyPants:
- * - Preserves existing smart quotes.
- * - Handles common English contractions/possessives.
- * - Handles years like '70s.
- * - Handles typical opening/closing quotes around words/sentences.
- * - Avoids exponential or runaway replacements via validation.
- *
- * @param {string} text The input string.
- * @returns {string} The processed string with smart typography, or original text on anomaly.
- */
-function smartenQuotes(text) {
-	if (!text || typeof text !== "string") {
-		return ""
-	}
-
-	// Configuration toggle (global config is preferred; local constant as safe default)
-	const smartQuotesEnabled =
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ?.config?.smartQuotesEnabled !== undefined ? Boolean(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.smartQuotesEnabled) : true
-
-	if (!smartQuotesEnabled) {
-		return text
-	}
-
-	try {
-		const original = text
-
-		// Pre-counts
-		const originalStraightSingles = (original.match(/'/g) || []).length
-		const originalStraightDoubles = (original.match(/"/g) || []).length
-		const originalSmart = (original.match(/[“”‘’]/g) || []).length
-
-		// If there are no straight quotes, nothing to do.
-		if (originalStraightSingles === 0 && originalStraightDoubles === 0) {
-			return original
-		}
-
-		// 1) Normalize em-dashes first (safe, independent).
-		let out = original.replace(/--/g, "\u2014")
-
-		// 2) Handle years like '70s -> ’70s (must be before generic apostrophe handling).
-		out = out.replace(/'(\d{2}s)/g, "\u2019$1")
-
-		// 3) Handle common contractions/possessives:
-		//    don't, it's, we've, I'll, John's, etc.
-		//    Pattern: letter ' letter(s) (no spaces), treat the ' as apostrophe.
-		out = out.replace(/(\p{L})'(\p{L}{1,3}\b)/gu, "$1\u2019$2")
-
-		// 4) Handle possessives like Councilor's, John's (letter ' s\b).
-		out = out.replace(/(\p{L})'s\b/gu, "$1\u2019s")
-
-		// Note: Above rules intentionally only touch ASCII ' that are clearly apostrophes.
-		// Remaining straight single quotes will be processed more structurally below.
-
-		// 5) Double quotes: conservative opening/closing.
-		//    - Opening double quote when at start or after whitespace/([{- and followed by non-space.
-		//    - Closing double quote otherwise.
-		out = out.replace(/(^|[\s({>“”[])"(?=\S)/g, "$1\u201c")
-		out = out.replace(/"/g, "\u201d")
-
-		// 6) Single quotes (excluding ones already converted by contractions/years rules):
-		//    - Opening single quote when at start or after whitespace/([{- or opening quote and before non-space.
-		//    - Remaining straight single quotes become closing/apostrophe.
-		out = out.replace(/(^|[\s({>“”[] )'(?=\S)/g, "$1\u2018")
-		out = out.replace(/'/g, "\u2019")
-
-		// Post-counts
-		const newStraightSingles = (out.match(/'/g) || []).length
-		const newStraightDoubles = (out.match(/"/g) || []).length
-		const newSmart = (out.match(/[“”‘’]/g) || []).length
-
-		const straightSinglesConsumed = originalStraightSingles - newStraightSingles
-		const straightDoublesConsumed = originalStraightDoubles - newStraightDoubles
-		const totalStraightOriginal = originalStraightSingles + originalStraightDoubles
-		const totalStraightRemaining = newStraightSingles + newStraightDoubles
-		const totalStraightConsumed = totalStraightOriginal - totalStraightRemaining
-
-		// Validation / anomaly detection:
-		// - New smart quotes should not exceed:
-		//   originalSmart + totalStraightOriginal * 2 (extremely generous upper bound).
-		// - Straight quotes consumed should not be negative.
-		// - If we somehow produced far more smart quotes than plausible, revert.
-		const maxAllowedNewSmart = originalSmart + totalStraightOriginal * 2
-
-		const anomaly = newSmart > maxAllowedNewSmart || straightSinglesConsumed < 0 || straightDoublesConsumed < 0
-
-		if (anomaly) {
-			log("SMART QUOTES SAFEGUARD: Detected anomalous conversion. Reverting to original text.", {
-				originalStraightSingles,
-				originalStraightDoubles,
-				originalSmart,
-				newStraightSingles,
-				newStraightDoubles,
-				newSmart,
-				totalStraightOriginal,
-				totalStraightRemaining,
-				maxAllowedNewSmart,
-			})
-			return original
-		}
-
-		// Debug logging (chapter-level wrapper will also log context).
-		log("SMART QUOTES STATS (smartenQuotes):", {
-			originalStraightSingles,
-			originalStraightDoubles,
-			originalSmart,
-			newStraightSingles,
-			newStraightDoubles,
-			newSmart,
-			totalStraightOriginal,
-			totalStraightRemaining,
-			totalStraightConsumed,
-		})
-
-		return out
-	} catch (error) {
-		// Hard safeguard: never let smart quotes break analysis.
-		log("SMART QUOTES ERROR: Failed to apply smart quotes. Returning original text.", error)
-		return text
-	}
-}
-
-/**
- * Applies smart quotes replacement to chapter text, skipping the active chapter
- * to avoid conflicts with other userscripts.
- * @param {Array} chapterData Array of chapter data objects
- * @returns {Array} Chapter data with smart quotes applied (where applicable)
- */
-function applySmartQuotesReplacement(chapterData) {
-	if (!Array.isArray(chapterData) || chapterData.length === 0) {
-		return chapterData || []
-	}
-
-	const smartQuotesEnabled =
-		_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ?.config?.smartQuotesEnabled !== undefined ? Boolean(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.smartQuotesEnabled) : true
-
-	if (!smartQuotesEnabled) {
-		log("SMART QUOTES: Skipping conversion because smartQuotesEnabled is false.")
-		return chapterData
-	}
-
-	log(`Applying smart quotes replacement to ${chapterData.length} chapters...`)
-
-	let chaptersWithChanges = 0
-	let skippedChapters = 0
-
-	const processedData = chapterData.map((data) => {
-		// Skip processing if this is the active chapter
-		if (data.tracker && data.tracker.classList.contains("chapter-tracker active")) {
-			log(`Skipping smart quotes on ACTIVE chapter #${data.chapter} to avoid conflicts`)
-			skippedChapters++
-			return data
-		}
-
-		const originalText = data.text || ""
-		const originalStraightQuotes = (originalText.match(/["']/g) || []).length
-		const originalSmartQuotes = (originalText.match(/[“”‘’]/g) || []).length
-
-		// If no straight quotes, skip for efficiency.
-		if (originalStraightQuotes === 0) {
-			log(`SMART QUOTES: No straight quotes to convert for chapter #${data.chapter}. Skipping.`)
-			return data
-		}
-
-		let smartenedText = originalText
-		let usedFallback = false
-
-		try {
-			smartenedText = smartenQuotes(originalText)
-		} catch (error) {
-			// Defensive: log and fallback to original.
-			log(`SMART QUOTES ERROR: Conversion failed for chapter #${data.chapter}. Using original text.`, error)
-			smartenedText = originalText
-			usedFallback = true
-		}
-
-		// Post counts
-		const newStraightQuotes = (smartenedText.match(/["']/g) || []).length
-		const newSmartQuotes = (smartenedText.match(/[“”‘’]/g) || []).length
-		const quotesConverted = newSmartQuotes - originalSmartQuotes
-
-		// Safeguard at chapter level:
-		// If we somehow increased smart quotes wildly relative to original straight quotes,
-		// treat as anomaly and revert this chapter only.
-		const totalOriginalStraight = originalStraightQuotes
-		const maxAllowedNewSmart = originalSmartQuotes + totalOriginalStraight * 2
-
-		const anomaly = !usedFallback && (newSmartQuotes > maxAllowedNewSmart || quotesConverted < 0)
-
-		if (anomaly) {
-			log(
-				`SMART QUOTES SAFEGUARD (chapter #${data.chapter}): Anomalous stats detected. Reverting to original text.`,
-				{
-					originalStraightQuotes,
-					originalSmartQuotes,
-					newStraightQuotes,
-					newSmartQuotes,
-					quotesConverted,
-					maxAllowedNewSmart,
-				},
-			)
-			smartenedText = originalText
-		} else if (!usedFallback && smartenedText !== originalText) {
-			chaptersWithChanges++
-
-			const sampleLength = Math.min(160, originalText.length)
-			const originalSample = originalText.substring(0, sampleLength).replace(/\n/g, "\\n")
-			const convertedSample = smartenedText.substring(0, sampleLength).replace(/\n/g, "\\n")
-
-			log(`SMART QUOTES CONVERSION Chapter #${data.chapter}:`)
-			log(`  Original: ${originalStraightQuotes} straight, ${originalSmartQuotes} smart`)
-			log(`  After:    ${newStraightQuotes} straight, ${newSmartQuotes} smart`)
-			log(`  Converted: ${quotesConverted} quotes to smart format`)
-			log(`  Sample before: "${originalSample}${originalText.length > sampleLength ? "..." : ""}"`)
-			log(`  Sample after:  "${convertedSample}${smartenedText.length > sampleLength ? "..." : ""}"`)
-		} else {
-			log(
-				`SMART QUOTES: No safe changes for chapter #${data.chapter} (${originalStraightQuotes} straight, ${originalSmartQuotes} smart).`,
-			)
-		}
-
-		return { ...data, text: smartenedText }
-	})
-
-	log(
-		`SMART QUOTES SUMMARY: Processed ${chapterData.length} chapters, skipped ${skippedChapters} active chapters, applied safe conversions to ${chaptersWithChanges} chapters.`,
-	)
-
-	return processedData
 }
 
 function applyTermReplacements(chapterData, terms = []) {

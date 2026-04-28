@@ -5,7 +5,7 @@ const FALLBACK_VERSION_INFO = {
 	SEMANTIC: "5.4.1",
 	DISPLAY: "v5.4.1",
 	BUILD_ENV: "production",
-	BUILD_DATE: "2026-04-04",
+	BUILD_DATE: "2026-04-05",
 }
 
 let runtimeVersionInfo = FALLBACK_VERSION_INFO
