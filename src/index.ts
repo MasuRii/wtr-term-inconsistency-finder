@@ -1,4 +1,4 @@
-// src/index.js
+// src/index.ts
 
 // Import styles - Webpack will handle injection
 import "./styles/main.css"

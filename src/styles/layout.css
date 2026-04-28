@@ -1,17 +1,17 @@
-/* Section-based Finder layout improvements */
+/* Section layout */
 .wtr-if-section {
 	background-color: var(--bs-body-bg, #fff);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
-	box-shadow: 0 2px 4px rgb(0 0 0 / 5%);
-	margin-bottom: 20px;
+	border: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 72%, transparent);
+	border-radius: 12px;
+	box-shadow: none;
+	margin-bottom: 16px;
 	overflow: hidden;
 }
 
 .wtr-if-section-header {
-	background-color: var(--bs-tertiary-bg, #f8f9fa);
-	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-	padding: 12px 16px;
+	background: transparent;
+	border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 64%, transparent);
+	padding: 14px 18px 8px;
 }
 
 .wtr-if-section-header h3 {
@@ -19,22 +19,17 @@
 	color: var(--bs-body-color, #212529);
 	display: flex;
 	font-size: 16px;
-	font-weight: 600;
+	font-weight: 650;
 	gap: 8px;
 	margin: 0;
 }
 
 .wtr-if-icon {
-	align-items: center;
-	display: flex;
-	font-size: 18px;
-	height: 24px;
-	justify-content: center;
-	width: 24px;
+	display: none;
 }
 
 .wtr-if-section-content {
-	padding: 16px;
+	padding: 16px 18px 18px;
 }
 
 .wtr-if-finder-controls {
@@ -43,13 +38,42 @@
 	gap: 12px;
 }
 
-/* Configuration Tab Responsive Design */
+.wtr-if-advanced-details {
+	border: 1px dashed var(--bs-border-color, #dee2e6);
+	border-radius: 10px;
+	margin-bottom: 16px;
+	padding: 10px 12px;
+}
+
+.wtr-if-advanced-details summary {
+	cursor: pointer;
+	font-weight: 650;
+}
+
+.wtr-if-advanced-details .wtr-if-form-group {
+	margin-top: 12px;
+}
+
 @media (width <= 768px) {
-	.wtr-if-finder-controls {
+	#wtr-if-panel {
+		border-radius: 0;
+		height: 100dvh;
+		max-height: none;
+		width: 100%;
+	}
+
+	.wtr-if-finder-controls,
+	.wtr-if-action-buttons,
+	.wtr-if-model-controls {
 		flex-direction: column;
 	}
 
-	.wtr-if-btn-large {
+	.wtr-if-btn-large,
+	.wtr-if-action-buttons button,
+	.wtr-if-model-controls select,
+	.wtr-if-model-controls button,
+	.wtr-if-import-export button,
+	.wtr-if-form-select {
 		min-width: auto;
 		width: 100%;
 	}
@@ -63,51 +87,20 @@
 		min-width: auto;
 	}
 
-	.wtr-if-form-select {
-		min-width: auto;
-		width: 100%;
-	}
-
-	.wtr-if-action-buttons {
-		flex-direction: column;
-	}
-
-	.wtr-if-action-buttons button {
-		width: 100%;
-	}
-
-	/* Configuration Tab Specific Responsive */
 	.wtr-if-section {
-		margin-bottom: 16px;
+		border-left: none;
+		border-right: none;
+		border-radius: 0;
+		margin-bottom: 12px;
 	}
 
 	.wtr-if-section-header h3 {
 		align-items: flex-start;
 		font-size: 15px;
-		gap: 6px;
-	}
-
-	.wtr-if-model-controls {
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.wtr-if-model-controls select,
-	.wtr-if-model-controls button {
-		width: 100%;
-	}
-
-	.wtr-if-import-export .wtr-if-form-row {
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.wtr-if-import-export button {
-		width: 100%;
 	}
 
 	.wtr-if-section-content {
-		padding: 12px;
+		padding: 14px;
 	}
 
 	.wtr-if-api-keys-container-wrapper {
@@ -115,7 +108,6 @@
 	}
 }
 
-/* Configuration Tab Specific Enhancements */
 .wtr-if-import-export {
 	border-top: 1px solid var(--bs-border-color, #dee2e6);
 	margin-top: 15px;

@@ -10,7 +10,7 @@ import { appState, saveSessionResults, getNextAvailableKey, updateKeyState } fro
 import { displayResults, updateStatusIndicator } from "./ui"
 
 // Import from utils module
-import { extractJsonFromString, log, mergeAnalysisResults, truncateForLog } from "./utils"
+import { areSemanticallySimilar, extractJsonFromString, log, mergeAnalysisResults, truncateForLog } from "./utils"
 
 // Import from retryLogic module
 import { MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS } from "./retryLogic"
@@ -144,6 +144,17 @@ function createStreamingRequestState(config) {
 	}
 }
 
+function buildProviderRequestWithRuntimeMetadata(apiKey, prompt) {
+	return buildAnalysisRequest(
+		{
+			...appState.config,
+			providerModelMetadata: appState.runtime.providerModelMetadata || {},
+		},
+		apiKey,
+		prompt,
+	)
+}
+
 function handleStreamingProgress(operationName, streamState, response) {
 	if (!streamState) {
 		return
@@ -186,6 +197,107 @@ function resolveStreamedApiResponse(response, streamState) {
 			},
 		],
 	}
+}
+
+function getPreservableResults(results) {
+	return Array.isArray(results) ? results.filter((result) => result && !result.error && result.concept) : []
+}
+
+function markResultsForReviewAfterEmptyVerification(results) {
+	return results.map((result) => {
+		if (!result || result.error || !result.concept) {
+			return result
+		}
+
+		return {
+			...result,
+			isNew: false,
+			status: "Needs Review",
+			latestVerificationStatus: "empty_verification_pass",
+			verificationNote: "Latest verification returned no items; this result was preserved for review.",
+		}
+	})
+}
+
+function markFinalInitialResultsForReview(results) {
+	return results.map((result) => {
+		if (!result || result.error || !result.concept) {
+			return result
+		}
+
+		return {
+			...result,
+			isNew: true,
+			status: "Needs Review",
+			latestVerificationStatus: "final_unverified_discovery",
+			verificationNote:
+				"This finding was discovered on the final deep-analysis pass and has not been verified by a later pass.",
+		}
+	})
+}
+
+function preserveResultsAfterEmptyVerification(operationName, fallbackResults = []) {
+	const sourceResults = getPreservableResults(appState.runtime.cumulativeResults).length
+		? appState.runtime.cumulativeResults
+		: fallbackResults
+	const preservableCount = getPreservableResults(sourceResults).length
+
+	if (preservableCount === 0) {
+		return false
+	}
+
+	appState.runtime.cumulativeResults = markResultsForReviewAfterEmptyVerification(sourceResults)
+	log(
+		`${operationName}: Verification returned no items; preserving ${preservableCount} previous result${preservableCount === 1 ? "" : "s"} as Needs Review to avoid dropping findings from an empty model response.`,
+	)
+	return true
+}
+
+function hasMatchingConcept(result, candidates) {
+	return candidates.some((candidate) =>
+		areSemanticallySimilar(result?.concept || "", candidate?.concept || "", { silent: true }),
+	)
+}
+
+function markUnreturnedPreviousResultsForReview(mergedResults, previousResults, latestResults, operationName) {
+	const previousFindings = getPreservableResults(previousResults)
+	const latestFindings = getPreservableResults(latestResults)
+
+	if (previousFindings.length === 0 || latestFindings.length === 0) {
+		return mergedResults
+	}
+
+	const unreturnedPreviousFindings = previousFindings.filter(
+		(previousResult) => !hasMatchingConcept(previousResult, latestFindings),
+	)
+
+	if (unreturnedPreviousFindings.length === 0) {
+		return mergedResults
+	}
+
+	log(
+		`${operationName}: Latest verification did not return ${unreturnedPreviousFindings.length} previous result${unreturnedPreviousFindings.length === 1 ? "" : "s"}; preserving them as Needs Review.`,
+	)
+
+	return mergedResults.map((result) => {
+		if (!result || result.error || !result.concept) {
+			return result
+		}
+
+		const wasPreviousButUnreturned = hasMatchingConcept(result, unreturnedPreviousFindings)
+		const wasReturnedByLatestVerification = hasMatchingConcept(result, latestFindings)
+		if (!wasPreviousButUnreturned || wasReturnedByLatestVerification) {
+			return result
+		}
+
+		return {
+			...result,
+			isNew: false,
+			status: "Needs Review",
+			latestVerificationStatus: "not_returned_by_latest_verification",
+			verificationNote: "Latest verification did not return this previous finding; it was preserved for review.",
+		}
+	})
 }
 
 /**
@@ -242,7 +354,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 	})
 
 	const prompt = buildPrompt(combinedText, existingResults)
-	const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
+	const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 	const streamingRequestState = createStreamingRequestState(appState.config)
 
 	GM_xmlhttpRequest({
@@ -355,7 +467,21 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				log(
 					`Verification complete. ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
 				)
-				appState.runtime.cumulativeResults = [...verifiedItems, ...newItems]
+				const allVerifiedItems = [...verifiedItems, ...newItems]
+				if (
+					allVerifiedItems.length === 0 &&
+					preserveResultsAfterEmptyVerification(operationName, existingResults)
+				) {
+					// Preserve existing findings explicitly when the verifier returns an empty pass.
+				} else {
+					const mergedVerificationResults = mergeAnalysisResults(existingResults, allVerifiedItems)
+					appState.runtime.cumulativeResults = markUnreturnedPreviousResultsForReview(
+						mergedVerificationResults,
+						existingResults,
+						allVerifiedItems,
+						operationName,
+					)
+				}
 			} else {
 				if (!Array.isArray(parsedResponse)) {
 					handleApiError("Invalid response format for initial run. Expected a JSON array.")
@@ -396,6 +522,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targetDepth = 1, currentDepth = 1) {
 	if (currentDepth > targetDepth) {
 		// Deep analysis complete
+		appState.runtime.currentIteration = targetDepth
 		appState.runtime.isAnalysisRunning = false
 		const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : "Complete!"
 		updateStatusIndicator("complete", statusMessage)
@@ -494,7 +621,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 		})
 
 		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
-		const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
+		const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 		const streamingRequestState = createStreamingRequestState(appState.config)
 
 		GM_xmlhttpRequest({
@@ -613,10 +740,23 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					)
 
 					const allNewItems = [...verifiedItems, ...newItems]
-					appState.runtime.cumulativeResults = mergeAnalysisResults(
-						appState.runtime.cumulativeResults,
-						allNewItems,
-					)
+					if (
+						allNewItems.length === 0 &&
+						preserveResultsAfterEmptyVerification(operationName, existingResults)
+					) {
+						// Preserve existing findings explicitly when the verifier returns an empty pass.
+					} else {
+						const mergedVerificationResults = mergeAnalysisResults(
+							appState.runtime.cumulativeResults,
+							allNewItems,
+						)
+						appState.runtime.cumulativeResults = markUnreturnedPreviousResultsForReview(
+							mergedVerificationResults,
+							existingResults,
+							allNewItems,
+							operationName,
+						)
+					}
 				} else {
 					if (!Array.isArray(parsedResponse)) {
 						handleApiError("Invalid response format for initial run. Expected a JSON array.")
@@ -624,9 +764,18 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 						return
 					}
 					parsedResponse.forEach((r) => (r.isNew = true))
+					const resultsToMerge =
+						currentDepth >= targetDepth && parsedResponse.length > 0
+							? markFinalInitialResultsForReview(parsedResponse)
+							: parsedResponse
+					if (resultsToMerge !== parsedResponse) {
+						log(
+							`${operationName}: Final iteration produced ${parsedResponse.length} new unverified result${parsedResponse.length === 1 ? "" : "s"}; marking as Needs Review because no verification pass remains.`,
+						)
+					}
 					appState.runtime.cumulativeResults = mergeAnalysisResults(
 						appState.runtime.cumulativeResults,
-						parsedResponse,
+						resultsToMerge,
 					)
 				}
 
@@ -634,7 +783,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				saveSessionResults()
 
 				// Continue to next iteration or complete
-				appState.runtime.currentIteration = currentDepth + 1
+				appState.runtime.currentIteration = currentDepth < targetDepth ? currentDepth + 1 : targetDepth
 				if (currentDepth < targetDepth) {
 					// Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
 					setTimeout(() => {

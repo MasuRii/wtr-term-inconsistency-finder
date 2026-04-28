@@ -1,7 +1,108 @@
-// src/modules/utils.js
+// src/modules/utils.ts
 import { appState } from "./state"
 
 // --- UTILITY FUNCTIONS ---
+const MAX_DEBUG_LOG_ENTRIES = 300
+
+const debugLogEntries = []
+
+function redactSensitiveText(value) {
+	if (typeof value !== "string") {
+		return value
+	}
+
+	return value
+		.replace(/Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, "Bearer [REDACTED]")
+		.replace(/(api[_-]?key|authorization|token|key)(["'`\s:=]+)([^"'`\s,}]+)/gi, "$1$2[REDACTED]")
+		.replace(/sk-[A-Za-z0-9_-]{12,}/g, "sk-[REDACTED]")
+}
+
+function normalizeDebugLogValue(value) {
+	const summarized = summarizeForLog(value)
+
+	if (typeof summarized === "string") {
+		return redactSensitiveText(summarized)
+	}
+
+	try {
+		return JSON.parse(redactSensitiveText(JSON.stringify(summarized)))
+	} catch {
+		return redactSensitiveText(String(summarized))
+	}
+}
+
+function appendDebugLogEntry(args) {
+	debugLogEntries.push({
+		timestamp: new Date().toISOString(),
+		args: args.map((arg) => normalizeDebugLogValue(arg)),
+	})
+
+	if (debugLogEntries.length > MAX_DEBUG_LOG_ENTRIES) {
+		debugLogEntries.splice(0, debugLogEntries.length - MAX_DEBUG_LOG_ENTRIES)
+	}
+}
+
+function formatDebugLogValue(value) {
+	if (typeof value === "string") {
+		return value
+	}
+
+	try {
+		return JSON.stringify(value, null, 2)
+	} catch {
+		return String(value)
+	}
+}
+
+export function getDebugLogCount() {
+	return debugLogEntries.length
+}
+
+export function clearDebugLogs() {
+	debugLogEntries.length = 0
+}
+
+export function getDebugLogReport() {
+	const providerBaseUrl = appState.config.providerBaseUrl || "not configured"
+	const reportLines = [
+		"# WTR Lab Term Inconsistency Finder Debug Report",
+		"",
+		`Generated: ${new Date().toISOString()}`,
+		`Script version: ${window.WTR_VERSION || "unknown"}`,
+		`Page: ${window.location.href}`,
+		"",
+		"## Configuration",
+		`- Provider: ${appState.config.providerType || "unknown"}`,
+		`- Base URL: ${providerBaseUrl}`,
+		`- Model: ${appState.config.model || "not selected"}`,
+		`- Temperature: ${appState.config.temperature ?? "default"}`,
+		`- Reasoning mode: ${appState.config.reasoningMode || "off"}`,
+		`- Deep analysis depth: ${appState.config.deepAnalysisDepth || 1}`,
+		`- API key count: ${Array.isArray(appState.config.apiKeys) ? appState.config.apiKeys.filter(Boolean).length : 0}`,
+		"",
+		"## Runtime",
+		`- Analysis running: ${Boolean(appState.runtime.isAnalysisRunning)}`,
+		`- Current iteration: ${appState.runtime.currentIteration || 1}/${appState.runtime.totalIterations || 1}`,
+		`- Result count: ${Array.isArray(appState.runtime.cumulativeResults) ? appState.runtime.cumulativeResults.length : 0}`,
+		`- Log entries: ${debugLogEntries.length}`,
+		"",
+		"## Logs",
+	]
+
+	if (debugLogEntries.length === 0) {
+		reportLines.push("No debug log entries were captured yet.")
+	} else {
+		debugLogEntries.forEach((entry, index) => {
+			reportLines.push("", `### ${index + 1}. ${entry.timestamp}`)
+			entry.args.forEach((arg) => {
+				reportLines.push("```", formatDebugLogValue(arg), "```")
+			})
+		})
+	}
+
+	return reportLines.join("\n")
+}
+
 export function truncateForLog(value, maxLength = 280) {
 	if (typeof value !== "string") {
 		return value
@@ -36,6 +137,7 @@ export function summarizeForLog(value, maxStringLength = 280) {
 
 export function log(...args) {
 	if (appState.config.loggingEnabled) {
+		appendDebugLogEntry(args)
 		console.log("Inconsistency Finder:", ...args.map((arg) => summarizeForLog(arg)))
 	}
 }
@@ -381,33 +483,116 @@ function detectScriptCategory(text) {
 	return "mixed"
 }
 
-function isProperNameLike(concept) {
+function splitConceptVariants(concept) {
 	if (!concept || typeof concept !== "string") {
+		return []
+	}
+
+	const trimmed = concept.trim()
+	if (!trimmed) {
+		return []
+	}
+
+	const variants = [trimmed, ...trimmed.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i)]
+	const seen = new Set()
+
+	return variants
+		.map((variant) => variant.trim())
+		.filter((variant) => {
+			if (!variant || seen.has(variant.toLowerCase())) {
+				return false
+			}
+			seen.add(variant.toLowerCase())
+			return true
+		})
+}
+
+function normalizeConceptForComparison(str) {
+	return str
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+}
+
+function getNormalizedConceptVariants(concept) {
+	return splitConceptVariants(concept)
+		.map((variant) => normalizeConceptForComparison(variant))
+		.filter(Boolean)
+}
+
+function areNormalizedConceptsSimilar(norm1, norm2) {
+	if (!norm1 || !norm2) {
 		return false
 	}
-	const trimmed = concept.trim()
 
-	// Single token with leading capital and not all caps -> likely proper name
-	const tokens = trimmed.split(/\s+/)
-	if (tokens.length === 1) {
-		const t = tokens[0]
-		if (/^[A-Z][a-zA-Z]+$/.test(t)) {
-			return true
-		}
-	}
-
-	// Simple heuristic: multiple capitalized tokens
-	if (tokens.length > 1 && tokens.every((t) => /^[A-Z][a-z]+$/.test(t))) {
+	if (norm1 === norm2) {
 		return true
 	}
 
-	return false
+	if (norm1.length <= 3 || norm2.length <= 3) {
+		return false
+	}
+
+	if (norm1.includes(norm2) || norm2.includes(norm1)) {
+		return true
+	}
+
+	const words1 = norm1.split(/\s+/).filter(Boolean)
+	const words2 = norm2.split(/\s+/).filter(Boolean)
+	if (!words1.length || !words2.length) {
+		return false
+	}
+
+	const commonWords = words1.filter((word) => words2.includes(word))
+	const overlapRatio = commonWords.length / Math.max(words1.length, words2.length)
+	return overlapRatio >= 0.8 && commonWords.length > 0
+}
+
+function isVariantProperNameLike(variant) {
+	const tokens = variant.match(/[A-Za-z][A-Za-z0-9'-]*/g) || []
+	if (tokens.length === 0) {
+		return false
+	}
+
+	const connectorWords = new Set([
+		"a",
+		"an",
+		"and",
+		"at",
+		"by",
+		"de",
+		"for",
+		"from",
+		"in",
+		"la",
+		"of",
+		"on",
+		"the",
+		"to",
+	])
+	const meaningfulTokens = tokens.filter((token) => !connectorWords.has(token.toLowerCase()))
+	if (meaningfulTokens.length === 0) {
+		return false
+	}
+
+	const capitalizedTokens = meaningfulTokens.filter((token) => /^[A-Z][a-zA-Z0-9'-]*$/.test(token))
+	if (meaningfulTokens.length === 1) {
+		return capitalizedTokens.length === 1 && meaningfulTokens[0].toUpperCase() !== meaningfulTokens[0]
+	}
+
+	return capitalizedTokens.length >= 2 && capitalizedTokens.length / meaningfulTokens.length >= 0.6
+}
+
+function isProperNameLike(concept) {
+	return splitConceptVariants(concept).some((variant) => isVariantProperNameLike(variant))
 }
 
 /**
  * More conservative semantic similarity with script & contextual safeguards.
  */
-export function areSemanticallySimilar(concept1, concept2) {
+export function areSemanticallySimilar(concept1, concept2, options: any = {}) {
+	const shouldLog = !options?.silent
 	if (!concept1 || !concept2) {
 		return false
 	}
@@ -420,75 +605,54 @@ export function areSemanticallySimilar(concept1, concept2) {
 
 	// Hard rule: do not treat clearly different scripts as similar.
 	if (script1 !== "unknown" && script2 !== "unknown" && script1 !== script2) {
-		log(`Semantic similarity blocked by script mismatch: "${c1}" [${script1}] vs "${c2}" [${script2}]`)
+		if (shouldLog) {
+			log(`Semantic similarity blocked by script mismatch: "${c1}" [${script1}] vs "${c2}" [${script2}]`)
+		}
 		return false
 	}
 
-	// Normalize for ASCII/Latin similarity. Non-Latin content will mostly reduce to empty,
-	// which is fine because we already guard by script category above.
-	const normalize = (str) =>
-		str
-			.toLowerCase()
-			.replace(/[^a-z0-9\s]/g, "")
-			.trim()
-
-	const norm1 = normalize(c1)
-	const norm2 = normalize(c2)
+	const norm1 = normalizeConceptForComparison(c1)
+	const norm2 = normalizeConceptForComparison(c2)
 
 	// If both normalizations are empty (e.g., pure CJK) and scripts are same non-latin,
 	// fall back to strict exact match only.
 	if (!norm1 && !norm2) {
 		const exact = c1.trim() === c2.trim()
-		if (!exact) {
+		if (!exact && shouldLog) {
 			log(`Semantic similarity rejected for non-Latin pair (no normalized content): "${c1}" vs "${c2}"`)
 		}
 		return exact
 	}
 
-	// Exact match after normalization.
-	if (norm1 === norm2 && norm1.length > 0) {
-		return true
-	}
-
-	// Very short tokens (<=3) should only match on exact equality to avoid noise.
-	if (norm1.length <= 3 || norm2.length <= 3) {
-		return norm1.length > 0 && norm1 === norm2
-	}
-
 	// Block merging clearly unrelated when one looks like a proper name and the other does not.
+	// Composite concepts like "A / B" are evaluated per variant so proper-name alternates stay mergeable.
 	const proper1 = isProperNameLike(c1)
 	const proper2 = isProperNameLike(c2)
 	if (proper1 !== proper2) {
-		log(
-			`Semantic similarity rejected due to proper-name mismatch: "${c1}" (proper=${proper1}) vs "${c2}" (proper=${proper2})`,
-		)
+		if (shouldLog) {
+			log(
+				`Semantic similarity rejected due to proper-name mismatch: "${c1}" (proper=${proper1}) vs "${c2}" (proper=${proper2})`,
+			)
+		}
 		return false
 	}
 
-	// Check if one is contained in the other (for partial matches), but require decent length overlap.
-	if (norm1.length >= 4 && norm2.length >= 4) {
-		if (norm1.includes(norm2) || norm2.includes(norm1)) {
-			return true
+	const normalizedVariants1 = getNormalizedConceptVariants(c1)
+	const normalizedVariants2 = getNormalizedConceptVariants(c2)
+
+	for (const variant1 of normalizedVariants1) {
+		for (const variant2 of normalizedVariants2) {
+			if (areNormalizedConceptsSimilar(variant1, variant2)) {
+				return true
+			}
 		}
 	}
 
-	// Token overlap with conservative threshold.
-	const words1 = norm1.split(/\s+/).filter(Boolean)
-	const words2 = norm2.split(/\s+/).filter(Boolean)
-
-	if (words1.length && words2.length) {
-		const commonWords = words1.filter((word) => words2.includes(word))
-		const overlapRatio = commonWords.length / Math.max(words1.length, words2.length)
-
-		// Require strong overlap to consider them semantically similar.
-		if (overlapRatio >= 0.8 && commonWords.length > 0) {
-			return true
-		}
+	if (shouldLog) {
+		log(
+			`Semantic similarity not strong enough: "${c1}" [${script1}] vs "${c2}" [${script2}] (norm1="${norm1}", norm2="${norm2}")`,
+		)
 	}
-
-	log(
-		`Semantic similarity not strong enough: "${c1}" [${script1}] vs "${c2}" [${script2}] (norm1="${norm1}", norm2="${norm2}")`,
-	)
 	return false
 }
 
@@ -737,7 +901,7 @@ export function isWTRLabTermReplacerLoaded() {
  * - `Array` of normalized term objects on success (including empty array if no terms exist)
  * - `null` if the bridge is unavailable, times out, or responds with an error
  */
-export function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
+export function requestTermsFromWTRLabTermReplacer(novelSlug, options: any = {}) {
 	if (!novelSlug || !isWTRLabTermReplacerLoaded()) {
 		return Promise.resolve(null)
 	}

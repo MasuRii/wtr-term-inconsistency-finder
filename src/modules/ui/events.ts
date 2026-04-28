@@ -1,6 +1,11 @@
-// src/modules/ui/events.js
+// src/modules/ui/events.ts
 import { appState, saveConfig, clearSessionResults } from "../state"
-import { AI_PROVIDERS, PROVIDER_DEFAULTS, resolveProviderSettings } from "../providerConfig"
+import {
+	AI_PROVIDERS,
+	PROVIDER_DEFAULTS,
+	getProviderDefaultTemperature,
+	resolveProviderSettings,
+} from "../providerConfig"
 import {
 	crawlChapterData,
 	applyTermReplacements,
@@ -9,6 +14,8 @@ import {
 	escapeRegExp,
 	isWTRLabTermReplacerLoaded,
 	requestTermsFromWTRLabTermReplacer,
+	getDebugLogReport,
+	clearDebugLogs,
 } from "../utils"
 import { findInconsistenciesDeepAnalysis } from "../geminiApi"
 import {
@@ -20,6 +27,9 @@ import {
 	syncProviderConfigUI,
 	updateStatusIndicator,
 	updateTermReplacerIntegrationUI,
+	updateAIControlHints,
+	toggleApiKeyVisibility,
+	updateDebugLoggingUI,
 } from "./panel"
 import { displayResults } from "./display"
 
@@ -55,7 +65,7 @@ async function startAnalysis(isContinuation = false) {
 		}
 
 		if (appState.config.useJson) {
-			document.getElementById("wtr-if-file-input").dataset.continuation = isContinuation
+			document.getElementById("wtr-if-file-input").dataset.continuation = String(isContinuation)
 			document.getElementById("wtr-if-file-input").click()
 			return
 		}
@@ -122,6 +132,7 @@ export async function handleSaveConfig() {
 		providerBaseUrl: document.getElementById("wtr-if-provider-base-url").value,
 		providerChatCompletionsPath: document.getElementById("wtr-if-provider-chat-path").value,
 		providerModelsPath: document.getElementById("wtr-if-provider-models-path").value,
+		providerUseManualPaths: document.getElementById("wtr-if-provider-use-manual-paths").checked,
 	})
 
 	appState.config.apiKeys = newApiKeys
@@ -129,11 +140,13 @@ export async function handleSaveConfig() {
 	appState.config.providerBaseUrl = providerSettings.baseUrl
 	appState.config.providerChatCompletionsPath = providerSettings.chatCompletionsPath
 	appState.config.providerModelsPath = providerSettings.modelsPath
+	appState.config.providerUseManualPaths = providerSettings.useManualPaths
 	appState.config.model = document.getElementById("wtr-if-model").value
 	appState.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked
 	appState.config.useJson = document.getElementById("wtr-if-use-json").checked
 	appState.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	appState.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
+	appState.config.reasoningMode = document.getElementById("wtr-if-reasoning-mode").value
 	const statusEl = document.getElementById("wtr-if-status")
 	statusEl.textContent = "Saving..."
 	const success = await saveConfig()
@@ -158,7 +171,7 @@ export function handleFileImportAndAnalyze(event) {
 	const reader = new FileReader()
 	reader.onload = (e) => {
 		try {
-			const data = JSON.parse(e.target.result)
+			const data = JSON.parse(String(e.target.result))
 			const novelSlug = getNovelSlug()
 			log(`Detected novel slug: "${novelSlug}"`)
 
@@ -491,7 +504,7 @@ export function handleApplyClick(event) {
 					if (!successful) {
 						reject(new Error("execCommand copy failed"))
 					} else {
-						resolve()
+						resolve(undefined)
 					}
 				} catch (err) {
 					reject(err)
@@ -663,7 +676,7 @@ function importConfiguration() {
 		const reader = new FileReader()
 		reader.onload = (e) => {
 			try {
-				const data = JSON.parse(e.target.result)
+				const data = JSON.parse(String(e.target.result))
 
 				if (!data.config || !data.version) {
 					throw new Error("Invalid configuration file format")
@@ -682,6 +695,7 @@ function importConfiguration() {
 				appState.config.providerBaseUrl = importedProviderSettings.baseUrl
 				appState.config.providerChatCompletionsPath = importedProviderSettings.chatCompletionsPath
 				appState.config.providerModelsPath = importedProviderSettings.modelsPath
+				appState.config.providerUseManualPaths = importedProviderSettings.useManualPaths
 				if (data.preferences) {
 					appState.preferences = {
 						...appState.preferences,
@@ -697,6 +711,9 @@ function importConfiguration() {
 				document.getElementById("wtr-if-provider-base-url").value = appState.config.providerBaseUrl
 				document.getElementById("wtr-if-provider-chat-path").value = appState.config.providerChatCompletionsPath
 				document.getElementById("wtr-if-provider-models-path").value = appState.config.providerModelsPath
+				document.getElementById("wtr-if-provider-use-manual-paths").checked = Boolean(
+					appState.config.providerUseManualPaths,
+				)
 				syncProviderConfigUI()
 				populateModelSelector()
 
@@ -705,10 +722,13 @@ function importConfiguration() {
 					appState.config.useLiveTermReplacerSync
 				document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 				document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
+				updateDebugLoggingUI()
 				updateTermReplacerIntegrationUI()
 				document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
 				document.getElementById("wtr-if-temperature").value = appState.config.temperature
 				document.getElementById("wtr-if-temp-value").textContent = appState.config.temperature
+				document.getElementById("wtr-if-reasoning-mode").value = appState.config.reasoningMode || "off"
+				updateAIControlHints()
 
 				const statusEl = document.getElementById("wtr-if-status")
 				statusEl.textContent = "Configuration imported successfully"
@@ -720,6 +740,54 @@ function importConfiguration() {
 		reader.readAsText(file)
 	}
 	input.click()
+}
+
+function copyTextToClipboard(text) {
+	if (navigator.clipboard?.writeText) {
+		return navigator.clipboard.writeText(text)
+	}
+
+	const textarea = document.createElement("textarea")
+	textarea.value = text
+	textarea.setAttribute("readonly", "true")
+	textarea.style.position = "fixed"
+	textarea.style.left = "-9999px"
+	document.body.appendChild(textarea)
+	textarea.select()
+	const copied = document.execCommand("copy")
+	document.body.removeChild(textarea)
+	return copied ? Promise.resolve() : Promise.reject(new Error("Clipboard copy failed"))
+}
+
+function setConfigStatus(message, timeout = 3000) {
+	const statusEl = document.getElementById("wtr-if-status")
+	if (!statusEl) {
+		return
+	}
+	statusEl.textContent = message
+	if (timeout > 0) {
+		setTimeout(() => {
+			if (statusEl.textContent === message) {
+				statusEl.textContent = ""
+			}
+		}, timeout)
+	}
+}
+
+async function handleCopyDebugReport() {
+	try {
+		await copyTextToClipboard(getDebugLogReport())
+		setConfigStatus("Debug report copied. Paste it into your issue report.")
+	} catch (error) {
+		log("Failed to copy debug report.", error)
+		setConfigStatus("Failed to copy debug report. Check clipboard permissions.", 5000)
+	}
+}
+
+function handleClearDebugLogs() {
+	clearDebugLogs()
+	updateDebugLoggingUI()
+	setConfigStatus("Debug logs cleared.")
 }
 
 export function addEventListeners() {
@@ -738,6 +806,8 @@ export function addEventListeners() {
 	panel.querySelector("#wtr-if-file-input").addEventListener("change", handleFileImportAndAnalyze)
 	panel.querySelector("#wtr-if-export-config-btn").addEventListener("click", exportConfiguration)
 	panel.querySelector("#wtr-if-import-config-btn").addEventListener("click", importConfiguration)
+	panel.querySelector("#wtr-if-copy-debug-report-btn").addEventListener("click", handleCopyDebugReport)
+	panel.querySelector("#wtr-if-clear-debug-logs-btn").addEventListener("click", handleClearDebugLogs)
 	panel.querySelector("#wtr-if-restore-btn")?.addEventListener("click", handleRestoreSession)
 	panel.querySelector("#wtr-if-clear-session-btn")?.addEventListener("click", handleClearSession)
 
@@ -756,6 +826,19 @@ export function addEventListeners() {
 		document.getElementById("wtr-if-temp-value").textContent = e.target.value
 	})
 
+	panel.querySelector("#wtr-if-reasoning-mode").addEventListener("change", updateAIControlHints)
+
+	panel.querySelector("#wtr-if-logging-enabled").addEventListener("change", (e) => {
+		appState.config.loggingEnabled = e.target.checked
+		updateDebugLoggingUI()
+		saveConfig()
+	})
+
+	panel.querySelector("#wtr-if-provider-use-manual-paths").addEventListener("change", (e) => {
+		appState.config.providerUseManualPaths = e.target.checked
+		syncProviderConfigUI()
+	})
+
 	panel.querySelector("#wtr-if-auto-restore").addEventListener("change", (e) => {
 		appState.preferences.autoRestoreResults = e.target.checked
 		saveConfig()
@@ -768,10 +851,18 @@ export function addEventListeners() {
 		document.getElementById("wtr-if-provider-base-url").value = defaults.baseUrl
 		document.getElementById("wtr-if-provider-chat-path").value = defaults.chatCompletionsPath
 		document.getElementById("wtr-if-provider-models-path").value = defaults.modelsPath
+		document.getElementById("wtr-if-provider-use-manual-paths").checked = false
+		const defaultTemperature = getProviderDefaultTemperature(providerType)
+		document.getElementById("wtr-if-temperature").value = String(defaultTemperature)
+		document.getElementById("wtr-if-temp-value").textContent = String(defaultTemperature)
 		appState.config.providerType = providerType
 		appState.config.providerBaseUrl = defaults.baseUrl
 		appState.config.providerChatCompletionsPath = defaults.chatCompletionsPath
 		appState.config.providerModelsPath = defaults.modelsPath
+		appState.config.providerUseManualPaths = false
+		appState.config.temperature = defaultTemperature
+		appState.config.reasoningMode = "off"
+		document.getElementById("wtr-if-reasoning-mode").value = "off"
 		appState.config.model = ""
 		syncProviderConfigUI()
 		populateModelSelector()
@@ -805,6 +896,7 @@ export function addEventListeners() {
 	})
 
 	panel.querySelector("#wtr-if-add-key-btn").addEventListener("click", addApiKeyRow)
+	panel.querySelector("#wtr-if-toggle-keys-btn").addEventListener("click", toggleApiKeyVisibility)
 	panel.querySelector("#wtr-if-api-keys-container").addEventListener("click", (e) => {
 		if (e.target.classList.contains("wtr-if-remove-key-btn")) {
 			if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {

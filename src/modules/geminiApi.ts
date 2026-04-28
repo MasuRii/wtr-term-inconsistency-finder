@@ -3,12 +3,14 @@
  * Maintains 100% backward compatibility by re-exporting functions from modular submodules
  *
  * This module serves as a backward-compatible facade that delegates to the new modular structure:
- * - retryLogic.js: Exponential backoff and retry scheduling
- * - promptManager.js: AI prompt generation and management
- * - apiErrorHandler.js: Centralized error handling
- * - analysisEngine.js: Core analysis logic and API communication
+ * - retryLogic.ts: Exponential backoff and retry scheduling
+ * - promptManager.ts: AI prompt generation and management
+ * - apiErrorHandler.ts: Centralized error handling
+ * - analysisEngine.ts: Core analysis logic and API communication
  */
 
+import { handleApiError } from "./apiErrorHandler"
+import { buildPrompt } from "./promptManager"
 import { log } from "./utils"
 
 // ===== BACKWARD COMPATIBILITY RE-EXPORTS =====
@@ -75,8 +77,8 @@ export function deprecatedHandleApiError(errorMessage) {
 
 // Log successful modular structure initialization when module loads
 log("Modular Gemini API structure loaded successfully")
-log("├── retryLogic.js: Exponential backoff and retry scheduling")
-log("├── promptManager.js: AI prompt generation and management")
-log("├── apiErrorHandler.js: Centralized error handling")
-log("├── analysisEngine.js: Core analysis logic and API communication")
-log("└── geminiApi.js: Backward compatibility facade")
+log("├── retryLogic.ts: Exponential backoff and retry scheduling")
+log("├── promptManager.ts: AI prompt generation and management")
+log("├── apiErrorHandler.ts: Centralized error handling")
+log("├── analysisEngine.ts: Core analysis logic and API communication")
+log("└── geminiApi.ts: Backward compatibility facade")

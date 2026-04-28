@@ -1,9 +1,19 @@
-// src/modules/ui/display.js
+// src/modules/ui/display.ts
 import { appState } from "../state"
 import { escapeHtml, log } from "../utils"
 import { handleApplyClick, handleCopyVariationClick, updateApplyCopyButtonsMode } from "./events"
 
 const loggedNonActionableSuggestions = new Set()
+
+function getStatusBadge(group) {
+	if (group.status === "Verified") {
+		return '<span class="wtr-if-verified-badge">Verified</span>'
+	}
+	if (group.status === "Needs Review") {
+		return '<span class="wtr-if-review-badge" title="Latest verification returned no items, so this finding was preserved for review.">Needs Review</span>'
+	}
+	return ""
+}
 
 export function displayResults(results) {
 	// Ensure we render only into the dedicated results container inside Finder tab.
@@ -26,9 +36,7 @@ export function displayResults(results) {
 	if (filterValue === "new") {
 		displayedResults = displayedResults.filter((r) => r.isNew)
 	} else if (filterValue === "verified") {
-		displayedResults = displayedResults.filter(
-			(r) => r.status === "Verified" || (r.isNew === false && r.status !== "Verified"),
-		)
+		displayedResults = displayedResults.filter((r) => r.status === "Verified")
 	} else if (filterValue !== "all") {
 		displayedResults = displayedResults.filter((r) => r.priority === filterValue)
 	}
@@ -141,11 +149,7 @@ export function displayResults(results) {
 							group.priority || "info"
 						).toLowerCase()}">${escapeHtml(group.priority || "INFO")}</span>
                         Concept: <span class="wtr-if-concept">${escapeHtml(group.concept)}</span>
-                        ${
-							group.status === "Verified" || (group.isNew === false && group.status !== "Verified")
-								? '<span class="wtr-if-verified-badge">Verified</span>'
-								: ""
-						}
+                        ${getStatusBadge(group)}
                     </h3>
                     <p class="wtr-if-explanation">${escapeHtml(group.explanation)}</p>
                 </div>

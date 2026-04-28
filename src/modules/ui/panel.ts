@@ -1,10 +1,35 @@
-// src/modules/ui/panel.js
+// src/modules/ui/panel.ts
 import { appState, MODELS_CACHE_KEY, getModelsCacheBucket } from "../state"
 import { getAvailableApiKey } from "../geminiApi"
-import { AI_PROVIDERS, PROVIDER_DEFAULTS, buildModelsRequest, parseModelsResponse } from "../providerConfig"
-import { escapeHtml, log, isWTRLabTermReplacerLoaded } from "../utils"
+import {
+	AI_PROVIDERS,
+	PROVIDER_DEFAULTS,
+	buildModelCatalogMetadata,
+	buildModelsRequests,
+	getProviderDefaultTemperature,
+	parseModelCatalogEntries,
+	parseModelsResponse,
+	type ModelCatalogEntry,
+	type ModelCatalogMetadata,
+} from "../providerConfig"
+import { escapeHtml, log, isWTRLabTermReplacerLoaded, getDebugLogCount } from "../utils"
 import { VERSION_INFO } from "../../version"
 import { addEventListeners, handleRestoreSession } from "./events"
+
+let areApiKeysVisible = false
+
+const getApiKeyInputType = (): string => (areApiKeysVisible ? "text" : "password")
+
+function updateApiKeyVisibilityButton(): void {
+	const toggleButton = document.getElementById("wtr-if-toggle-keys-btn")
+	if (!toggleButton) {
+		return
+	}
+
+	toggleButton.textContent = areApiKeysVisible ? "Hide Keys" : "Show Keys"
+	toggleButton.setAttribute("aria-pressed", String(areApiKeysVisible))
+	toggleButton.setAttribute("title", areApiKeysVisible ? "Hide API keys from view" : "Display API keys in plain text")
+}
 
 export function createUI() {
 	if (document.getElementById("wtr-if-panel")) {
@@ -33,7 +58,7 @@ export function createUI() {
                     <!-- Primary Analysis Controls Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔍</i> Primary Analysis Controls</h3>
+                            <h3>Primary Analysis Controls</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-finder-controls">
@@ -46,7 +71,7 @@ export function createUI() {
                     <!-- Deep Analysis Configuration Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">⚙️</i> Deep Analysis Configuration</h3>
+                            <h3>Deep Analysis Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-deep-analysis-controls">
@@ -68,7 +93,7 @@ export function createUI() {
                     <!-- Filter and Display Controls Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🎛️</i> Filter and Display Controls</h3>
+                            <h3>Filter and Display Controls</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-filter-controls">
@@ -93,7 +118,7 @@ export function createUI() {
                     <!-- Results Display Area Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">📋</i> Results Display Area</h3>
+                            <h3>Results Display Area</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div id="wtr-if-results"></div>
@@ -104,7 +129,7 @@ export function createUI() {
                     <!-- Provider & API Keys Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🔌</i> Provider Configuration</h3>
+                            <h3>Provider Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
@@ -117,20 +142,32 @@ export function createUI() {
                             </div>
                             <div class="wtr-if-form-group">
                                 <label for="wtr-if-provider-base-url" id="wtr-if-provider-base-url-label">Provider Base URL</label>
-                                <input type="text" id="wtr-if-provider-base-url" placeholder="https://api.openai.com">
+                                <input type="text" id="wtr-if-provider-base-url" placeholder="https://api.openai.com/v1" autocomplete="off">
+                                <small class="wtr-if-hint">Use the provider base URL only. Finder automatically derives chat and model endpoints for common OpenAI-compatible providers.</small>
                             </div>
-                            <div id="wtr-if-openai-compatible-fields">
+                            <details id="wtr-if-openai-compatible-fields" class="wtr-if-advanced-details">
+                                <summary>Advanced endpoint troubleshooting</summary>
+                                <small class="wtr-if-hint">Only change these paths if model refresh or analysis fails because your provider uses non-standard OpenAI-compatible routes.</small>
                                 <div class="wtr-if-form-group">
-                                    <label for="wtr-if-provider-chat-path">Chat Completions Path</label>
-                                    <input type="text" id="wtr-if-provider-chat-path" placeholder="/v1/chat/completions">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="wtr-if-provider-use-manual-paths">
+                                        Use manual endpoint paths
+                                    </label>
                                 </div>
-                                <div class="wtr-if-form-group">
-                                    <label for="wtr-if-provider-models-path">Models Path</label>
-                                    <input type="text" id="wtr-if-provider-models-path" placeholder="/v1/models">
+                                <div class="wtr-if-form-group wtr-if-manual-path-field">
+                                    <label for="wtr-if-provider-chat-path">Chat completions path</label>
+                                    <input type="text" id="wtr-if-provider-chat-path" placeholder="/chat/completions" autocomplete="off">
                                 </div>
-                            </div>
+                                <div class="wtr-if-form-group wtr-if-manual-path-field">
+                                    <label for="wtr-if-provider-models-path">Models path</label>
+                                    <input type="text" id="wtr-if-provider-models-path" placeholder="/models" autocomplete="off">
+                                </div>
+                            </details>
                             <div class="wtr-if-form-group">
-                                <label id="wtr-if-api-key-label">API Keys</label>
+                                <div class="wtr-if-api-key-header">
+                                    <label id="wtr-if-api-key-label">API Keys</label>
+                                    <button type="button" id="wtr-if-toggle-keys-btn" class="wtr-if-key-visibility-btn" aria-pressed="false" title="Display API keys in plain text">Show Keys</button>
+                                </div>
                                 <div class="wtr-if-api-keys-container-wrapper">
                                     <div id="wtr-if-api-keys-container"></div>
                                 </div>
@@ -142,7 +179,7 @@ export function createUI() {
                     <!-- Model Configuration Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">🤖</i> Model Configuration</h3>
+                            <h3>Model Configuration</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
@@ -154,8 +191,18 @@ export function createUI() {
                             </div>
                             <div class="wtr-if-form-group">
                                 <label for="wtr-if-temperature">AI Temperature (<span id="wtr-if-temp-value">0.5</span>)</label>
-                                <input type="range" id="wtr-if-temperature" min="0" max="1" step="0.1" value="0.5">
-                                <small class="wtr-if-hint">Lower is more predictable, higher is more creative.</small>
+                                <input type="range" id="wtr-if-temperature" min="0" max="2" step="0.1" value="0.5">
+                                <small id="wtr-if-temperature-hint" class="wtr-if-hint">Lower is more predictable, higher is more creative.</small>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-reasoning-mode">Reasoning / Thinking</label>
+                                <select id="wtr-if-reasoning-mode">
+                                    <option value="off">Off</option>
+                                    <option value="low">Low effort</option>
+                                    <option value="medium">Medium effort</option>
+                                    <option value="high">High effort</option>
+                                </select>
+                                <small id="wtr-if-reasoning-hint" class="wtr-if-hint">Used only for models/providers that advertise reasoning or thinking controls.</small>
                             </div>
                         </div>
                     </div>
@@ -163,7 +210,7 @@ export function createUI() {
                     <!-- Advanced Settings Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">⚙️</i> Advanced Settings</h3>
+                            <h3>Advanced Settings</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group" id="wtr-if-use-live-term-replacer-sync-container">
@@ -183,7 +230,14 @@ export function createUI() {
                                     <input type="checkbox" id="wtr-if-logging-enabled">
                                     Enable Debug Logging
                                 </label>
-                                <small class="wtr-if-hint">Outputs detailed script operations to the browser console.</small>
+                                <small class="wtr-if-hint">Outputs detailed script operations to the browser console and keeps a redacted report buffer.</small>
+                                <div id="wtr-if-debug-log-actions" class="wtr-if-debug-log-actions" style="display: none;">
+                                    <div class="wtr-if-debug-log-copy">
+                                        <button type="button" id="wtr-if-copy-debug-report-btn" class="wtr-if-btn wtr-if-btn-secondary">Copy Debug Report</button>
+                                        <button type="button" id="wtr-if-clear-debug-logs-btn" class="wtr-if-btn wtr-if-btn-secondary">Clear Logs</button>
+                                    </div>
+                                    <small id="wtr-if-debug-log-hint" class="wtr-if-hint">No debug logs captured yet.</small>
+                                </div>
                             </div>
                             <div class="wtr-if-form-group">
                                 <div class="wtr-if-hint">
@@ -201,7 +255,7 @@ export function createUI() {
                     <!-- Data Management Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
-                            <h3><i class="wtr-if-icon">💾</i> Data Management</h3>
+                            <h3>Data Management</h3>
                         </div>
                         <div class="wtr-if-section-content">
                             <div class="wtr-if-form-group">
@@ -242,6 +296,66 @@ export function createUI() {
 	addEventListeners()
 }
 
+function getCachedModelMetadata(cachedData): ModelCatalogMetadata {
+	return cachedData?.metadata && typeof cachedData.metadata === "object" ? cachedData.metadata : {}
+}
+
+function formatTokenCount(value: unknown): string | null {
+	const count = typeof value === "number" ? value : Number(value)
+	if (!Number.isFinite(count) || count <= 0) {
+		return null
+	}
+
+	return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count)
+}
+
+function formatPricing(metadata: ModelCatalogEntry): string | null {
+	const prompt = metadata.pricing?.prompt
+	const completion = metadata.pricing?.completion
+	if (prompt === undefined && completion === undefined) {
+		return null
+	}
+
+	return `pricing in/out: ${prompt ?? "?"}/${completion ?? "?"}`
+}
+
+function formatModelOptionTitle(modelId: string, metadata?: ModelCatalogEntry): string {
+	if (!metadata) {
+		return modelId
+	}
+
+	const details = [modelId]
+	if (metadata.displayName && metadata.displayName !== modelId) {
+		details.push(metadata.displayName)
+	}
+	if (metadata.ownedBy) {
+		details.push(`owned by ${metadata.ownedBy}`)
+	}
+	const contextLength = formatTokenCount(metadata.contextLength)
+	if (contextLength) {
+		details.push(`${contextLength} context`)
+	}
+	const maxOutput = formatTokenCount(metadata.maxCompletionTokens)
+	if (maxOutput) {
+		details.push(`${maxOutput} max output`)
+	}
+	if (metadata.capabilities?.reasoning === true) {
+		details.push("reasoning")
+	}
+	if (metadata.capabilities?.temperature === false) {
+		details.push("temperature disabled")
+	}
+	if (metadata.latestAliasFor) {
+		details.push(`resolves to ${metadata.latestAliasFor}`)
+	}
+	const pricing = formatPricing(metadata)
+	if (pricing) {
+		details.push(pricing)
+	}
+
+	return details.join(" - ")
+}
+
 function getCachedModelsData(cacheState, providerBucket) {
 	if (cacheState && Array.isArray(cacheState.models)) {
 		return cacheState
@@ -264,6 +378,8 @@ export function syncProviderConfigUI() {
 	const providerHint = document.getElementById("wtr-if-provider-hint")
 	const chatPathInput = document.getElementById("wtr-if-provider-chat-path")
 	const modelsPathInput = document.getElementById("wtr-if-provider-models-path")
+	const manualPathCheckbox = document.getElementById("wtr-if-provider-use-manual-paths")
+	const manualPathFields = document.querySelectorAll(".wtr-if-manual-path-field")
 	const openAiFields = document.getElementById("wtr-if-openai-compatible-fields")
 	const isGemini = providerType === AI_PROVIDERS.GEMINI
 
@@ -281,8 +397,8 @@ export function syncProviderConfigUI() {
 	}
 	if (providerHint) {
 		providerHint.textContent = isGemini
-			? "Uses Gemini's native generateContent endpoint and Gemini model catalog."
-			: "Uses a configurable OpenAI-style base URL with chat completions and model discovery paths."
+			? "Uses Gemini's native generateContent endpoint and Gemini model catalog. Temperature defaults to 1.0 for Gemini."
+			: "Enter only the base URL, such as https://api.openai.com/v1, http://localhost:11434/v1, or https://openrouter.ai/api/v1."
 	}
 	if (chatPathInput) {
 		chatPathInput.placeholder = defaults.chatCompletionsPath
@@ -290,8 +406,36 @@ export function syncProviderConfigUI() {
 	if (modelsPathInput) {
 		modelsPathInput.placeholder = defaults.modelsPath
 	}
+	if (manualPathCheckbox) {
+		manualPathCheckbox.checked = Boolean(appState.config.providerUseManualPaths)
+	}
+	manualPathFields.forEach((field) => {
+		field.style.display = manualPathCheckbox?.checked ? "" : "none"
+	})
 	if (openAiFields) {
 		openAiFields.style.display = isGemini ? "none" : "block"
+		if (!isGemini) {
+			openAiFields.open = Boolean(appState.config.providerUseManualPaths)
+		}
+	}
+	updateAIControlHints()
+}
+
+export function updateAIControlHints() {
+	const providerType = document.getElementById("wtr-if-provider-type")?.value || appState.config.providerType
+	const temperatureHint = document.getElementById("wtr-if-temperature-hint")
+	const reasoningHint = document.getElementById("wtr-if-reasoning-hint")
+	const isGemini = providerType === AI_PROVIDERS.GEMINI
+
+	if (temperatureHint) {
+		temperatureHint.textContent = isGemini
+			? "Gemini usually works best near 1.0. Thinking models may ignore custom sampling settings."
+			: "Lower is more predictable, higher is more creative. Reasoning models may ignore or reject custom temperature."
+	}
+	if (reasoningHint) {
+		reasoningHint.textContent = isGemini
+			? "Gemini thinking is sent only for likely thinking-capable Gemini models."
+			: "Reasoning effort is sent only for known reasoning models or Ollama-compatible local models."
 	}
 }
 
@@ -306,6 +450,8 @@ export async function populateModelSelector() {
 	const cacheState = await GM_getValue(MODELS_CACHE_KEY, null)
 	const cachedData = getCachedModelsData(cacheState, providerBucket)
 	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
+	const cachedMetadata = getCachedModelMetadata(cachedData)
+	appState.runtime.providerModelMetadata = cachedMetadata
 
 	if (cachedModels.length > 0 && appState.config.model && !cachedModels.includes(appState.config.model)) {
 		cachedModels.unshift(appState.config.model)
@@ -313,7 +459,11 @@ export async function populateModelSelector() {
 
 	if (cachedModels.length > 0) {
 		selectEl.innerHTML = cachedModels
-			.map((modelId) => `<option value="${modelId}">${modelId.replace(/^models\//, "")}</option>`)
+			.map((modelId) => {
+				const metadata = cachedMetadata[modelId]
+				const title = formatModelOptionTitle(modelId, metadata)
+				return `<option value="${escapeHtml(modelId)}" title="${escapeHtml(title)}">${escapeHtml(modelId.replace(/^models\//, ""))}</option>`
+			})
 			.join("")
 		selectEl.value = appState.config.model || cachedModels[0]
 	} else {
@@ -322,9 +472,38 @@ export async function populateModelSelector() {
 	selectEl.disabled = false
 }
 
+function requestModelCatalog(requestConfig): Promise<any> {
+	return new Promise((resolve, reject) => {
+		GM_xmlhttpRequest({
+			method: requestConfig.method,
+			url: requestConfig.url,
+			headers: requestConfig.headers,
+			onload: function (response) {
+				try {
+					const data = JSON.parse(response.responseText)
+					if (response.status >= 400) {
+						throw new Error(data?.error?.message || response.statusText || `HTTP ${response.status}`)
+					}
+					if (data.error) {
+						throw new Error(data.error.message || "Failed to fetch models")
+					}
+					resolve({ data, url: requestConfig.url })
+				} catch (e) {
+					reject(e)
+				}
+			},
+			onerror: function (error) {
+				console.error("Model fetch error:", error)
+				reject(new Error("Network error while fetching models."))
+			},
+		})
+	})
+}
+
 export async function fetchAndCacheModels() {
 	const apiKeyInfo = getAvailableApiKey()
 	const statusEl = document.getElementById("wtr-if-status")
+	const refreshButton = document.getElementById("wtr-if-refresh-models-btn")
 	if (!apiKeyInfo) {
 		statusEl.textContent = "Error: No available API keys. Add one or wait for cooldowns."
 		setTimeout(() => (statusEl.textContent = ""), 4000)
@@ -332,54 +511,59 @@ export async function fetchAndCacheModels() {
 	}
 	const apiKey = apiKeyInfo.key
 	const providerBucket = getModelsCacheBucket(appState.config)
-	const requestConfig = buildModelsRequest(appState.config, apiKey)
+	const requestConfigs = buildModelsRequests(appState.config, apiKey)
 	statusEl.textContent = "Fetching model list..."
-	document.getElementById("wtr-if-refresh-models-btn").disabled = true
-	GM_xmlhttpRequest({
-		method: requestConfig.method,
-		url: requestConfig.url,
-		headers: requestConfig.headers,
-		onload: async function (response) {
+	refreshButton.disabled = true
+
+	try {
+		let lastError = null
+		for (let index = 0; index < requestConfigs.length; index++) {
+			const requestConfig = requestConfigs[index]
+			if (index > 0) {
+				statusEl.textContent = `Trying alternate model endpoint ${index + 1}/${requestConfigs.length}...`
+			}
 			try {
-				const data = JSON.parse(response.responseText)
-				if (response.status >= 400) {
-					throw new Error(data?.error?.message || response.statusText || `HTTP ${response.status}`)
-				}
-				if (data.error) {
-					throw new Error(data.error.message || "Failed to fetch models")
+				const { data, url } = await requestModelCatalog(requestConfig)
+				const modelEntries = parseModelCatalogEntries(data)
+				const filteredModels = parseModelsResponse(appState.config, data)
+				if (filteredModels.length === 0) {
+					lastError = new Error("No compatible models found.")
+					continue
 				}
 
-				const filteredModels = parseModelsResponse(appState.config, data)
-				if (filteredModels.length > 0) {
-					const existingCache = await GM_getValue(MODELS_CACHE_KEY, null)
-					const nextCacheState =
-						existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
-							? existingCache
-							: {}
-					nextCacheState[providerBucket] = {
-						timestamp: Date.now(),
-						models: filteredModels,
-					}
-					await GM_setValue(MODELS_CACHE_KEY, nextCacheState)
-					statusEl.textContent = `Success! Found ${filteredModels.length} models.`
-					await populateModelSelector()
-				} else {
-					statusEl.textContent = "No compatible models found."
+				const modelMetadata = buildModelCatalogMetadata(
+					modelEntries.filter((entry) => filteredModels.includes(entry.id)),
+				)
+				const existingCache = await GM_getValue(MODELS_CACHE_KEY, null)
+				const nextCacheState =
+					existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
+						? existingCache
+						: {}
+				nextCacheState[providerBucket] = {
+					timestamp: Date.now(),
+					models: filteredModels,
+					metadata: modelMetadata,
 				}
+				appState.runtime.providerModelMetadata = modelMetadata
+				await GM_setValue(MODELS_CACHE_KEY, nextCacheState)
+				statusEl.textContent = `Success! Found ${filteredModels.length} models.`
+				log(`Fetched model catalog from ${url}`, { metadataCount: Object.keys(modelMetadata).length })
+				await populateModelSelector()
+				return
 			} catch (e) {
-				statusEl.textContent = `Error: ${e.message}`
-			} finally {
-				setTimeout(() => (statusEl.textContent = ""), 4000)
-				document.getElementById("wtr-if-refresh-models-btn").disabled = false
+				lastError = e
 			}
-		},
-		onerror: function (error) {
-			console.error("Model fetch error:", error)
-			statusEl.textContent = "Network error while fetching models."
-			setTimeout(() => (statusEl.textContent = ""), 4000)
-			document.getElementById("wtr-if-refresh-models-btn").disabled = false
-		},
-	})
+		}
+
+		const advancedDetails = document.getElementById("wtr-if-openai-compatible-fields")
+		if (advancedDetails && appState.config.providerType !== AI_PROVIDERS.GEMINI) {
+			advancedDetails.open = true
+		}
+		statusEl.textContent = `Error: ${lastError?.message || "Unable to fetch models"}. See advanced endpoint troubleshooting.`
+	} finally {
+		setTimeout(() => (statusEl.textContent = ""), 6000)
+		refreshButton.disabled = false
+	}
 }
 
 export function renderApiKeysUI() {
@@ -389,18 +573,20 @@ export function renderApiKeysUI() {
 	}
 	container.innerHTML = "" // Clear existing
 	const keys = appState.config.apiKeys.length > 0 ? appState.config.apiKeys : [""] // Show at least one empty input
+	const inputType = getApiKeyInputType()
 
 	keys.forEach((key) => {
 		const keyRow = document.createElement("div")
 		keyRow.className = "wtr-if-key-row"
 		keyRow.innerHTML = `
-            <input type="password" class="wtr-if-api-key-input" value="${escapeHtml(
+            <input type="${inputType}" class="wtr-if-api-key-input" value="${escapeHtml(
 				key,
 			)}" placeholder="Enter your API key">
             <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
         `
 		container.appendChild(keyRow)
 	})
+	updateApiKeyVisibilityButton()
 }
 
 export function addApiKeyRow() {
@@ -408,11 +594,37 @@ export function addApiKeyRow() {
 	const keyRow = document.createElement("div")
 	keyRow.className = "wtr-if-key-row"
 	keyRow.innerHTML = `
-        <input type="password" class="wtr-if-api-key-input" placeholder="Enter your API key">
+        <input type="${getApiKeyInputType()}" class="wtr-if-api-key-input" placeholder="Enter your API key">
         <button class="wtr-if-remove-key-btn" title="Remove this key">&times;</button>
     `
 	container.appendChild(keyRow)
 	keyRow.querySelector("input").focus()
+}
+
+export function toggleApiKeyVisibility() {
+	areApiKeysVisible = !areApiKeysVisible
+	document.querySelectorAll<HTMLInputElement>(".wtr-if-api-key-input").forEach((input) => {
+		input.type = getApiKeyInputType()
+	})
+	updateApiKeyVisibilityButton()
+}
+
+export function updateDebugLoggingUI() {
+	const loggingCheckbox = document.getElementById("wtr-if-logging-enabled")
+	const debugActions = document.getElementById("wtr-if-debug-log-actions")
+	const debugHint = document.getElementById("wtr-if-debug-log-hint")
+	const isEnabled = Boolean(loggingCheckbox?.checked || appState.config.loggingEnabled)
+
+	if (debugActions) {
+		debugActions.style.display = isEnabled ? "" : "none"
+	}
+	if (debugHint) {
+		const logCount = getDebugLogCount()
+		debugHint.textContent =
+			logCount > 0
+				? `${logCount} debug log entr${logCount === 1 ? "y" : "ies"} ready to copy. API keys are redacted from the report.`
+				: "No debug logs captured yet. Reproduce the issue, then copy the report."
+	}
 }
 
 export function updateTermReplacerIntegrationUI() {
@@ -468,15 +680,20 @@ export async function togglePanel(show = null) {
 		document.getElementById("wtr-if-provider-base-url").value = appState.config.providerBaseUrl
 		document.getElementById("wtr-if-provider-chat-path").value = appState.config.providerChatCompletionsPath
 		document.getElementById("wtr-if-provider-models-path").value = appState.config.providerModelsPath
+		document.getElementById("wtr-if-provider-use-manual-paths").checked = Boolean(
+			appState.config.providerUseManualPaths,
+		)
 		syncProviderConfigUI()
 		document.getElementById("wtr-if-use-live-term-replacer-sync").checked = appState.config.useLiveTermReplacerSync
 		document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 		document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
+		updateDebugLoggingUI()
 		document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
 		const tempSlider = document.getElementById("wtr-if-temperature")
 		const tempValue = document.getElementById("wtr-if-temp-value")
-		tempSlider.value = appState.config.temperature
-		tempValue.textContent = appState.config.temperature
+		tempSlider.value = appState.config.temperature ?? getProviderDefaultTemperature(appState.config.providerType)
+		tempValue.textContent = tempSlider.value
+		document.getElementById("wtr-if-reasoning-mode").value = appState.config.reasoningMode || "off"
 
 		// Restore tab
 		panel.querySelectorAll(".wtr-if-tab-btn").forEach((b) => b.classList.remove("active"))
@@ -514,7 +731,7 @@ export async function togglePanel(show = null) {
 
 		// Ensure Apply/Copy button modes are synchronized after panel initialization
 		try {
-			const { updateApplyCopyButtonsMode } = await import("./events.js")
+			const { updateApplyCopyButtonsMode } = await import("./events")
 			updateApplyCopyButtonsMode()
 		} catch (error) {
 			log("Failed to sync Apply/Copy button modes after panel initialization:", error)

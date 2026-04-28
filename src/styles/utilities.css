@@ -87,6 +87,16 @@
 	padding: 3px 8px;
 }
 
+.wtr-if-review-badge {
+	background-color: var(--bs-warning, #ffc107);
+	border-radius: 12px;
+	color: #212529;
+	font-size: 11px;
+	font-weight: bold;
+	margin-left: 8px;
+	padding: 3px 8px;
+}
+
 .wtr-if-recommended-badge {
 	background-color: var(--bs-info, #0dcaf0);
 	border-radius: 12px;

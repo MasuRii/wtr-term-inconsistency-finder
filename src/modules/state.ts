@@ -1,5 +1,11 @@
-// src/modules/state.js
-import { DEFAULT_PROVIDER_TYPE, PROVIDER_DEFAULTS, AI_PROVIDERS, resolveProviderSettings } from "./providerConfig"
+// src/modules/state.ts
+import {
+	DEFAULT_PROVIDER_TYPE,
+	PROVIDER_DEFAULTS,
+	AI_PROVIDERS,
+	resolveProviderSettings,
+	isManualPathConfig,
+} from "./providerConfig"
 import { log } from "./utils"
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_"
@@ -8,7 +14,7 @@ export const MODELS_CACHE_KEY = `${SCRIPT_PREFIX}models_cache`
 export const SESSION_RESULTS_KEY = `${SCRIPT_PREFIX}session_results`
 export const KEY_STATE_KEY = `${SCRIPT_PREFIX}key_states` // Persistent key state tracking
 
-export const appState = {
+export const appState: any = {
 	// Configuration
 	config: {
 		apiKeys: [],
@@ -16,11 +22,13 @@ export const appState = {
 		providerBaseUrl: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].baseUrl,
 		providerChatCompletionsPath: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].chatCompletionsPath,
 		providerModelsPath: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].modelsPath,
+		providerUseManualPaths: false,
 		model: "",
 		useJson: false,
 		useLiveTermReplacerSync: true,
 		loggingEnabled: false,
-		temperature: 0.5,
+		temperature: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].defaultTemperature,
+		reasoningMode: "off",
 		activeTab: "finder",
 		activeFilter: "all",
 		deepAnalysisDepth: 1,
@@ -32,6 +40,7 @@ export const appState = {
 		currentApiKeyIndex: 0,
 		apiKeyCooldowns: new Map(),
 		failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
+		providerModelMetadata: {},
 		currentIteration: 1,
 		totalIterations: 1,
 	},
@@ -98,7 +107,7 @@ function sanitizeResultsData(results) {
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 export async function loadConfig() {
-	const savedConfig = await GM_getValue(CONFIG_KEY, {})
+	const savedConfig = (await GM_getValue(CONFIG_KEY, {})) as Record<string, any>
 
 	// --- Migration for single API key to multiple ---
 	if (savedConfig.apiKey && !savedConfig.apiKeys) {
@@ -132,6 +141,15 @@ export async function loadConfig() {
 	if (!savedConfig.providerModelsPath) {
 		savedConfig.providerModelsPath = providerDefaults.modelsPath
 	}
+	if (typeof savedConfig.providerUseManualPaths !== "boolean") {
+		savedConfig.providerUseManualPaths = isManualPathConfig(savedConfig)
+	}
+	if (typeof savedConfig.reasoningMode !== "string") {
+		savedConfig.reasoningMode = "off"
+	}
+	if (typeof savedConfig.temperature !== "number") {
+		savedConfig.temperature = providerDefaults.defaultTemperature
+	}
 
 	// Load preferences from saved config if they exist
 	if (savedConfig.preferences) {
@@ -152,6 +170,7 @@ export async function loadConfig() {
 	appState.config.providerBaseUrl = resolvedProvider.baseUrl
 	appState.config.providerChatCompletionsPath = resolvedProvider.chatCompletionsPath
 	appState.config.providerModelsPath = resolvedProvider.modelsPath
+	appState.config.providerUseManualPaths = resolvedProvider.useManualPaths
 
 	// Load session results if available
 	const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY)
@@ -204,6 +223,7 @@ export async function saveConfig() {
 			providerBaseUrl: resolvedProvider.baseUrl,
 			providerChatCompletionsPath: resolvedProvider.chatCompletionsPath,
 			providerModelsPath: resolvedProvider.modelsPath,
+			providerUseManualPaths: resolvedProvider.useManualPaths,
 			preferences: appState.preferences,
 		}
 		await GM_setValue(CONFIG_KEY, configToSave)
