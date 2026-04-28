@@ -307,7 +307,7 @@ export async function populateModelSelector() {
 	const cachedData = getCachedModelsData(cacheState, providerBucket)
 	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
 
-	if (appState.config.model && !cachedModels.includes(appState.config.model)) {
+	if (cachedModels.length > 0 && appState.config.model && !cachedModels.includes(appState.config.model)) {
 		cachedModels.unshift(appState.config.model)
 	}
 

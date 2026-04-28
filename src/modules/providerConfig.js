@@ -64,6 +64,11 @@ export function resolveProviderSettings(config = {}) {
 	}
 }
 
+export function providerUsesStreaming(config) {
+	const provider = resolveProviderSettings(config)
+	return provider.providerType === AI_PROVIDERS.OPENAI_COMPATIBLE
+}
+
 export function buildAnalysisRequest(config, apiKey, prompt) {
 	const provider = resolveProviderSettings(config)
 
@@ -93,6 +98,7 @@ export function buildAnalysisRequest(config, apiKey, prompt) {
 		data: JSON.stringify({
 			model: config.model,
 			temperature: config.temperature,
+			stream: true,
 			messages: [{ role: "user", content: prompt }],
 		}),
 	}
@@ -130,6 +136,110 @@ function extractOpenAiMessageText(content) {
 		.filter(Boolean)
 
 	return textParts.length > 0 ? textParts.join("\n") : null
+}
+
+function extractOpenAiDeltaText(delta) {
+	return extractOpenAiMessageText(delta?.content)
+}
+
+function consumeOpenAiStreamLine(streamState, line) {
+	const trimmedLine = typeof line === "string" ? line.trim() : ""
+	if (!trimmedLine || trimmedLine.startsWith(":")) {
+		return
+	}
+
+	if (!trimmedLine.startsWith("data:")) {
+		return
+	}
+
+	const payloadText = trimmedLine.slice(5).trim()
+	if (!payloadText) {
+		return
+	}
+
+	if (payloadText === "[DONE]") {
+		streamState.done = true
+		return
+	}
+
+	let payload
+	try {
+		payload = JSON.parse(payloadText)
+	} catch {
+		return
+	}
+
+	streamState.eventCount += 1
+
+	if (payload?.error) {
+		streamState.errorPayload = payload
+		return
+	}
+
+	const choice = payload?.choices?.[0]
+	const deltaText = extractOpenAiDeltaText(choice?.delta)
+	if (deltaText) {
+		streamState.text += deltaText
+	}
+
+	if (choice?.finish_reason) {
+		streamState.finishReason = choice.finish_reason
+	}
+}
+
+export function createOpenAiStreamState() {
+	return {
+		processedLength: 0,
+		pendingLine: "",
+		text: "",
+		finishReason: null,
+		done: false,
+		eventCount: 0,
+		errorPayload: null,
+	}
+}
+
+export function consumeOpenAiStreamResponse(streamState, responseText) {
+	if (!streamState || typeof responseText !== "string" || responseText.length === 0) {
+		return streamState
+	}
+
+	const nextChunk = responseText.slice(streamState.processedLength)
+	if (!nextChunk) {
+		return streamState
+	}
+
+	streamState.processedLength = responseText.length
+	const bufferedChunk = `${streamState.pendingLine}${nextChunk}`
+	const lines = bufferedChunk.split(/\r?\n/)
+	streamState.pendingLine = lines.pop() || ""
+	lines.forEach((line) => consumeOpenAiStreamLine(streamState, line))
+	return streamState
+}
+
+export function finalizeOpenAiStreamResponse(streamState, responseText) {
+	if (!streamState) {
+		return {
+			isStreamResponse: false,
+			text: null,
+			finishReason: null,
+			errorPayload: null,
+		}
+	}
+
+	consumeOpenAiStreamResponse(streamState, responseText)
+
+	if (streamState.pendingLine.trim()) {
+		consumeOpenAiStreamLine(streamState, streamState.pendingLine)
+		streamState.pendingLine = ""
+	}
+
+	return {
+		isStreamResponse: streamState.eventCount > 0 || streamState.done,
+		text: streamState.text || null,
+		finishReason: streamState.finishReason || null,
+		errorPayload: streamState.errorPayload,
+	}
 }
 
 export function extractResponseText(config, apiResponse) {

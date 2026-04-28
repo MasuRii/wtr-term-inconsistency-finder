@@ -219,6 +219,42 @@ export function getModelsCacheBucket(config = appState.config) {
 	return [provider.providerType, provider.baseUrl.toLowerCase(), provider.modelsPath].join("|")
 }
 
+function getKeyStateScope(config = appState.config) {
+	const provider = resolveProviderSettings(config)
+	return [
+		provider.providerType,
+		provider.baseUrl.toLowerCase(),
+		provider.chatCompletionsPath,
+		provider.modelsPath,
+	].join("|")
+}
+
+function getKeyFingerprint(apiKey) {
+	const normalizedKey = typeof apiKey === "string" ? apiKey.trim() : ""
+	if (!normalizedKey) {
+		return "empty"
+	}
+
+	let hash = 5381
+	for (let i = 0; i < normalizedKey.length; i++) {
+		hash = (hash * 33) ^ normalizedKey.charCodeAt(i)
+	}
+
+	return `${normalizedKey.length}:${(hash >>> 0).toString(16)}`
+}
+
+function createInitialKeyState(apiKey, scope, now = Date.now()) {
+	return {
+		status: "AVAILABLE",
+		unlockTime: 0,
+		lastUsed: null,
+		failureCount: 0,
+		lastReset: now,
+		keyFingerprint: getKeyFingerprint(apiKey),
+		scope,
+	}
+}
+
 export function saveSessionResults() {
 	try {
 		const sessionData = {
@@ -270,6 +306,8 @@ export function loadKeyStates() {
 			const unlockTime =
 				typeof raw.unlockTime === "number" && Number.isFinite(raw.unlockTime) ? raw.unlockTime : 0
 			const failureCount = typeof raw.failureCount === "number" && raw.failureCount >= 0 ? raw.failureCount : 0
+			const keyFingerprint = typeof raw.keyFingerprint === "string" ? raw.keyFingerprint : null
+			const scope = typeof raw.scope === "string" ? raw.scope : null
 
 			let normalizedStatus = status
 			let normalizedUnlockTime = unlockTime
@@ -289,6 +327,8 @@ export function loadKeyStates() {
 					typeof raw.lastReset === "number" && Number.isFinite(raw.lastReset)
 						? raw.lastReset
 						: raw.lastReset || null,
+				keyFingerprint,
+				scope,
 			}
 		})
 
@@ -324,39 +364,39 @@ export function saveKeyStates(keyStates) {
 export function initializeKeyStates() {
 	const keyStates = loadKeyStates()
 	const now = Date.now()
+	const scope = getKeyStateScope()
 	let hasChanges = false
 
 	if (appState.config.apiKeys) {
 		appState.config.apiKeys.forEach((key, index) => {
-			if (!keyStates[index]) {
-				keyStates[index] = {
-					status: "AVAILABLE",
-					unlockTime: 0,
-					lastUsed: null,
-					failureCount: 0,
-				}
+			const expectedFingerprint = getKeyFingerprint(key)
+			const existingState = keyStates[index]
+			const keyIdentityChanged =
+				!existingState || existingState.scope !== scope || existingState.keyFingerprint !== expectedFingerprint
+
+			if (keyIdentityChanged) {
+				keyStates[index] = createInitialKeyState(key, scope, now)
 				hasChanges = true
-			} else {
-				// Check if cooldown has expired
-				if (keyStates[index].status === "ON_COOLDOWN" && now > keyStates[index].unlockTime) {
-					keyStates[index].status = "AVAILABLE"
-					keyStates[index].unlockTime = 0
-					hasChanges = true
+				if (existingState) {
+					log(`Reset API key state for slot ${index + 1} after key/provider change.`)
 				}
-				// Check if daily reset has occurred (for exhausted keys)
-				if (keyStates[index].status === "EXHAUSTED") {
-					const lastReset = keyStates[index].lastReset || now
-					const daysSinceReset = Math.floor((now - lastReset) / (24 * 60 * 60 * 1000))
-					if (daysSinceReset >= 1) {
-						keyStates[index] = {
-							status: "AVAILABLE",
-							unlockTime: 0,
-							lastUsed: null,
-							failureCount: 0,
-							lastReset: now,
-						}
-						hasChanges = true
-					}
+				return
+			}
+
+			// Check if cooldown has expired
+			if (keyStates[index].status === "ON_COOLDOWN" && now > keyStates[index].unlockTime) {
+				keyStates[index].status = "AVAILABLE"
+				keyStates[index].unlockTime = 0
+				keyStates[index].failureCount = 0
+				hasChanges = true
+			}
+			// Check if daily reset has occurred (for exhausted keys)
+			if (keyStates[index].status === "EXHAUSTED") {
+				const lastReset = keyStates[index].lastReset || now
+				const daysSinceReset = Math.floor((now - lastReset) / (24 * 60 * 60 * 1000))
+				if (daysSinceReset >= 1) {
+					keyStates[index] = createInitialKeyState(key, scope, now)
+					hasChanges = true
 				}
 			}
 		})
@@ -375,14 +415,16 @@ export function initializeKeyStates() {
 export function updateKeyState(keyIndex, status, unlockTime = null, failureCount = 0) {
 	const keyStates = loadKeyStates()
 	const now = Date.now()
+	const scope = getKeyStateScope()
+	const apiKey = appState.config.apiKeys?.[keyIndex] || ""
+	const keyFingerprint = getKeyFingerprint(apiKey)
 
-	if (!keyStates[keyIndex]) {
-		keyStates[keyIndex] = {
-			status: "AVAILABLE",
-			unlockTime: 0,
-			lastUsed: null,
-			failureCount: 0,
-		}
+	if (
+		!keyStates[keyIndex] ||
+		keyStates[keyIndex].scope !== scope ||
+		keyStates[keyIndex].keyFingerprint !== keyFingerprint
+	) {
+		keyStates[keyIndex] = createInitialKeyState(apiKey, scope, now)
 	}
 
 	// Ensure unlockTime is numeric
@@ -397,8 +439,12 @@ export function updateKeyState(keyIndex, status, unlockTime = null, failureCount
 	}
 
 	const prevFailureCount = typeof keyStates[keyIndex].failureCount === "number" ? keyStates[keyIndex].failureCount : 0
-
-	const nextFailureCount = Math.max(0, prevFailureCount + failureCount)
+	const nextFailureCount =
+		nextStatus === "AVAILABLE"
+			? 0
+			: nextStatus === "INVALID"
+				? Math.max(1, prevFailureCount + failureCount)
+				: Math.max(0, prevFailureCount + failureCount)
 
 	keyStates[keyIndex] = {
 		...keyStates[keyIndex],
@@ -406,11 +452,9 @@ export function updateKeyState(keyIndex, status, unlockTime = null, failureCount
 		unlockTime: nextUnlockTime,
 		lastUsed: now,
 		failureCount: nextFailureCount,
-	}
-
-	// Mark as permanently invalid after 3 consecutive failures (unless explicitly set INVALID)
-	if (keyStates[keyIndex].failureCount >= 3 && status !== "INVALID") {
-		keyStates[keyIndex].status = "INVALID"
+		lastReset: nextStatus === "EXHAUSTED" ? now : keyStates[keyIndex].lastReset,
+		keyFingerprint,
+		scope,
 	}
 
 	saveKeyStates(keyStates)

@@ -21,8 +21,12 @@ import { buildPrompt, buildDeepAnalysisPrompt } from "./promptManager"
 // Import from providerConfig module
 import {
 	buildAnalysisRequest,
+	createOpenAiStreamState,
+	consumeOpenAiStreamResponse,
 	extractResponseText,
+	finalizeOpenAiStreamResponse,
 	getResponseFinishReason,
+	providerUsesStreaming,
 	resolveProviderSettings,
 } from "./providerConfig"
 
@@ -128,6 +132,62 @@ function summarizeParsedResponse(parsedResponse) {
 	}
 }
 
+function createStreamingRequestState(config) {
+	if (!providerUsesStreaming(config)) {
+		return null
+	}
+
+	return {
+		...createOpenAiStreamState(),
+		lastStatusUpdateAt: 0,
+		lastStatusLength: 0,
+	}
+}
+
+function handleStreamingProgress(operationName, streamState, response) {
+	if (!streamState) {
+		return
+	}
+
+	consumeOpenAiStreamResponse(streamState, response.responseText || "")
+
+	const currentLength = streamState.text.length
+	if (currentLength <= 0 || currentLength === streamState.lastStatusLength) {
+		return
+	}
+
+	const now = Date.now()
+	if (now - streamState.lastStatusUpdateAt < 250) {
+		return
+	}
+
+	streamState.lastStatusUpdateAt = now
+	streamState.lastStatusLength = currentLength
+	updateStatusIndicator("running", `${operationName}: Streaming response (${currentLength} chars)...`)
+}
+
+function resolveStreamedApiResponse(response, streamState) {
+	const streamResult = finalizeOpenAiStreamResponse(streamState, response.responseText || "")
+	if (!streamResult.isStreamResponse) {
+		return null
+	}
+
+	if (streamResult.errorPayload) {
+		return streamResult.errorPayload
+	}
+
+	return {
+		choices: [
+			{
+				message: {
+					content: streamResult.text || "",
+				},
+				finish_reason: streamResult.finishReason,
+			},
+		],
+	}
+}
+
 /**
  * Main inconsistency analysis function
  * @param {Array} chapterData - Array of chapter objects with text and chapter numbers
@@ -183,12 +243,16 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
 	const prompt = buildPrompt(combinedText, existingResults)
 	const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
+	const streamingRequestState = createStreamingRequestState(appState.config)
 
 	GM_xmlhttpRequest({
 		method: requestConfig.method,
 		url: requestConfig.url,
 		headers: requestConfig.headers,
 		data: requestConfig.data,
+		onprogress: function (response) {
+			handleStreamingProgress(operationName, streamingRequestState, response)
+		},
 		onload: function (response) {
 			log(`${operationName}: Received API response.`, {
 				...getProviderLogContext(),
@@ -201,7 +265,8 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 
 			// Shell parse errors are treated as retriable (can be transient)
 			try {
-				apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
+				const streamedApiResponse = resolveStreamedApiResponse(response, streamingRequestState)
+				apiResponse = normalizeApiResponse(response, streamedApiResponse || JSON.parse(response.responseText))
 			} catch (e) {
 				log(
 					`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
@@ -430,12 +495,16 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
 		const requestConfig = buildAnalysisRequest(appState.config, currentKey, prompt)
+		const streamingRequestState = createStreamingRequestState(appState.config)
 
 		GM_xmlhttpRequest({
 			method: requestConfig.method,
 			url: requestConfig.url,
 			headers: requestConfig.headers,
 			data: requestConfig.data,
+			onprogress: function (response) {
+				handleStreamingProgress(operationName, streamingRequestState, response)
+			},
 			onload: function (response) {
 				log(`${operationName}: Received API response.`, {
 					...getProviderLogContext(),
@@ -448,7 +517,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 
 				// Shell parse: treat as retriable (can be transient / truncation)
 				try {
-					apiResponse = normalizeApiResponse(response, JSON.parse(response.responseText))
+					const streamedApiResponse = resolveStreamedApiResponse(response, streamingRequestState)
+					apiResponse = normalizeApiResponse(
+						response,
+						streamedApiResponse || JSON.parse(response.responseText),
+					)
 				} catch (e) {
 					log(
 						`${operationName}: Failed to parse API response shell: ${e.message}. Retrying immediately with next key.`,
