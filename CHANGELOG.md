@@ -6,61 +6,88 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [Unreleased]
+
+---
+## [5.5.0] - 2026-04-28
+
+### Added
+- TypeScript build support for source modules while preserving JavaScript userscript output in `dist/`.
+- Provider-aware temperature and reasoning/thinking controls in the configuration modal.
+- Automatic OpenAI-compatible chat/model endpoint handling with fallback probing for model discovery.
+- Enriched OpenAI-compatible model catalog support for providers that expose metadata such as context length, output limits, pricing, capabilities, supported parameters, and latest-alias targets.
+- Metadata-aware OpenAI-compatible request serialization so unsupported parameters such as `temperature` or `reasoning_effort` are skipped when model catalogs indicate they are not supported.
+- API key visibility controls in the configuration modal, letting users temporarily show or hide saved API keys.
+- Debug report controls that appear when Debug Logging is enabled, including copy-ready Markdown reports with runtime details, configuration summary, timestamped logs, and redacted secrets.
+- Needs Review confidence state for findings that are preserved but not confirmed by the latest verification pass.
+- Removed repository code-style tooling and related scripts to keep development dependencies lean.
+
+### Changed
+- Converted remaining runtime/UI source modules and generated source metadata files under `src/` to TypeScript.
+- Simplified default OpenAI-compatible setup so users enter a base URL instead of raw chat/models paths.
+- Moved manual endpoint path edits behind advanced troubleshooting controls.
+- Updated modal styling to reduce box-heavy layout and improve desktop/mobile responsiveness.
+- Cached model catalog metadata alongside model IDs to improve model selection hints and request behavior across sessions.
+- Improved deep-analysis confidence handling so previous findings remain available for review when model verification is inconclusive.
+- Cleaned project Markdown to use plain headings and concise setup notes.
+
+### Fixed
+- Fixed the userscript runtime startup failure caused by Node-only `process.env` references being bundled into the browser userscript after the TypeScript rewrite.
+- Preserved browser-safe runtime version globals without importing Node-only version configuration into the userscript bundle.
+- Reduced provider request failures for OpenAI-compatible endpoints that advertise unsupported parameters in their model metadata.
+- Clamped completed deep-analysis iteration state so reports show the configured target depth instead of advancing past it.
+- Improved semantic duplicate detection for composite concepts such as `A / B` by comparing individual variants and handling proper-name connector words.
+- Preserved previous findings as Needs Review when a verification pass returns no items or omits earlier context results, making confidence changes explicit.
+- Marked findings discovered on the final deep-analysis pass as Needs Review when no later verification pass remains.
+
+---
 ## [5.4.1] - 2026-04-04
 
-### ✨ Added
+### Added
 - **Live Term Replacer Sync**: When the external WTR Lab Term Replacer userscript is installed, Finder can now request the current novel's live term list directly at analysis time instead of requiring an exported JSON file.
 - **Live Sync Preference Toggle**: Added a configuration toggle so users can explicitly choose whether Finder should reuse Term Replacer terms automatically or operate independently even when both scripts are installed.
 
-### ♻️ Changed
+### Changed
 - **JSON Integration Positioning**: Reframed the Term Replacer JSON option as an optional manual override/backup import path instead of the primary integration workflow.
 - **Configuration Messaging**: Updated the configuration panel hints to explain the three supported modes clearly: Finder-only, live sync with Term Replacer, and optional JSON import.
 
-### 🐛 Fixed
+### Fixed
 - **Dual-Script Workflow Friction**: Removed the need to export a Term Replacer JSON file before running Finder analysis in the common case where both userscripts are installed together.
 - **Finder-Only Control**: Preserved the ability to ignore Term Replacer data by disabling the new live sync toggle, preventing unwanted automatic reuse of external terms.
 
 ---
 ## [5.4.0] - 2026-04-04
 
-### ✨ Added
+### Added
 - **Multi-Provider Support**: Added support for OpenAI-compatible API providers in addition to Google Gemini. Users can now choose between Gemini and any OpenAI-compatible API (OpenAI, local models, self-hosted solutions like Ollama, etc.).
 - **Flexible API Configuration**: New configuration options for provider type, base URL, and custom API endpoints, enabling integration with various AI backends.
 - **Dynamic Model Discovery**: Enhanced model fetching system that works with both Gemini and OpenAI-compatible model catalogs.
 - **Provider-Aware Request Building**: Automatic request formatting based on provider type, handling authentication and payload differences transparently.
 
-### 📦 New Module
+### New Module
 - **providerConfig.js**: New module providing provider configuration, URL/path normalization, request builders, and response parsers for both Gemini and OpenAI-compatible APIs.
 
 ---
 ## [5.3.9] - 2026-04-04
 
-### ✨ Added
+### Added
 - **Version Badge in UI Header**: Added a visible version indicator badge to the panel header, making it easy to identify the current script version at a glance. The badge displays the version number (e.g., `v5.3.9`) and includes a tooltip showing the build date and environment.
 - **Node.js Engine Requirement**: Added `engines` field to `package.json` specifying Node.js >=20.19.0 as the minimum required version.
 
-### ♻️ Changed
-- **Dependency Updates**: Updated all dev dependencies to their latest compatible versions:
-  - ESLint 9.39.4 (held at v9 due to `eslint-plugin-import` compatibility)
-  - Prettier 3.8.1
-  - Stylelint 17.6.0 with stylelint-config-standard 40.0.0
-  - Webpack 5.105.4, webpack-cli 7.0.2, webpack-dev-server 5.2.3
-  - css-loader 7.1.4, eslint-plugin-prettier 5.5.5
-- **Build Pipeline Order**: Fixed build script execution order so `version:update` runs before `format` and `lint:fix`, ensuring generated files are properly formatted before linting.
+### Changed
+- **Dependency Updates**: Updated build dependencies to their latest compatible versions, including webpack, webpack CLI, webpack dev server, and CSS loaders.
+- **Build Pipeline Order**: Fixed build script execution order so version synchronization runs before generated bundle output.
 - **Version Script Enhancement**: Extended `update-versions.js` to automatically sync `src/version.js` fallback values, preventing the UI version badge from showing stale data.
 - **Version Module Refactor**: Converted `src/version.js` to proper ESM exports while maintaining browser globals for backward compatibility.
 
-### 🐛 Fixed
+### Fixed
 - **Broken `version:check` Script**: Corrected the command alias from pointing to `version` (invalid) to `check` (valid), restoring `npm run version:check` functionality.
-- **Generated File Formatting**: Fixed formatting issues in generated `banner.js` and `header.js` that caused lint errors after builds.
-
-### ⚙️ Internal
-- **ESLint 10 Compatibility Note**: Intentionally held ESLint at v9.x because `eslint-plugin-import` only supports ESLint ^9 (peer dependency constraint). Will upgrade to ESLint 10 once plugin support is available.
+- **Generated File Consistency**: Fixed generated `banner.js` and `header.js` consistency issues after builds.
 
 ---
 ## [5.3.8] - 2025-11-17
 
-### ♻️ Changed
+### Changed
 - **Major Gemini API Module Refactoring**: Completely modularized the monolithic 908-line `geminiApi.js` file into 5 focused modules following single responsibility principle:
   - `retryLogic.js` (107 lines) - Exponential backoff and retry scheduling logic
   - `promptManager.js` (310 lines) - AI prompt generation and response parsing
@@ -72,12 +99,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Preserved Backward Compatibility**: All existing function signatures and interfaces remain unchanged - no breaking changes
 - **API Key Rotation Logic Refactoring**: Removed exponential backoff mechanism and implemented immediate key-switching with smart cooldown system for faster API key cycling and improved user experience
 
-### 🐛 Fixed
+### Fixed
 - **Mobile CSS Layout**: Removed `flex-direction: column;` from the mobile view rule for `.wtr-if-section-header h3` to correct layout behavior
 - **Chapter Title Punctuation Filtering**: Added exclusion rule to prevent flagging of minor, non-actionable stylistic inconsistencies related to chapter title formatting, specifically the presence or absence of colon separators
 - **Debug Log Leakage**: Corrected the logging mechanism to ensure that initialization and module loading messages are suppressed when the user has disabled debug logging in the configuration settings panel
 
-### ⚙️ Internal
+### Internal
 - **Comprehensive Documentation**: Added detailed JSDoc documentation to all new modular components
 - **Dependency Management**: Implemented proper module initialization order with circular dependency resolution
 - **Error Handling Enhancement**: Extended error handling patterns across all modules with comprehensive recovery strategies
@@ -85,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.7] - 2025-11-11
 
-### 🐛 Fixed
+### Fixed
 - **Critical API Key Cooldown State Synchronization**: Resolved issue where API keys whose cooldown periods had expired remained marked as unavailable, causing false "no available keys" errors. Implemented proactive state synchronization that automatically re-evaluates and marks expired keys as available based on real-time clock information without requiring failed analysis attempts.
 - **First-Attempt Success After Cooldown**: Eliminated redundant failure-first behavior where users had to perform multiple analysis attempts after cooldown expiry. The first analysis attempt now succeeds immediately if at least one key's cooldown has expired and no other constraints prevent its use.
 - **Real-Time Key State Management**: Replaced reactive-only state updates with comprehensive real-time evaluation. Key availability is now computed using up-to-date cooldown information on every selection attempt, ensuring the system no longer relies solely on state refresh triggered by user actions.
@@ -100,17 +127,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.6] - 2025-11-10
 
-### ✨ Added
+### Added
 - **WTR Lab Term Replacer Integration Mode Switcher**: Automatically detects if the external Term Replacer userscript is active, switching between "Apply" and "Copy" modes accordingly. Provides clear user messaging.
 - **Advanced API Key Rotation System**: Implemented a state-managed key pool (`AVAILABLE`, `ON_COOLDOWN`, `EXHAUSTED`, `INVALID`) with persistent `localStorage` state. Features context-aware cooldowns, automatic recovery, and intelligent key selection to improve reliability and handle API limits gracefully.
 
-### ♻️ Changed
+### Changed
 - **Gemini Prompt Refinement**: Updated the system prompt to ignore non-user-actionable numbering discrepancies from the WTR Lab site templates.
 - **Finder Tab Layout Stability**: Ensured the main UI structure remains static during result updates, preventing layout shifts.
 - **UI Stacking Order**: Adjusted `z-index` to ensure the Finder panel appears above the site's bottom navigator.
 - **UI Header Cleanup**: Removed the version number from the panel header for a cleaner look.
 
-### 🐛 Fixed
+### Fixed
 - **Status Widget Collision**: Refined positioning logic to prevent jitter and overlap with other status widgets, correctly ignoring the site's bottom navigator for vertical placement.
 - **Dynamic Apply/Copy Behavior**: Centralized button mode handling to ensure all action buttons correctly sync with the Term Replacer's detection state, preventing incorrect actions.
 - **Smart Quotes Safety**: Reworked smart quote replacement to be more conservative and context-aware, preventing malformed transformations.
@@ -121,43 +148,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.5] - 2025-11-10
 
-### ✨ Added
+### Added
 - **Multi-Build System**: Implemented a webpack multi-target build system for performance, GreasyFork, and development outputs.
-- **Enhanced Development Workflow**: Integrated Prettier, ESLint, and Stylelint for a complete auto-formatting and auto-fixing pipeline.
+- **Enhanced Development Workflow**: Added a code-quality workflow for generated userscript builds.
 
-### ♻️ Changed
-- **Build Process**: Updated `npm run build` to include automated linting and fixing.
+### Changed
+- **Build Process**: Updated `npm run build` to include automated code-quality checks at the time.
 - **CSS Processing**: Configured webpack with proper loaders to handle CSS `@import` and processing.
 
-### 🐛 Fixed
-- **CSS Linting Errors**: Resolved various selector ordering and duplicate issues.
+### Fixed
+- **CSS Quality Errors**: Resolved various selector ordering and duplicate issues.
 - **Userscript Validation**: Fixed a webpack header validation issue caused by a conflicting `homepage` field in `package.json`.
 - **Build Failures**: Corrected issues related to CSS processing and userscript metadata validation.
 
-### ⚙️ Internal
+### Internal
 - **Webpack Configuration**: Enhanced multi-target webpack config for all build types.
 - **Version Management**: Improved version synchronization across build artifacts.
 - **Optimized Build Artifacts**: Tailored outputs for performance (93.5 KiB), GreasyFork (159 KiB), and development (159 KiB).
 
 ## [5.3.3] - 2025-11-07
 
-### ✨ Added
+### Added
 - **Smart Quotes Replacement**: Implemented a pre-processing step to standardize quotes before term analysis.
 - **Active Chapter Skipping**: The script now avoids processing chapters currently being edited to prevent conflicts.
 
-### 🐛 Fixed
+### Fixed
 - **Status Indicator Positioning**: Adjusted CSS to avoid collision with other status widgets on the page.
 
 ## [5.3.2] - 2025-11-06
 
-### 🐛 Fixed
+### Fixed
 - **Quote Handling False Positives**: Enhanced the AI prompt to correctly ignore differences in quote styles (e.g., straight vs. smart quotes).
 - **Configuration Bug**: Fixed an issue where the "Auto-restore saved results" setting would not save correctly when disabled.
 - **UI Conflict**: Resolved a `z-index` conflict with the site's bottom navigation bar.
 
 ## [5.3.1] - 2025-11-06
 
-### ✨ Added
+### Added
 - Complete refactoring to a modern **ES6 modular architecture**.
 - **Multi-API Key Support** with rotation and cooldowns.
 - **Deep Analysis** feature with multiple iterations.
@@ -166,23 +193,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Seamless integration with the **Term Replacer** userscript.
 - **GitHub Actions** for automated CI builds.
 
-### ♻️ Changed
+### Changed
 - Migrated the build system to **webpack-userscript**.
 - Reorganized the codebase into focused modules (`api`, `state`, `ui`, `utils`).
 - Improved error handling with exponential backoff.
 
-### 🐛 Fixed
+### Fixed
 - Addressed various bugs related to session restoration, memory leaks, API rate limiting, and UI responsiveness.
 
 ## [5.2.0] - 2025-10-XX (Legacy)
 
-### ✨ Added
+### Added
 - Initial AI-powered inconsistency detection.
 - Priority-based result filtering.
 
 ## [5.1.0] - 2025-09-XX (Legacy)
 
-### ✨ Added
+### Added
 - Initial integration with the Gemini AI.
 - Basic chapter data extraction and results display.
 

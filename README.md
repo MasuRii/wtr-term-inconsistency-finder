@@ -1,153 +1,111 @@
 # WTR Lab Term Inconsistency Finder
 
-[![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
-
-[![Version](https://img.shields.io/badge/version-5.4.1-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.5.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
-A sophisticated userscript that finds translation inconsistencies in WTR Lab chapters using Google Gemini or OpenAI-compatible AI providers. It can also integrate directly with WTR Lab Term Replacer by reusing live stored terms during analysis, while still supporting a Finder-only workflow. Perfect for translators and proofreaders who want to ensure term consistency across entire novels.
+[![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
 
----
+A userscript for finding translation term inconsistencies in WTR Lab chapters. It supports Google Gemini and OpenAI-compatible providers, can rotate multiple API keys, can reuse live terms from WTR Lab Term Replacer, and includes shareable debug reports for issue reporting.
 
-### Table of Contents
+## Features
 
--   [🚀 Features](#-features)
--   [🔧 Installation](#-installation)
--   [💡 Usage](#-usage)
--   [⚙️ For Developers](#️-for-developers)
-    -   [Prerequisites](#prerequisites)
-    -   [Setup and Installation](#setup-and-installation)
-    -   [Available Scripts](#available-scripts)
-    -   [Project Structure](#project-structure)
--   [🤝 Contributing](#-contributing)
--   [📜 Changelog](#-changelog)
--   [📄 License](#-license)
--   [🌟 Acknowledgments](#-acknowledgments)
--   [💬 Support](#-support)
+- AI-assisted inconsistency detection with Gemini or OpenAI-compatible APIs.
+- Simple provider setup using provider type, base URL, API keys, and model selection.
+- Automatic OpenAI-compatible endpoint handling for common bases such as OpenAI, Ollama, OpenRouter, Groq, Together, DeepSeek, and Gemini OpenAI compatibility.
+- Advanced endpoint path overrides hidden behind troubleshooting controls for non-standard providers.
+- Enriched OpenAI-compatible model catalog support, including optional metadata for context length, output limits, pricing, capabilities, supported parameters, and latest-alias targets.
+- Metadata-aware request serialization that avoids unsupported options such as temperature or reasoning effort when a provider advertises those limits.
+- Configurable temperature and reasoning/thinking effort with provider-aware request serialization.
+- Multiple API keys with rotation, cooldown state, saved configuration migration, and a show/hide API key toggle in the modal.
+- Deep analysis carries findings forward between iterations, verifies them in later passes, and downgrades uncertain findings to Needs Review instead of silently dropping or over-confirming them.
+- Session persistence for continuing analysis later.
+- Optional live sync with WTR Lab Term Replacer terms and optional JSON import fallback.
+- Debug logging mode with copy-ready, redacted Markdown reports for easier issue reporting.
+- Responsive modal UI for desktop and mobile.
 
----
+## Installation
 
-## 🚀 Features
+1. Install a userscript manager such as [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
+2. Install the script from [Greasy Fork](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder).
+3. Open a WTR Lab chapter and click the Finder control.
+4. In Configuration, choose Gemini or OpenAI-Compatible, enter your API key, set the base URL, refresh models, select a model, and save.
 
--   **🤖 AI-Powered Analysis**: Leverages Google Gemini or OpenAI-compatible APIs to intelligently detect contextual term inconsistencies.
--   **🔀 Multi-Provider Support**: Choose between Google Gemini or any OpenAI-compatible API (OpenAI, Ollama, local models, self-hosted solutions).
--   **🔄 Multi-API Key Support**: Automatically rotates keys to manage rate limits, with smart cooldowns and persistent state.
--   **🔍 Deep Analysis**: Performs multiple analysis iterations (1-5) for more comprehensive and accurate results.
--   **💾 Session Persistence**: Automatically saves and restores analysis results, allowing you to pick up where you left off.
--   **🎛️ Advanced Filtering**: Filter results by priority (`CRITICAL`, `HIGH`, `MEDIUM`, etc.) and status (`New`, `Verified`).
--   **🛠️ Term Replacer Integration**: Seamlessly apply suggested fixes with the external [WTR Lab Term Replacer](https://greasyfork.org/en/scripts/452202-wtr-lab-term-replacer) userscript.
--   **🔗 Live Term Sync**: Automatically reuses the current novel's live term list from WTR Lab Term Replacer during analysis when both scripts are installed.
--   **🎚️ Optional Integration Toggle**: Disable live sync at any time if you want Finder to behave independently, even while Term Replacer is installed.
--   **📊 Real-time Status**: A clean UI with live progress indicators and detailed status messages.
--   **📱 Modern & Responsive**: The interface is designed to work smoothly on all screen sizes.
+For OpenAI-compatible providers, enter the base URL only. Examples: `https://api.openai.com/v1`, `http://localhost:11434/v1`, `https://openrouter.ai/api/v1`, or `https://api.groq.com/openai/v1`. Manual chat/models paths are available only in Advanced endpoint troubleshooting.
 
-## 🔧 Installation
+## Usage
 
-The easiest way to install is directly from Greasy Fork.
+1. Open the Finder panel on a WTR Lab chapter.
+2. Configure provider, API keys, model, temperature, and optional reasoning/thinking effort.
+3. Use Show Keys only when you need to inspect or edit saved API key values.
+4. Choose whether to use live Term Replacer sync when the companion userscript is installed.
+5. Start analysis from the Finder tab.
+6. Review results, including Verified and Needs Review badges, then filter by priority/status and apply through Term Replacer or copy suggestions.
 
-1.  **Install a Userscript Manager**: You need an extension like [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
-2.  **Install the Script**: Click the link below to install.
-    -   <a href="https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Install from Greasy Fork</a>
-3.  **Get an API Key**: This script requires an API key to work.
-    -   **Google Gemini** (Free): Visit [Google AI Studio](https://makersuite.google.com/app/apikey) to create one.
-    -   **OpenAI-Compatible**: Use any compatible provider (OpenAI, Ollama, local models, etc.) with custom base URL.
+## Debug Reports
 
-## 💡 Usage
+When reporting an issue:
 
-1.  **Navigate** to any WTR Lab chapter.
-2.  **Click the Finder icon (🔍)** in the top-right corner to open the panel.
-3.  **Configure**: In the "Configuration" tab, select your provider type, paste your API key(s), and click "Save". For custom providers, adjust the base URL as needed.
-4.  **Choose Integration Mode (Optional)**: If WTR Lab Term Replacer is installed, Finder can automatically reuse its live term list during analysis. You can disable that behavior in Configuration if you want Finder-only analysis, or enable JSON mode as a manual override.
-5.  **Analyze**: Go back to the "Analysis" tab, select your chapters, and click "Start Analysis".
-6.  **Review**: Once the analysis is complete, review the found inconsistencies.
-7.  **Apply/Copy**: Use the "Apply" buttons to send terms to the WTR Lab Term Replacer script, or "Copy" buttons to copy them to your clipboard.
+1. Open Configuration and enable Debug Logging.
+2. Reproduce the issue.
+3. Click Copy Debug Report.
+4. Paste the copied Markdown report into a GitHub issue or Greasy Fork feedback thread.
 
-## ⚙️ For Developers
+The report includes runtime details, provider/model configuration, iteration state, result count, and timestamped debug logs. API keys and common token formats are redacted before copying.
 
-This project is built with a modern JavaScript toolchain for maintainability and ease of development.
+## Developer Setup
 
 ### Prerequisites
 
--   Node.js (v16 or higher)
--   npm (v8 or higher)
--   A userscript manager like Tampermonkey for testing.
+- Node.js 20.19.0 or newer
+- npm
+- A userscript manager for browser testing
 
-### Setup and Installation
+### Install
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/MasuRii/wtr-term-inconsistency-finder.git
-    cd wtr-term-inconsistency-finder
-    ```
+```bash
+npm install
+```
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+### Build
 
-### Available Scripts
+```bash
+npm run build
+```
 
--   **Start the development server (with hot-reloading):**
-    ```bash
-    npm run dev
-    ```
-    This creates a proxy script at `dist/wtr-term-inconsistency-finder.proxy.user.js`. Install this proxy script in Tampermonkey to get automatic updates whenever you save a file.
+Webpack compiles TypeScript source and CSS into JavaScript userscript bundles in `dist/`:
 
--   **Build for production:**
-    ```bash
-    npm run build
-    ```
-    This bundles and minifies the script into `dist/wtr-term-inconsistency-finder.user.js`, ready for distribution.
+- `dist/wtr-lab-term-inconsistency-finder.user.js`
+- `dist/wtr-lab-term-inconsistency-finder.greasyfork.user.js`
+- `dist/wtr-lab-term-inconsistency-finder.dev.user.js`
 
--   **Lint and format code:**
-    ```bash
-    npm run lint
-    npm run lint:fix
-    ```
+### Checks
+
+```bash
+npm run typecheck
+```
 
 ### Project Structure
 
+```text
+src/
+  index.ts
+  modules/
+    analysisEngine.ts
+    providerConfig.ts
+    state.ts
+    ui/
+  styles/
+dist/
+  generated userscript output
 ```
-.
-├── dist/                   # Build output
-├── src/
-│   ├── modules/            # Core logic (API, state, UI, utils)
-│   ├── styles/             # CSS styles
-│   └── index.js            # Main entry point
-├── .github/                # GitHub Actions workflows
-├── eslint.config.js        # ESLint configuration
-├── .prettierrc.json        # Prettier configuration
-├── package.json            # Project dependencies and scripts
-└── webpack.config.js       # Webpack configuration
-```
 
-## 🤝 Contributing
+## Support
 
-Contributions are welcome! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to submit pull requests, report issues, and suggest features.
+- [GitHub Issues](https://github.com/MasuRii/wtr-term-inconsistency-finder/issues)
+- [GitHub Discussions](https://github.com/MasuRii/wtr-term-inconsistency-finder/discussions)
+- [Greasy Fork Feedback](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder/feedback)
 
-## 📜 Changelog
+## License
 
-All notable changes to this project are documented in the [CHANGELOG.md](CHANGELOG.md) file.
-
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## 🌟 Acknowledgments
-
--   **Google** for the powerful Gemini AI model.
--   **The WTR Lab community** for their feedback and support.
--   **Webpack Userscript Plugin** for simplifying the build process.
-
-## 💬 Support
-
-If you encounter a bug or have a feature request, please use the following channels:
-
--   **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/MasuRii/wtr-term-inconsistency-finder/issues)
--   **Questions & Discussions**: [GitHub Discussions](https://github.com/MasuRii/wtr-term-inconsistency-finder/discussions)
--   **User Feedback**: [Greasy Fork Feedback Section](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder/feedback)
-
----
-
-**Made with ❤️ for the WTR Lab translation community.**
+MIT. See [LICENSE](LICENSE).
