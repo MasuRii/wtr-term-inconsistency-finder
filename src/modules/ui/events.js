@@ -4,7 +4,6 @@ import { AI_PROVIDERS, PROVIDER_DEFAULTS, resolveProviderSettings } from "../pro
 import {
 	crawlChapterData,
 	applyTermReplacements,
-	applySmartQuotesReplacement,
 	getNovelSlug,
 	log,
 	escapeRegExp,
@@ -87,8 +86,7 @@ async function startAnalysis(isContinuation = false) {
 		}
 
 		const chapterData = crawlChapterData()
-		const smartQuotesData = applySmartQuotesReplacement(chapterData)
-		const processedData = applyTermReplacements(smartQuotesData, liveTerms)
+		const processedData = applyTermReplacements(chapterData, liveTerms)
 		findInconsistenciesDeepAnalysis(
 			processedData,
 			isContinuation ? appState.runtime.cumulativeResults : [],
@@ -189,9 +187,7 @@ export function handleFileImportAndAnalyze(event) {
 			// --- End Validation ---
 
 			const chapterData = crawlChapterData()
-			// Apply smart quotes replacement first, then term replacements
-			const smartQuotesData = applySmartQuotesReplacement(chapterData)
-			const processedData = applyTermReplacements(smartQuotesData, terms || [])
+			const processedData = applyTermReplacements(chapterData, terms || [])
 			const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
 			findInconsistenciesDeepAnalysis(
 				processedData,
