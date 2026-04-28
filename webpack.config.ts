@@ -1,12 +1,14 @@
-// webpack.config.js
+// webpack.config.ts
 // Multi-build configuration for WTR Term Inconsistency Finder
 
-const path = require("path")
-const { UserscriptPlugin } = require("webpack-userscript")
-const pkg = require("./package.json")
-const { VERSION_INFO, getVersion } = require("./config/versions.js")
+import path from "node:path"
+import type { Configuration, RuleSetRule } from "webpack"
+import { UserscriptPlugin, type HeadersProps } from "webpack-userscript"
+import "webpack-dev-server"
 
-// Common metadata for all builds
+import pkg from "./package.json"
+import { getVersion } from "./config/versions"
+
 const COMMON_META = {
 	description: pkg.description,
 	author: pkg.author,
@@ -19,34 +21,41 @@ const COMMON_META = {
 	"run-at": "document-idle",
 	supportURL: "https://github.com/MasuRii/wtr-term-inconsistency-finder/issues",
 	website: "https://github.com/MasuRii/wtr-term-inconsistency-finder",
-}
+} satisfies HeadersProps
 
-// Script name constants
 const SCRIPT_NAME = "WTR Lab Term Inconsistency Finder"
 const PACKAGE_NAME = pkg.name
 
-// Build time for development builds
-const buildTime = new Date()
-	.toISOString()
-	.replace(/[:-]|\.\d{3}/g, "")
-	.slice(0, 15)
+const typeScriptRule = (): RuleSetRule => ({
+	test: /\.ts$/,
+	use: {
+		loader: "ts-loader",
+		options: {
+			transpileOnly: true,
+			compilerOptions: { noEmit: false },
+		},
+	},
+	exclude: /node_modules/,
+})
 
-// 1. Performance Build (Production)
-const performanceConfig = {
+const cssRule = (): RuleSetRule => ({
+	test: /\.css$/,
+	use: ["style-loader", "css-loader"],
+})
+
+const performanceConfig: Configuration = {
 	name: "performance",
 	mode: "production",
-	entry: "./src/index.js",
+	entry: "./src/index.ts",
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: `${PACKAGE_NAME}.user.js`,
 	},
+	resolve: {
+		extensions: [".ts", ".js"],
+	},
 	module: {
-		rules: [
-			{
-				test: /\.css$/,
-				use: ["style-loader", "css-loader"],
-			},
-		],
+		rules: [typeScriptRule(), cssRule()],
 	},
 	optimization: {
 		minimize: true,
@@ -65,27 +74,23 @@ const performanceConfig = {
 				downloadURL: `https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/${PACKAGE_NAME}.user.js`,
 				updateURL: `https://raw.githubusercontent.com/MasuRii/wtr-term-inconsistency-finder/main/dist/${PACKAGE_NAME}.user.js`,
 			},
-			proxyScript: false,
 		}),
 	],
 }
 
-// 2. GreasyFork Build
-const greasyforkConfig = {
+const greasyforkConfig: Configuration = {
 	name: "greasyfork",
 	mode: "production",
-	entry: "./src/index.js",
+	entry: "./src/index.ts",
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: `${PACKAGE_NAME}.greasyfork.user.js`,
 	},
+	resolve: {
+		extensions: [".ts", ".js"],
+	},
 	module: {
-		rules: [
-			{
-				test: /\.css$/,
-				use: ["style-loader", "css-loader"],
-			},
-		],
+		rules: [typeScriptRule(), cssRule()],
 	},
 	optimization: {
 		minimize: false,
@@ -98,18 +103,15 @@ const greasyforkConfig = {
 				...COMMON_META,
 				name: SCRIPT_NAME,
 				version: getVersion("semantic"),
-				// No updateURL/downloadURL for GreasyFork compliance
 			},
-			proxyScript: false,
 		}),
 	],
 }
 
-// 3. Development Build
-const devConfig = {
+const devConfig: Configuration = {
 	name: "dev",
 	mode: "development",
-	entry: "./src/index.js",
+	entry: "./src/index.ts",
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: `${PACKAGE_NAME}.dev.user.js`,
@@ -128,13 +130,11 @@ const devConfig = {
 			logging: "none",
 		},
 	},
+	resolve: {
+		extensions: [".ts", ".js"],
+	},
 	module: {
-		rules: [
-			{
-				test: /\.css$/,
-				use: ["style-loader", "css-loader"],
-			},
-		],
+		rules: [typeScriptRule(), cssRule()],
 	},
 	optimization: {
 		minimize: false,
@@ -151,13 +151,11 @@ const devConfig = {
 				version: getVersion("dev"),
 			},
 			proxyScript: {
-				baseUrl: "http://localhost:8080",
+				baseURL: "http://localhost:8080/",
 				filename: "[basename].proxy.user.js",
-				enable: true,
 			},
 		}),
 	],
 }
 
-// Export all configurations
-module.exports = [performanceConfig, greasyforkConfig, devConfig]
+export default [performanceConfig, greasyforkConfig, devConfig]

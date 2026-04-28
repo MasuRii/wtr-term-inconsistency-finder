@@ -1,13 +1,23 @@
 #!/usr/bin/env node
-// scripts/update-versions.js
+// scripts/update-versions.ts
 // Automated version synchronization for WTR Term Inconsistency Finder
 
-const fs = require("fs")
-const path = require("path")
-const { VERSION_INFO } = require("../config/versions.js")
+import fs from "node:fs"
+import path from "node:path"
+import { VERSION_INFO } from "../config/versions"
+
+interface ReplacementPattern {
+	search: RegExp
+	replace: string
+}
+
+interface FileUpdate {
+	file: string
+	patterns: ReplacementPattern[]
+}
 
 // Files to update with version information
-const FILES_TO_UPDATE = [
+const FILES_TO_UPDATE: FileUpdate[] = [
 	{
 		file: "package.json",
 		patterns: [{ search: /"version":\s*"[^"]*"/g, replace: `"version": "${VERSION_INFO.NPM}"` }],
@@ -22,25 +32,22 @@ const FILES_TO_UPDATE = [
 		],
 	},
 	{
-		file: "GreasyForkREADME.md",
-		patterns: [
-			{
-				search: /!\[Version\]\(https:\/\/img\.shields\.io\/badge\/version-[^)]+\)/g,
-				replace: `![Version](https://img.shields.io/badge/version-${VERSION_INFO.BADGE}-blue)`,
-			},
-		],
-	},
-	{
-		file: "src/version.js",
+		file: "src/version.ts",
 		patterns: [
 			{ search: /SEMANTIC:\s*"[^"]*"/g, replace: `SEMANTIC: "${VERSION_INFO.SEMANTIC}"` },
 			{ search: /DISPLAY:\s*"[^"]*"/g, replace: `DISPLAY: "v${VERSION_INFO.SEMANTIC}"` },
 			{ search: /BUILD_DATE:\s*"[^"]*"/g, replace: `BUILD_DATE: "${VERSION_INFO.BUILD_DATE}"` },
+			{ search: /GREASYFORK:\s*"[^"]*"/g, replace: `GREASYFORK: "${VERSION_INFO.GREASYFORK}"` },
+			{ search: /NPM:\s*"[^"]*"/g, replace: `NPM: "${VERSION_INFO.NPM}"` },
+			{ search: /BADGE:\s*"[^"]*"/g, replace: `BADGE: "${VERSION_INFO.BADGE}"` },
+			{ search: /CHANGELOG:\s*"[^"]*"/g, replace: `CHANGELOG: "${VERSION_INFO.CHANGELOG}"` },
 		],
 	},
 ]
 
 const command = process.argv[2] || "update"
+
+const getErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 /**
  * Safely update a file using explicit patterns.
@@ -49,7 +56,7 @@ const command = process.argv[2] || "update"
  * - false if no changes were needed
  * - throws on hard failure (I/O or unexpected error)
  */
-function updateFile(filePath, patterns) {
+function updateFile(filePath: string, patterns: ReplacementPattern[]): boolean {
 	if (!fs.existsSync(filePath)) {
 		console.log(`⚠️  File not found: ${filePath}`)
 		return false
@@ -77,12 +84,12 @@ function updateFile(filePath, patterns) {
 		return false
 	} catch (error) {
 		// Treat as hard failure so build can surface the problem
-		console.error(`❌ Error updating ${filePath}:`, error.message)
+		console.error(`❌ Error updating ${filePath}:`, getErrorMessage(error))
 		throw error
 	}
 }
 
-function generateBanner() {
+function generateBanner(): string {
 	const banner = `/**
  * WTR Term Inconsistency Finder v${VERSION_INFO.SEMANTIC}
  * Built: ${VERSION_INFO.BUILD_DATE} (${VERSION_INFO.BUILD_ENV})
@@ -96,13 +103,13 @@ function generateBanner() {
  */
 `
 
-	const bannerPath = path.join(__dirname, "../src/banner.js")
+	const bannerPath = path.join(__dirname, "../src/banner.ts")
 	fs.writeFileSync(bannerPath, banner, "utf8")
 	console.log(`📝 Generated build banner: ${bannerPath}`)
 	return bannerPath
 }
 
-function generateHeader() {
+function generateHeader(): string {
 	const header = `// ==UserScript==
 // @name         WTR Term Inconsistency Finder v${VERSION_INFO.SEMANTIC}
 // @namespace    http://tampermonkey.net/
@@ -124,13 +131,13 @@ function generateHeader() {
 // ==/UserScript==
 `
 
-	const headerPath = path.join(__dirname, "../src/header.js")
+	const headerPath = path.join(__dirname, "../src/header.ts")
 	fs.writeFileSync(headerPath, header, "utf8")
 	console.log(`📋 Generated script header: ${headerPath}`)
 	return headerPath
 }
 
-function checkVersion() {
+function checkVersion(): void {
 	console.log("📋 Current Version Information:")
 	console.log(`   Semantic Version: ${VERSION_INFO.SEMANTIC}`)
 	console.log(`   Display Version: ${VERSION_INFO.DISPLAY}`)
@@ -147,7 +154,7 @@ console.log("🔄 WTR Term Inconsistency Finder - Version Management")
 console.log("=".repeat(55))
 
 switch (command) {
-	case "update":
+	case "update": {
 		console.log("🔄 Updating versioned files...")
 
 		let updatedFiles = 0
@@ -160,7 +167,7 @@ switch (command) {
 				if (updateFile(filePath, patterns)) {
 					updatedFiles++
 				}
-			} catch (error) {
+			} catch {
 				hadHardFailure = true
 			}
 		})
@@ -170,7 +177,7 @@ switch (command) {
 			generateBanner()
 			updatedFiles++
 		} catch (error) {
-			console.error("❌ Failed to generate banner.js:", error.message)
+			console.error("❌ Failed to generate banner.ts:", getErrorMessage(error))
 			hadHardFailure = true
 		}
 
@@ -178,7 +185,7 @@ switch (command) {
 			generateHeader()
 			updatedFiles++
 		} catch (error) {
-			console.error("❌ Failed to generate header.js:", error.message)
+			console.error("❌ Failed to generate header.ts:", getErrorMessage(error))
 			hadHardFailure = true
 		}
 
@@ -187,8 +194,9 @@ switch (command) {
 			process.exit(1)
 		}
 
-		console.log(`✅ Completed! Updated ${updatedFiles} items (including banner.js and header.js).`)
+		console.log(`✅ Completed! Updated ${updatedFiles} items (including banner.ts and header.ts).`)
 		break
+	}
 
 	case "check":
 	case "version":
@@ -199,7 +207,7 @@ switch (command) {
 		try {
 			generateBanner()
 		} catch (error) {
-			console.error("❌ Failed to generate banner.js:", error.message)
+			console.error("❌ Failed to generate banner.ts:", getErrorMessage(error))
 			process.exit(1)
 		}
 		break
@@ -208,7 +216,7 @@ switch (command) {
 		try {
 			generateHeader()
 		} catch (error) {
-			console.error("❌ Failed to generate header.js:", error.message)
+			console.error("❌ Failed to generate header.ts:", getErrorMessage(error))
 			process.exit(1)
 		}
 		break

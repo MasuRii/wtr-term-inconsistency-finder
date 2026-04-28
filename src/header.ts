@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         WTR Term Inconsistency Finder v5.4.1
+// @name         WTR Term Inconsistency Finder v5.5.0
 // @namespace    http://tampermonkey.net/
-// @version      5.4.1
+// @version      5.5.0
 // @description  Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
 // @author       MasuRii
 // @license      MIT
