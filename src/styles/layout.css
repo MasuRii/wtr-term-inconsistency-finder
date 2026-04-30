@@ -54,12 +54,17 @@
 	margin-top: 12px;
 }
 
+/* Narrow viewports: tablets and large phones in portrait.
+	   Modal stays centered with margin, not full-screen. */
 @media (width <= 768px) {
 	#wtr-if-panel {
-		border-radius: 0;
-		height: 100dvh;
-		max-height: none;
-		width: 100%;
+		border-radius: 10px;
+		max-height: calc(100dvh - 24px);
+		width: min(96vw, 860px);
+	}
+
+	.wtr-if-content {
+		padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
 	}
 
 	.wtr-if-finder-controls,
@@ -90,7 +95,7 @@
 	.wtr-if-section {
 		border-left: none;
 		border-right: none;
-		border-radius: 0;
+		border-radius: 8px;
 		margin-bottom: 12px;
 	}
 
@@ -105,6 +110,21 @@
 
 	.wtr-if-api-keys-container-wrapper {
 		max-height: 150px;
+	}
+}
+
+/* Tiny viewports: very narrow phones or ultra-short screens.
+	   Full-screen to maximize every pixel of usable space. */
+@media (width <= 480px), (width <= 768px) and (height <= 480px) {
+	#wtr-if-panel {
+		border-radius: 0;
+		height: 100dvh;
+		max-height: none;
+		width: 100%;
+	}
+
+	.wtr-if-section {
+		border-radius: 0;
 	}
 }
 
