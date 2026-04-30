@@ -10,6 +10,7 @@ import "./styles/main.css"
 import { loadConfig } from "./modules/state"
 import { createUI, initializeCollisionAvoidance, injectControlButton, togglePanel } from "./modules/ui"
 import { log } from "./modules/utils"
+import { gmRegisterMenuCommand } from "./modules/userscriptApi"
 
 // --- INITIALIZATION ---
 async function main() {
@@ -19,7 +20,7 @@ async function main() {
 		createUI()
 		injectControlButton()
 		initializeCollisionAvoidance()
-		GM_registerMenuCommand("Term Inconsistency Finder", () => togglePanel(true))
+		gmRegisterMenuCommand("Term Inconsistency Finder", () => togglePanel(true))
 		log("WTR Term Inconsistency Finder initialized successfully.")
 	} catch (error) {
 		console.error("Failed to initialize WTR Term Inconsistency Finder:", error)

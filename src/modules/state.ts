@@ -7,6 +7,7 @@ import {
 	isManualPathConfig,
 } from "./providerConfig"
 import { log } from "./utils"
+import { gmGetValue, gmSetValue } from "./userscriptApi"
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_"
 export const CONFIG_KEY = `${SCRIPT_PREFIX}config`
@@ -51,6 +52,7 @@ export const appState: any = {
 		officialGlossaryContext: null,
 		currentIteration: 1,
 		totalIterations: 1,
+		persistedKeyStates: {},
 	},
 	// Session data
 	session: {
@@ -115,7 +117,7 @@ function sanitizeResultsData(results) {
 
 // --- STATE MANAGEMENT FUNCTIONS ---
 export async function loadConfig() {
-	const savedConfig = (await GM_getValue(CONFIG_KEY, {})) as Record<string, any>
+	const savedConfig = (await gmGetValue(CONFIG_KEY, {})) as Record<string, any>
 
 	// --- Migration for single API key to multiple ---
 	if (savedConfig.apiKey && !savedConfig.apiKeys) {
@@ -200,6 +202,7 @@ export async function loadConfig() {
 	appState.config.providerChatCompletionsPath = resolvedProvider.chatCompletionsPath
 	appState.config.providerModelsPath = resolvedProvider.modelsPath
 	appState.config.providerUseManualPaths = resolvedProvider.useManualPaths
+	appState.runtime.persistedKeyStates = (await gmGetValue(KEY_STATE_KEY, {})) || {}
 
 	// Load session results if available
 	const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY)
@@ -255,7 +258,7 @@ export async function saveConfig() {
 			providerUseManualPaths: resolvedProvider.useManualPaths,
 			preferences: appState.preferences,
 		}
-		await GM_setValue(CONFIG_KEY, configToSave)
+		await gmSetValue(CONFIG_KEY, configToSave)
 		return true
 	} catch (e) {
 		console.error("Inconsistency Finder: Error saving config:", e)
@@ -341,7 +344,7 @@ export function clearSessionResults() {
  */
 export function loadKeyStates() {
 	try {
-		const savedStates = GM_getValue(KEY_STATE_KEY, {}) || {}
+		const savedStates = appState.runtime.persistedKeyStates || {}
 		const now = Date.now()
 		const normalizedStates = {}
 
@@ -401,7 +404,10 @@ export function loadKeyStates() {
  */
 export function saveKeyStates(keyStates) {
 	try {
-		GM_setValue(KEY_STATE_KEY, keyStates)
+		appState.runtime.persistedKeyStates = keyStates
+		gmSetValue(KEY_STATE_KEY, keyStates).catch((error) => {
+			console.error("Inconsistency Finder: Error saving key states:", error)
+		})
 	} catch (e) {
 		console.error("Inconsistency Finder: Error saving key states:", e)
 	}

@@ -1,4 +1,5 @@
 import { log } from "./utils"
+import { gmGetValue, gmSetValue, gmXmlhttpRequest } from "./userscriptApi"
 
 const WTR_API_GLOSSARY_CACHE_KEY = "wtr_inconsistency_finder_wtr_glossary_cache"
 const GLOSSARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000
@@ -92,7 +93,7 @@ function parseOptionalInteger(value: unknown): number | null {
 
 function wtrApiRequest(config: WtrApiRequestConfig): Promise<any> {
 	return new Promise((resolve, reject) => {
-		GM_xmlhttpRequest({
+		gmXmlhttpRequest({
 			method: config.method,
 			url: config.url,
 			headers: {
@@ -360,7 +361,7 @@ function buildOfficialGlossaryContext(rawId: number, response: any): OfficialGlo
 }
 
 async function getGlossaryCache(): Promise<Record<string, any>> {
-	const cache = await GM_getValue(WTR_API_GLOSSARY_CACHE_KEY, {})
+	const cache = await gmGetValue(WTR_API_GLOSSARY_CACHE_KEY, {})
 	return cache && typeof cache === "object" ? cache : {}
 }
 
@@ -385,7 +386,7 @@ export async function fetchOfficialWtrGlossaryContext(rawId: number): Promise<Of
 			timestamp: now,
 			context,
 		}
-		await GM_setValue(WTR_API_GLOSSARY_CACHE_KEY, cache)
+		await gmSetValue(WTR_API_GLOSSARY_CACHE_KEY, cache)
 		log(`Fetched WTR official glossary for raw_id ${rawId}.`, context.summary)
 		return context
 	} catch (error) {

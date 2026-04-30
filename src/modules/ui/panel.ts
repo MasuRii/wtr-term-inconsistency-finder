@@ -13,6 +13,7 @@ import {
 	type ModelCatalogMetadata,
 } from "../providerConfig"
 import { escapeHtml, log, isWTRLabTermReplacerLoaded, getDebugLogCount } from "../utils"
+import { gmGetValue, gmSetValue, gmXmlhttpRequest } from "../userscriptApi"
 import { VERSION_INFO } from "../../version"
 import { addEventListeners, handleRestoreSession } from "./events"
 
@@ -515,7 +516,7 @@ export async function populateModelSelector() {
 	selectEl.innerHTML = "<option>Loading from cache...</option>"
 	selectEl.disabled = true
 	const providerBucket = getModelsCacheBucket(appState.config)
-	const cacheState = await GM_getValue(MODELS_CACHE_KEY, null)
+	const cacheState = await gmGetValue(MODELS_CACHE_KEY, null)
 	const cachedData = getCachedModelsData(cacheState, providerBucket)
 	const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : []
 	const cachedMetadata = getCachedModelMetadata(cachedData)
@@ -542,7 +543,7 @@ export async function populateModelSelector() {
 
 function requestModelCatalog(requestConfig): Promise<any> {
 	return new Promise((resolve, reject) => {
-		GM_xmlhttpRequest({
+		gmXmlhttpRequest({
 			method: requestConfig.method,
 			url: requestConfig.url,
 			headers: requestConfig.headers,
@@ -602,7 +603,7 @@ export async function fetchAndCacheModels() {
 				const modelMetadata = buildModelCatalogMetadata(
 					modelEntries.filter((entry) => filteredModels.includes(entry.id)),
 				)
-				const existingCache = await GM_getValue(MODELS_CACHE_KEY, null)
+				const existingCache = await gmGetValue(MODELS_CACHE_KEY, null)
 				const nextCacheState =
 					existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
 						? existingCache
@@ -613,7 +614,7 @@ export async function fetchAndCacheModels() {
 					metadata: modelMetadata,
 				}
 				appState.runtime.providerModelMetadata = modelMetadata
-				await GM_setValue(MODELS_CACHE_KEY, nextCacheState)
+				await gmSetValue(MODELS_CACHE_KEY, nextCacheState)
 				statusEl.textContent = `Success! Found ${filteredModels.length} models.`
 				log(`Fetched model catalog from ${url}`, { metadataCount: Object.keys(modelMetadata).length })
 				await populateModelSelector()

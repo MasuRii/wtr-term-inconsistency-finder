@@ -11,6 +11,7 @@ import { displayResults, updateStatusIndicator } from "./ui"
 
 // Import from utils module
 import { areSemanticallySimilar, extractJsonFromString, log, mergeAnalysisResults, truncateForLog } from "./utils"
+import { gmXmlhttpRequest } from "./userscriptApi"
 
 // Import from retryLogic module
 import { MAX_RETRIES_PER_KEY, MAX_TOTAL_RETRY_DURATION_MS } from "./retryLogic"
@@ -674,7 +675,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 	const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 	const streamingRequestState = createStreamingRequestState(appState.config)
 
-	GM_xmlhttpRequest({
+	gmXmlhttpRequest({
 		method: requestConfig.method,
 		url: requestConfig.url,
 		headers: requestConfig.headers,
@@ -962,7 +963,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 		const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 		const streamingRequestState = createStreamingRequestState(appState.config)
 
-		GM_xmlhttpRequest({
+		gmXmlhttpRequest({
 			method: requestConfig.method,
 			url: requestConfig.url,
 			headers: requestConfig.headers,

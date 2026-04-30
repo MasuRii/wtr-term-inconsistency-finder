@@ -1,4 +1,4 @@
-declare const GM_xmlhttpRequest: (details: {
+type UserscriptXmlHttpRequestDetails = {
 	method: string
 	url: string
 	headers?: Record<string, string>
@@ -6,12 +6,21 @@ declare const GM_xmlhttpRequest: (details: {
 	onload?: (response: { status: number; statusText: string; responseText: string; finalUrl?: string }) => void
 	onerror?: (error: unknown) => void
 	onprogress?: (response: { responseText?: string; status?: number }) => void
-}) => void
+}
 
-declare const GM_getValue: <T = unknown>(key: string, defaultValue?: T) => Promise<T>
-declare const GM_setValue: (key: string, value: unknown) => Promise<void>
+declare const GM_xmlhttpRequest: (details: UserscriptXmlHttpRequestDetails) => unknown
+declare const GM_getValue: <T = unknown>(key: string, defaultValue?: T) => T | Promise<T>
+declare const GM_setValue: (key: string, value: unknown) => void | Promise<void>
 declare const GM_addStyle: (css: string) => void
 declare const GM_registerMenuCommand: (caption: string, commandFunc: () => void) => void
+
+declare const GM: {
+	xmlHttpRequest?: (details: UserscriptXmlHttpRequestDetails) => unknown
+	getValue?: <T = unknown>(key: string, defaultValue?: T) => Promise<T>
+	setValue?: (key: string, value: unknown) => Promise<void>
+	registerMenuCommand?: (caption: string, commandFunc: () => void) => void
+}
+
 declare const require: (moduleName: string) => any
 
 interface Element {

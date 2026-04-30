@@ -112,7 +112,7 @@ function generateBanner(): string {
 function generateHeader(): string {
 	const header = `// ==UserScript==
 // @name         WTR Term Inconsistency Finder v${VERSION_INFO.SEMANTIC}
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/MasuRii/wtr-term-inconsistency-finder
 // @version      ${VERSION_INFO.SEMANTIC}
 // @description  Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
 // @author       MasuRii
@@ -125,6 +125,10 @@ function generateHeader(): string {
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
+// @grant        GM.setValue
+// @grant        GM.getValue
+// @grant        GM.registerMenuCommand
+// @grant        GM.xmlHttpRequest
 // @run-at       document-idle
 // @supportURL   https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @website      https://github.com/MasuRii/wtr-term-inconsistency-finder
