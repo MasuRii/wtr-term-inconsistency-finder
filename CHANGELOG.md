@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ---
+## [5.5.1] - 2026-04-30
+
+### Added
+- WTR Lab Reader API chapter source mode for fetching current, nearby, or custom chapter ranges directly from WTR Lab without relying on loaded page content.
+- WTR Lab official glossary context support that fetches the novel's official glossary, caches it locally, and injects only compact relevant context into the AI prompt.
+- Official alias-only finding suppression that prevents the AI from creating findings when all variations of a result are already covered by official WTR glossary alias groups.
+- Post-analysis suggestion normalization that enforces exactly three suggestions per actionable finding with a single recommendation, adding fallback dominant-usage, glossary-informed, and editorial options when the AI returns fewer than three.
+- Placeholder artifact detection that marks findings containing unresolved WTR placeholder markers (such as `※8⛬`) as Needs Review.
+- Low-evidence detection that marks non-informational findings with fewer than two extracted variations as Needs Review.
+- Final-pass new-item detection that marks newly discovered findings on the last deep-analysis pass as Needs Review when no later verification pass remains.
+- Glossary-aware prompt injection with relevance filtering based on chapter glossary terms, source text occurrence, and CJK-aware phrase matching.
+- Debug log replacement preprocessing statistics including raw match, applied match, and skipped-overlap counts per chapter.
+- Chapter source and glossary context lines in the debug report output.
+- Concept annotation stripping for parenthetical notes during duplicate detection and concept comparison.
+- Responsive two-column grid layout for WTR API range controls with single-column mobile fallback.
+
+### Changed
+- Refactored the AI system prompt from approximately 197 inline lines to a compact 53-line prompt while preserving all detection logic and exclusion rules.
+- Updated suggestion schema guidance to request dominant-usage, glossary-informed, or editorial labels with frequency and chapter evidence in reasoning.
+- Simplified the existing-results continuation prompt for deep-analysis verification passes.
+- Improved concept merging to prefer concepts that carry useful parenthetical annotations (such as CJK source or alias notes) and to merge variations and suggestions through deduplicated helper functions.
+- Updated semantic duplicate detection to strip parenthetical annotations before comparing scripts and proper-name traits.
+- Suppressed verbose semantic similarity logging during result merge operations to reduce debug noise.
+- Merged prompt suggestion schema fields so `is_recommended` is marked as required on exactly one actionable suggestion instead of optional.
+
+---
 ## [5.5.0] - 2026-04-28
 
 ### Added

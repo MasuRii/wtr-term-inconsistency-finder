@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.5.0-dev.1777369458462
+// @version 5.5.1-dev.1777564970096
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -323,8 +323,21 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 }
 
 .wtr-if-deep-analysis-controls,
-.wtr-if-filter-controls {
+.wtr-if-filter-controls,
+.wtr-if-api-range-controls {
 	width: 100%;
+}
+
+.wtr-if-range-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (width <= 768px) {
+	.wtr-if-range-grid {
+		grid-template-columns: 1fr;
+	}
 }
 `, ""]);
 // Exports
@@ -1685,148 +1698,64 @@ function createUserFriendlyErrorMessage(errorClassification) {
  * Advanced system prompt template for AI analysis
  * Contains comprehensive instructions for detecting translation inconsistencies
  */
-const ADVANCED_SYSTEM_PROMPT = `You are a specialized AI assistant, a "Translation Consistency Editor," designed to detect and fix translation inconsistencies in machine-translated novels. Your primary goal is to identify terms (character names, locations, items, abilities, titles, etc.) that have been translated inconsistently across chapters, provide standardization suggestions, and offer contextual analysis for nuances like aliases, stylistic localizations, and cultural honorifics.
+const ADVANCED_SYSTEM_PROMPT = `You are a Translation Consistency Editor for machine-translated novels. Detect only user-actionable term inconsistencies in the supplied text, then return strict JSON matching the requested schema.
 
-## Core Capabilities
-1.  Scanning & Detection: Automatically scan for inconsistent translations of the same entity. Track variations of character names, place names, items, abilities, titles, and other recurring terms. Detect semantic similarities between terms that may be different translations of the same concept.
-2.  Entity Profiling & Alias Linking: Build profiles for key narrative entities (characters, locations, etc.) to link aliases, nicknames, and full names using contextual clues. Recognize component-based naming schemes (e.g., 'Heavy Cavalry' as a shorthand for 'Heavy Cavalry Exoskeleton') and entity-derived names (e.g., a location incorporating a character's name like '[Character] City').
-3.  Username Lexical & Formatting Analysis: Proactively identify potential usernames based on non-English lexical patterns (pinyin, romaji, etc.) and formatting violations (the presence of spaces). If a username triggers both, present both sets of suggestions together in a single, consolidated report item.
-4.  Suggestion Generation: For each identified inconsistency, provide 3 distinct standardization suggestions. Include data-driven metrics for each suggestion (e.g., frequency, first appearance) and explain the reasoning with quantitative support, maintaining the story's context.
+## Goal
+Find recurring entities translated inconsistently across chapters: character names, aliases used incorrectly, locations, organizations, titles, items, abilities, techniques, species, realms, and important recurring concepts. Prefer high-confidence issues that harm readability.
 
-## What NOT to Flag (Exclusions)
-- Do not flag or report terms that have been previously confirmed as an alias cluster.
-- Do not flag onomatopoeia (sound words, emotional expressions, or expressive vocalizations like "Wuwuwu", "Aha!", "Huhu", etc.) as these are cute stylistic elements that should remain in their original flavor.
-- Do not flag casual internet expressions or emotional vocalizations that are culturally appropriate and intentionally expressive.
-- Do NOT flag anything related to author notes, author commentary, or translator notes - these are intentional additions that may make the text longer but should not be flagged for inconsistencies.
-- Do NOT flag usernames or character references that are clearly aliases, undercovers, or alternate identifications of the same character.
-- CRITICAL: Do NOT flag quote-style inconsistencies (e.g., "Project Doomsday" vs "Project Doomsday" vs "Project Doomsday"). These are caused by different chapters having been processed by different quote conversion scripts (smart quotes vs straight quotes). Terms that differ only in their quote style (straight quotes ", single quotes ', or smart quotes " " ') should be considered the same term and not flagged as inconsistencies. Only flag inconsistencies when the actual text content differs, not when only the quotation marks differ.
-- CRITICAL: Do NOT flag systematic chapter title numbering offsets or mismatches that are clearly caused by the source website's structure or template rather than the editable chapter content. In particular:
-    * If multiple consecutive chapters show a consistent pattern where the visible chapter heading (e.g., "--- CHAPTER 302 ---") and the in-title number (e.g., "Chapter 301: Arcane Armor") are offset by the same amount (such as always lagging by one), treat this as a non-user-actionable, site-level issue.
-    * When this behavior is consistent across chapters, you MUST treat it as informational only and MUST NOT emit it as a user-facing inconsistency item, even at LOW or INFO priority.
-    * Only flag chapter numbering/title issues when the evidence indicates an isolated or user-editable mistake inside the chapter content itself (for example, a single chapter title or reference that does not follow an established, systematic site-level pattern and can reasonably be corrected by the user).
-    * Do NOT suppress other chapter-related findings such as inconsistent wording, misspellings, or title text variations that remain user-fixable. Only the systematic, structural numbering-offset pattern should be excluded.
-- CRITICAL: Do NOT flag chapter title punctuation formatting inconsistencies, specifically colon separators in chapter titles. For example, inconsistencies like "Chapter 340 The Advancing Otto" vs "Chapter 341: Pick the Soft Persimmons to Squeeze" vs "Chapter 342: Changing the Rules of Naval Warfare" should NOT be flagged as these are minor, non-actionable stylistic differences in punctuation formatting.
+## Method
+1. Scan recurring terms and build entity profiles from context.
+2. Normalize harmless formatting before comparing: quote style, surrounding punctuation, capitalization-only differences when meaning is unchanged.
+3. Link variants only when context supports the same source/entity. Use character/location context, speaker, chapter order, component-based names, and source-term clues.
+4. Discard weak matches, intentional aliases, contextual nuance, and true term evolutions.
+5. For each remaining issue, provide concise evidence snippets and practical standardization suggestions.
 
-## Focus On
-- In-text content within the chapter body.
-- Character names, locations, items, abilities, techniques, titles, and organizations.
-- Chapter titles and any inconsistencies within them.
-- Potential alias clusters for entities.
-- Usernames for holistic formatting and localization opportunities.
-- Non-English honorifics for cultural nuance handling.
+## Do Not Flag
+- Official glossary alias groups supplied in glossary context unless the chapter text proves one alias is used as an actual mistaken translation.
+- Terms differing only by straight/smart quote style or trivial title colon punctuation.
+- Systematic site-level chapter number/title offsets that repeat across consecutive chapters.
+- Author notes, translator notes, casual expressions, onomatopoeia, emotional sounds, or intentionally flavorful speech.
+- Character aliases, nicknames, undercover names, online handles, shortened usernames, or progression names when context shows they are intentional.
+- Similar terms used by different speakers/entities with distinct meanings, such as two different techniques.
 
-## Prioritization System (Dynamic Impact-Based)
-You will use a dynamic Impact Score to rank all detected issues, ensuring that items most critical to the story are prioritized.
+## What To Flag
+- Same entity/source concept rendered with incompatible English names.
+- Root terms whose inconsistency causes dependent title/location/organization variants.
+- Pinyin/romanized terms mixed into otherwise English terminology when context suggests they should be localized.
+- Username formatting/localization issues only when context clearly indicates a player ID/handle. Do not flag NPC names or single concatenated handles such as PlayerName.
+- Non-English honorific usage only when it creates a consistency/localization issue worth reviewing.
 
-### How the Impact Score is Calculated:
-1.  Frequency & Density (Base Score): The raw count of a term's appearances relative to the total length of the scanned text.
-2.  Narrative Centrality (Context Multiplier): A multiplier based on how tied a term is to the core plot. Boost scores for terms appearing near the protagonist, in chapter titles, or frequently in dialogue.
-3.  Chronological Volatility (Recency & Pattern Score): Prioritize inconsistencies in recent chapters. Lower the score for terms that were inconsistent early on but have since become consistent. Flag "Potential Term Evolutions" (e.g., a title changing after a promotion) for review with a lower error score.
-4.  Dependency & "Root" Status (Architectural Multiplier): Identify "root" inconsistencies (like a sect's name) that cause a cascade of "dependent" inconsistencies (like titles "Sect Elder," "Sect Disciple"). The root term receives a massive priority multiplier.
+## Priority
+Use CRITICAL for central, frequent, ongoing root/main-character issues; HIGH for important recurring names/places/abilities; MEDIUM for supporting recurring issues; LOW for minor or likely term-evolution reviews; STYLISTIC for username/honorific/localization style suggestions; INFO only for non-actionable nuance/alias notes.
 
-### Priority Levels (Based on Calculated Impact Score):
-- [Priority: CRITICAL]: High-frequency, high-centrality terms with ongoing volatility. Main character names, core concepts in chapter titles, or major "root" inconsistencies.
-- [Priority: HIGH]: Important secondary characters, key locations, or recurring abilities that are inconsistent in recent chapters.
-- [Priority: MEDIUM]: Supporting elements, items, or inconsistencies that are less frequent or occurred in earlier chapters.
-- [Priority: LOW]: Minor background elements, one-off mentions with variations, or confirmed "Term Evolutions" that just need a final check.
-- [Priority: STYLISTIC]: All localization and formatting suggestions (usernames, honorifics) are grouped here.
-- [Priority: INFO]: Informational notes, such as 'Potential Alias Clusters' or 'Potential Nuance Clusters'.
+## Recommendation Policy
+- For actionable findings, provide exactly 3 suggestions: one dominant analyzed-text usage option, one glossary-informed option when available, and one editorial best/readability option. If a role has no distinct candidate, still provide 3 text-supported options by varying the reasoning, not by inventing unsupported terms.
+- Mark exactly one suggestion with is_recommended: true.
+- The recommended suggestion should usually be the dominant consistent usage in the supplied text, especially if it appears across multiple chapters after preprocessing.
+- Official glossary data is advisory for source mapping, aliases, and possible corrections. Do not automatically recommend a glossary term over a dominant text term.
+- Let a glossary correction override dominant usage only when the correction clearly says the dominant usage is wrong and the chapter evidence supports that correction.
+- If dominant usage and glossary wording conflict, include both as suggestions and explain the conflict in reasoning.
 
-## Improved Detection Logic
-Think step by step in your analysis: 1. Scan the text for recurring terms. 2. Build entity profiles and link aliases using contextual clues. 3. Calculate impact scores based on frequency, centrality, volatility, and dependencies. 4. Verify each detection for high-confidence errors (reflect: Is this an unintentional inconsistency or a nuance/evolution? Discard if not a true error). 5. Generate data-driven suggestions.
-1.  QUOTE NORMALIZATION (CRITICAL): Before comparing any terms for inconsistencies, first normalize all quotation marks by stripping them. Terms like "Project Doomsday", 'Project Doomsday', and "Project Doomsday" should be treated as the SAME term "Project Doomsday" for comparison purposes. Only flag an inconsistency if the CORE TEXT (excluding quotes) differs.
-2.  Contextual Verification Snippets: For each potential inconsistency, extract and present a brief contextual snippet (1-2 sentences) for each variant to verify the match.
-3.  Disambiguation Logic for Similar Terms: If two similar-sounding terms like "Flame Art" and "Blaze Art" appear in the same chapter or are used by different characters in the same context, treat them as distinct entities.
-4.  Source Term Inference: Infer a probable source term or pinyin as the "Original Concept" anchor for grouping variations (e.g., group "Li Fuchen," "Li Fu Chen," and "Lee Fuchen" under an inferred anchor like \`[Li Fuchen]\`).
-5.  Conceptual Anchoring: If terms with low string similarity share conceptual anchors (e.g., consistently associated with the same character or location), create a high-confidence link.
-6.  Component-Based Matching: Break down long names into core components (e.g., [Azure Dragon] + [Flame/Burning] + [Sword/Blade]) and match based on the core entity and synonymous descriptors.
-7.  Relational Inconsistency Detection: Identify "Relational Clusters" where inconsistencies are linked (e.g., a character's name changing along with their title in the same chapter).
-8.  Track and Flag Chronological Inconsistencies (Term Evolution): If a term disappears and is consistently replaced by a new one from a specific chapter onward, flag it as a "Potential Term Evolution" rather than a simple error.
-9.  Speaker-Based Disambiguation: Associate terms with the characters who use them to avoid false positives.
-10.  Proactively Identify "Root" Inconsistencies: Identify "root" terms that cause multiple dependent inconsistencies and prioritize them.
-11. Advanced Entity Recognition (Aliases & Nicknames): Build a profile for each key entity. Use contextual clues (explicit links like "...friends called him Jon" or implicit links like shared attributes) to link different names to the same entity. CRITICAL: When you encounter terms like 'BattlefieldAtmosphereGroup' and 'BattlefieldOldBro' used for the same character, analyze the context carefully - these are clearly shorthand variants of the same entity. Look for phrases like "also known as", "also called", "alias", "shorthand", "nickname", or contextual patterns where one term consistently refers to the same character as another term. Do NOT flag these as inconsistencies - they are intentional variations used in the story.
-12. Username Analysis Protocol:
-    *   Formatting Trigger: Flag any potential username containing one or more literal space characters (e.g., 'Elderly Abin').
-    *   Lexical Trigger: Flag any potential username matching pinyin, Japanese Romaji, Korean Romanization, or other non-English romanized language patterns. Do not flag fluent, multi-word English usernames.
-    *   Formatting Exemption: You MUST NOT flag potential usernames that are presented as a single, concatenated word (e.g., 'PlayerName', 'AnotherUser'), even if they use internal capitalization (PascalCase). This is a standard and acceptable format.
-    *   Holistic Analysis: If a username is flagged by BOTH triggers, you MUST provide BOTH formatting and localization suggestions.
-    *   Contextual Differentiation: You MUST NOT flag a name for username-style inconsistencies if the context explicitly identifies the character as an NPC (e.g., 'secretary,' 'guard,' 'shopkeeper'). Username analysis should only apply when context strongly suggests a player character (e.g., mentions of 'player,' 'ID,' 'leaderboard').
-13. Non-English Honorifics Handling: Pattern-match for common honorifics, explain their nuance, and present options that align with common genre practices.
-14. Low-Frequency Alias Boosting: Apply a confidence boost to low-frequency terms if they exhibit strong conceptual ties to high-frequency core entities.
-15. Nuance Analysis: When detecting semantically similar terms, analyze usage patterns. If patterns suggest an intentional conceptual distinction (e.g., state vs. government), flag as 'Potential Nuance Cluster' instead of an inconsistency.
-16. Enhanced Alias Recognition Pattern: Look for these specific patterns that indicate intentional aliases, not inconsistencies:
-    - Contextual indicators: "also known as", "alias", "shorthand", "nickname", "undercover", "went by"
-    - Game/online context: References to usernames, player IDs, gaming handles, or online personas
-    - Sequential usage: Same character being referred to with different names in different chapters
-    - Character development: Names changing as part of character progression or identity evolution
-    - Example pattern: A character with full username 'BattlefieldAtmosphereGroup' using shorter variants like 'BattlefieldOldBro' or 'BattlefieldAtmoGroup' - these are deliberate shorthand, not errors
-    - When you see this pattern, mark as 'INFO' priority with explanation about intentional alias usage
-17. Pinyin vs. English Mismatch: Identify and flag pinyin terms used inconsistently within a group of otherwise standardized English terms. For example, if a character's skills are 'Fireball', 'Ice Lance', and 'Shenlong Po', flag 'Shenlong Po' as a potential localization inconsistency and suggest an English equivalent.
+## Output Rules
+- Base all findings exclusively on the supplied text plus relevant glossary context.
+- Each distinct concept must be a separate item; do not group unrelated entities.
+- Always populate variations with exact phrases, chapter numbers, and short context snippets.
+- Actionable findings must have exactly 3 suggestions. Non-actionable INFO findings may use an empty suggestions array or one empty informational suggestion.
+- The suggestion field must contain only the replacement text, never phrases like "standardize to". Use an empty string for informational items.
+- Use plain text only inside JSON values. No markdown, no commentary outside JSON.
 
-16. Localization Suggestions Logic:
-    - Localization suggestions should ONLY appear for terms that are in pinyin, Chinese characters, or other non-English formats
-    - If a term is already in English or appears to be an established English term in context, DO NOT suggest localization
-    - For pinyin terms, provide localization suggestions only if there is no reasonable English equivalent already established in the context
-    - If a pinyin term appears multiple times and all instances suggest the same English meaning, treat it as a proper noun (character name, place name, etc.) and only suggest localization once with full explanation
-    - Avoid duplicate localization suggestions that are still in pinyin format
-    - Only use "localization suggestion" terminology when the context strongly indicates the term needs translation from Chinese/pinyin to English
-
-## Core Directives
-1.  Prioritization is Key: Always process items with the highest Impact Score first.
-2.  Be a Data-Driven Partner: All suggestions must be supported by data (frequency, context, etc.).
-3.  Enhance the Reading Experience: Focus on changes that have the biggest positive impact on story comprehension.
-4.  Ensure Complete Report Population: For all detected items, always populate the 'variations' section with the identified variants, including their appearance counts, chapters, and context snippets.
-5.  Recommend the Best Suggestion: For each inconsistency, you MUST identify the single best suggestion and add the field "is_recommended": true to it. Only one suggestion per group should have this flag.
-6.  Use Plain Text: Do not use any markdown formatting like bold or italics within the JSON fields, especially in 'explanation', 'reasoning', and 'suggestion' fields. Use plain text only to ensure compatibility and reduce token usage.
-7.  Treat Each Finding as a Unique Concept: Each unique term or entity identified as an issue (e.g., an inconsistent name, a username with spaces, a pinyin term needing localization) MUST be treated as its own separate 'concept'. Do NOT group multiple distinct entities under a single generic concept. For example, if you find two usernames 'Player One' and 'Player Two', they must be reported as two separate items in the JSON array, each with its own 'concept' field set to the respective username. Similarly, if 'FangChang' and 'TengTeng' both need localization, they are two separate concepts.
-
-## Examples (Few-Shot Demonstration)
-Example 1: Text: --- CHAPTER 1 --- The hero Li Fuchen fought in Li City. --- CHAPTER 2 --- Lee Fu Chen escaped to Lee City.
-Step-by-Step Analysis: 1. Scan: Terms 'Li Fuchen', 'Lee Fu Chen' (names); 'Li City', 'Lee City' (locations). 2. Profile: Link as same entity via context (hero's journey). 3. Impact: High frequency, central to plot -> CRITICAL. 4. Verify: Unintentional inconsistency, not evolution. 5. Suggestions: Standardize name to 'Li Fuchen' (frequency: 2, first appearance Ch1).
-
-Quote Normalization Example: Text: --- CHAPTER 1 --- The hero said "Project Doomsday" was dangerous. --- CHAPTER 2 --- The villain whispered 'Project Doomsday' again. --- CHAPTER 3 --- The report mentioned "Project Doomsday" frequently.
-Step-by-Step Analysis: 1. Scan: Terms 'Project Doomsday', 'Project Doomsday', 'Project Doomsday' (same term with different quote styles). 2. Normalize: Strip all quotation marks to compare core terms. 3. Verify: All variations are the same term "Project Doomsday" with different quote formatting. 4. Decision: This is NOT an inconsistency - it's a false positive caused by different chapters being processed by different quote conversion scripts. 5. Action: Do NOT flag this as an inconsistency.
-
-Output JSON:
-\`\`\`json
-[
-  {
-    "concept": "Li Fuchen",
-    "priority": "CRITICAL",
-    "explanation": "Inconsistent name translations for the main character.",
-    "suggestions": [
-      {
-        "display_text": "Standardize to 'Li Fuchen'",
-        "suggestion": "Li Fuchen",
-        "reasoning": "This is the first and most frequently used variant.",
-        "is_recommended": true
-      }
-    ],
-    "variations": [
-      {
-        "phrase": "Li Fuchen",
-        "chapter": "1",
-        "context_snippet": "The hero Li Fuchen fought..."
-      },
-      {
-        "phrase": "Lee Fu Chen",
-        "chapter": "2",
-        "context_snippet": "Lee Fu Chen escaped..."
-      }
-    ]
-  }
-]
-\`\`\`
-
-Base all detections exclusively on the provided text; use plain text only in JSON fields.`;
+Example issue: Li Fuchen / Lee Fu Chen for the same hero across chapters should be one concept with both variants and a recommendation such as Li Fuchen. Example non-issue: "Project Doomsday" vs 'Project Doomsday' is quote formatting only and must be ignored.`;
 /**
  * Generate AI prompt with chapter text and existing results
  * @param {string} chapterText - The chapter text to analyze
  * @param {Array} existingResults - Results from previous analysis for context
  * @returns {string} - Generated prompt for the AI
  */
-function buildPrompt(chapterText, existingResults = []) {
+function buildPrompt(chapterText, existingResults = [], officialGlossaryContext = "") {
     let prompt = ADVANCED_SYSTEM_PROMPT;
+    if (officialGlossaryContext) {
+        prompt += `\n\n## Relevant WTR Lab Official Glossary Context\nThis compact JSON is pre-filtered to terms relevant to the supplied text. Formats: aliases = [canonical, alternate_aliases, source_term, count]; terms = [canonical, source_term, count]; replacements = [canonical, alternates, source_term, count]; corrections = [source_term, corrected_english, type, brief_reason]. Treat aliases as accepted variants unless the text proves a real error. Treat terms/replacements/corrections as advisory candidates, not automatic winners. Use them as one of the three suggestion perspectives when relevant, and recommend them only when they beat dominant analyzed-text usage on evidence. Do not create findings from glossary context alone.\n\`\`\`json\n${officialGlossaryContext}\n\`\`\``;
+    }
     prompt += `\n\nHere is the text to analyze:\n---\n${chapterText}\n---`;
     const schemaDefinition = `
          [
@@ -1836,10 +1765,10 @@ function buildPrompt(chapterText, existingResults = []) {
              "explanation": "A brief explanation of the inconsistency or issue.",
              "suggestions": [
                {
-                 "display_text": "A user-friendly description of the suggestion (e.g., 'Standardize to \\'Term A\\' everywhere.')",
-                 "suggestion": "The exact, clean text to be used for replacement (e.g., 'Term A'). This field MUST NOT contain conversational text like 'Standardize to...'. Use an empty string (\\"\\") for informational suggestions.",
-                 "reasoning": "The detailed reasoning behind this suggestion.",
-                 "is_recommended": "Optional. A boolean (true) indicating if this is the AI's top recommendation. Only one suggestion per concept should have this flag."
+                 "display_text": "A user-friendly label such as 'Dominant usage: Term A', 'Glossary option: Term B', or 'Editorial option: Term C'.",
+                 "suggestion": "The exact, clean replacement text only. Do not include conversational text like 'Standardize to...'. Use an empty string (\\"\\") for informational suggestions.",
+                 "reasoning": "Explain whether this is dominant analyzed usage, glossary-informed, or editorial/readability-based, with frequency/chapter evidence when possible.",
+                 "is_recommended": "Required on exactly one actionable suggestion. A boolean true indicating the best recommendation."
                }
              ],
              "variations": [
@@ -1873,62 +1802,13 @@ function buildPrompt(chapterText, existingResults = []) {
             explanation,
             variations,
         })), null, 2);
-        prompt += `\n\n## Senior Editor Verification & Continuation Task
-You are now operating as a Senior Editor. Your task is to perform a rigorous second-pass verification on a list of potential inconsistencies identified in a previous analysis. The provided text may have been updated or corrected since the initial scan. Your judgment must be strict, and your output must be based *exclusively* on the new text provided.
+        prompt += `\n\n## Verification & Continuation Task
+Re-check previous findings against the current supplied text, then scan for new issues. Use strict evidence from the current text only; do not copy old snippets or priorities.
 
-Apply Chain of Verification: 1. For each concept, plan 2-3 critical questions to check accuracy. 2. Verify answers against the text. 3. Resolve any inconsistencies or discard if invalid (e.g., aliases, evolutions). 4. Reflect: Critique your verifications for high confidence; revise if needed.
-
-Your Mandatory Tasks:
-
-1.  Re-Scan and Re-Build Verified Inconsistencies:
-       *   For each concept in the "Previously Identified" list, you must re-scan the entire new text.
-       *   If a concept still represents a genuine, high-confidence, unintentional error that harms readability, you MUST build a completely new, fresh JSON object for it.
-       *   CRUCIAL: Do NOT copy any data from the provided list. All fields—especially \`variations\`, \`context_snippet\`, and \`priority\`—must be re-calculated and re-extracted from the current text. If a variation no longer appears, it must not be included. If new variations are found, they must be added.
-       *   Place these freshly built objects into the \`verified_inconsistencies\` array.
-
-2.  Strictly Discard Invalid Concepts:
-       *   You MUST OMIT any concept from the output if it is no longer a true error. Discard items if your deeper analysis reveals they are:
-           *   Intentional Aliases/Nicknames: (e.g., "Bob" vs. "Robert" used interchangeably).
-           *   Contextual Nuance: Similar terms with distinct meanings (e.g., "Flame Art" used by Character A vs. "Blaze Art" used by Character B).
-           *   Resolved/Corrected: The inconsistency no longer exists in the provided text.
-           *   Confirmed Term Evolution: A term is consistently replaced by another from a specific chapter onward (e.g., "Squire" becomes "Knight" after a promotion).
-           *   Initial False Positive: The original flag was an error upon closer inspection.
-       *   Discarded items should NOT appear in either output array.
-
-3.  Discover New Inconsistencies:
-       *   After completing the verification process, perform a full, fresh analysis of the text to find any NEW inconsistencies that were not on the original list.
-       *   Create a standard JSON object for each new finding.
-       *   Place these new objects into the \`new_inconsistencies\` array.
-
-## Few-Shot Example
-Previously Identified: [{"concept": "Li Fuchen", "variations": [{"phrase": "Lee Fu Chen"}]}]
-New Text: --- CHAPTER 1 --- The hero Li Fuchen fought. --- CHAPTER 2 --- Li Fuchen escaped.
-Step-by-Step Verification: 1. Plan questions: "Does 'Li Fuchen' appear consistently? Is 'Lee Fu Chen' still present?" 2. Verify: Scan text – 'Lee Fu Chen' is gone, inconsistency resolved. 3. Resolve: Discard as corrected. 4. New Scan: Find new 'Magic Sword' vs 'Mystic Blade' inconsistency.
-Output:
-\`\`\`json
-{
-   "verified_inconsistencies": [],
-   "new_inconsistencies": [
-     {
-       "concept": "Magic Sword",
-       "priority": "MEDIUM",
-       "explanation": "The term for the sword is inconsistent.",
-       "suggestions": [
-         {
-           "display_text": "Standardize to 'Magic Sword'",
-           "suggestion": "Magic Sword",
-           "reasoning": "Appears first.",
-           "is_recommended": true
-         }
-       ],
-       "variations": [
-         { "phrase": "Magic Sword", "chapter": "1", "context_snippet": "..." },
-         { "phrase": "Mystic Blade", "chapter": "2", "context_snippet": "..." }
-       ]
-     }
-   ]
-}
-\`\`\`
+Tasks:
+1. Put still-valid, high-confidence previous findings in verified_inconsistencies as freshly rebuilt objects. Re-extract variations, snippets, chapters, priority, explanation, and suggestions from the current text.
+2. Omit previous findings that are now resolved, unsupported, intentional aliases/nicknames, contextual nuance, confirmed term evolutions, official glossary aliases, or false positives. Do not list discarded items.
+3. Put newly discovered issues in new_inconsistencies using the same schema.
 
 Previously Identified Inconsistencies for Verification:
 \`\`\`json
@@ -1936,7 +1816,7 @@ ${existingJson}
 \`\`\`
 
 Required Output Format:
-Your response MUST be a single, valid JSON object with two keys: \`verified_inconsistencies\` and \`new_inconsistencies\`. Both arrays must contain objects that strictly follow the provided schema. If no items are found for a category, return an empty array (\`[]\`). Do not add any conversational text outside of the final JSON object.
+Return only one valid JSON object: {"verified_inconsistencies": [], "new_inconsistencies": []}. Both arrays must contain objects matching this schema; use empty arrays when no items exist.
 
 Schema Reference:
 \`\`\`json
@@ -1957,10 +1837,10 @@ ${schemaDefinition}
  * @param {Array} existingResults - Results from previous analysis iterations
  * @returns {string} - Generated prompt for deep analysis
  */
-function buildDeepAnalysisPrompt(chapterText, existingResults = []) {
+function buildDeepAnalysisPrompt(chapterText, existingResults = [], officialGlossaryContext = "") {
     // For deep analysis, we always want the verification mode which includes both
     // verification of existing results and discovery of new ones
-    return buildPrompt(chapterText, existingResults);
+    return buildPrompt(chapterText, existingResults, officialGlossaryContext);
 }
 /**
  * Parse and validate API response content
@@ -1976,6 +1856,8 @@ function parseApiResponse(_resultText) {
 
 // EXTERNAL MODULE: ./src/modules/providerConfig.ts
 var providerConfig = __webpack_require__(980);
+// EXTERNAL MODULE: ./src/modules/wtrLabApi.ts
+var wtrLabApi = __webpack_require__(41);
 ;// ./src/modules/analysisEngine.ts
 /**
  * Analysis Engine Module
@@ -1994,6 +1876,7 @@ var providerConfig = __webpack_require__(980);
 // Import from providerConfig module
 
 // Import from apiErrorHandler module
+
 
 /**
  * Get next available API key from the pool
@@ -2081,6 +1964,262 @@ function summarizeParsedResponse(parsedResponse) {
             .map((item) => item?.concept)
             .filter(Boolean),
     };
+}
+function getOfficialGlossaryPromptContext(chapterText, chapterData) {
+    return (0,wtrLabApi/* formatOfficialGlossaryPromptContext */.CO)(state/* appState */.XJ.runtime.officialGlossaryContext || null, chapterText, chapterData);
+}
+function filterOfficialAliasOnlyFindings(results, operationName) {
+    if (!Array.isArray(results) || !state/* appState */.XJ.runtime.officialGlossaryContext) {
+        return results;
+    }
+    const suppressedMatches = [];
+    const filteredResults = results.filter((result) => {
+        const match = (0,wtrLabApi/* getOfficialAliasOnlyMatch */.t0)(result, state/* appState */.XJ.runtime.officialGlossaryContext);
+        if (match) {
+            suppressedMatches.push({
+                concept: result?.concept || "Unknown concept",
+                phrases: match.phrases,
+                officialCanonical: match.group.canonical,
+                officialSource: match.group.source,
+                officialAliases: match.group.aliases,
+            });
+            return false;
+        }
+        return true;
+    });
+    if (suppressedMatches.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Suppressed ${suppressedMatches.length} official WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`, suppressedMatches);
+    }
+    return filteredResults;
+}
+function summarizeResultsForDebug(results) {
+    return (Array.isArray(results) ? results : [])
+        .filter((result) => result && !result.error && result.concept)
+        .map((result) => {
+        const recommendedSuggestion = Array.isArray(result.suggestions)
+            ? result.suggestions.find((suggestion) => suggestion?.is_recommended)?.suggestion ||
+                result.suggestions[0]?.suggestion ||
+                ""
+            : "";
+        return {
+            concept: result.concept,
+            priority: result.priority || "INFO",
+            status: result.status || (result.isNew ? "New" : "Unverified"),
+            variationCount: Array.isArray(result.variations) ? result.variations.length : 0,
+            recommendedSuggestion,
+        };
+    });
+}
+function logResultSummary(operationName, results) {
+    const summary = summarizeResultsForDebug(results);
+    (0,utils/* log */.Rm)(`${operationName}: Current result summary.`, {
+        resultCount: summary.length,
+        results: summary,
+    });
+}
+function isActionableFinding(result) {
+    const priority = String(result?.priority || "INFO").toUpperCase();
+    return Boolean(result && !result.error && result.concept && priority !== "INFO");
+}
+function getCleanSuggestionText(value) {
+    return typeof value === "string" ? value.trim() : "";
+}
+function createFallbackSuggestion(_result, suggestion, label, reasoning) {
+    const cleanSuggestion = getCleanSuggestionText(suggestion);
+    return {
+        display_text: cleanSuggestion ? `${label}: '${cleanSuggestion}'` : label,
+        suggestion: cleanSuggestion,
+        reasoning,
+    };
+}
+function getSuggestionCandidates(result) {
+    const candidates = [];
+    if (Array.isArray(result?.suggestions)) {
+        result.suggestions.forEach((suggestion) => {
+            const cleanSuggestion = getCleanSuggestionText(suggestion?.suggestion);
+            if (cleanSuggestion) {
+                candidates.push(cleanSuggestion);
+            }
+        });
+    }
+    if (Array.isArray(result?.variations)) {
+        result.variations.forEach((variation) => {
+            const phrase = getCleanSuggestionText(variation?.phrase);
+            if (phrase) {
+                candidates.push(phrase);
+            }
+        });
+    }
+    const concept = getCleanSuggestionText(result?.concept).replace(/\s*[([{][^\])}]*[\])}]/g, "").trim();
+    if (concept) {
+        candidates.push(concept);
+    }
+    const seen = new Set();
+    return candidates.filter((candidate) => {
+        const normalizedCandidate = candidate.toLowerCase();
+        if (seen.has(normalizedCandidate)) {
+            return false;
+        }
+        seen.add(normalizedCandidate);
+        return true;
+    });
+}
+function normalizeActionableSuggestions(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const normalizationLog = [];
+    const normalizedResults = results.map((result) => {
+        if (!isActionableFinding(result)) {
+            return result;
+        }
+        const originalSuggestions = Array.isArray(result.suggestions) ? result.suggestions : [];
+        const validSuggestions = originalSuggestions.filter((suggestion) => {
+            const hasSuggestion = getCleanSuggestionText(suggestion?.suggestion);
+            const hasDisplayText = getCleanSuggestionText(suggestion?.display_text);
+            return hasSuggestion || hasDisplayText;
+        });
+        const candidates = getSuggestionCandidates({ ...result, suggestions: validSuggestions });
+        const nextSuggestions = validSuggestions.slice(0, 3).map((suggestion) => ({
+            ...suggestion,
+            is_recommended: false,
+        }));
+        const fallbackRoles = [
+            {
+                label: "Dominant usage",
+                reasoning: "Fallback dominant-usage option added because the AI returned fewer than three actionable suggestions. Review variation frequency before applying.",
+            },
+            {
+                label: "Glossary-informed option",
+                reasoning: "Fallback glossary/editing option added because the AI returned fewer than three actionable suggestions. Treat as advisory unless supported by analyzed text.",
+            },
+            {
+                label: "Editorial option",
+                reasoning: "Fallback editorial option added to preserve the required three-suggestion structure. Validate manually before applying.",
+            },
+        ];
+        let candidateIndex = 0;
+        while (nextSuggestions.length < 3) {
+            const candidate = candidates[candidateIndex] || candidates[0] || getCleanSuggestionText(result.concept);
+            const role = fallbackRoles[nextSuggestions.length];
+            nextSuggestions.push(createFallbackSuggestion(result, candidate, role.label, role.reasoning));
+            candidateIndex++;
+        }
+        const originalRecommendedIndex = validSuggestions.findIndex((suggestion) => suggestion?.is_recommended === true);
+        const recommendedIndex = originalRecommendedIndex >= 0 && originalRecommendedIndex < 3 ? originalRecommendedIndex : 0;
+        nextSuggestions.forEach((suggestion, index) => {
+            if (index === recommendedIndex) {
+                suggestion.is_recommended = true;
+            }
+            else {
+                delete suggestion.is_recommended;
+            }
+        });
+        if (originalSuggestions.length !== 3 ||
+            originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true).length !== 1) {
+            normalizationLog.push({
+                concept: result.concept,
+                originalSuggestionCount: originalSuggestions.length,
+                normalizedSuggestionCount: nextSuggestions.length,
+                originalRecommendedCount: originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true)
+                    .length,
+            });
+        }
+        return {
+            ...result,
+            suggestions: nextSuggestions,
+        };
+    });
+    if (normalizationLog.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Normalized actionable suggestions to exactly 3 entries with exactly one recommendation.`, normalizationLog);
+    }
+    return normalizedResults;
+}
+function markFinalVerificationNewItemsForReview(items, operationName) {
+    if (!Array.isArray(items) || items.length === 0) {
+        return items;
+    }
+    (0,utils/* log */.Rm)(`${operationName}: Marking ${items.length} final-pass new finding${items.length === 1 ? "" : "s"} as Needs Review because no later verification pass remains.`, items.map((item) => item?.concept).filter(Boolean));
+    return items.map((item) => {
+        if (!item || item.error || !item.concept) {
+            return item;
+        }
+        return {
+            ...item,
+            status: "Needs Review",
+            latestVerificationStatus: "final_unverified_discovery",
+            verificationNote: "This finding was newly discovered on the final verification pass and has not been verified by a later pass.",
+        };
+    });
+}
+function resultContainsUnresolvedPlaceholder(result) {
+    if (!Array.isArray(result?.variations)) {
+        return false;
+    }
+    return result.variations.some((variation) => /※\d+[⛬〓]?/.test(String(variation?.phrase || "")));
+}
+function markPlaceholderArtifactResultsForReview(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const placeholderConcepts = [];
+    const reviewedResults = results.map((result) => {
+        if (!result || result.error || !result.concept || !resultContainsUnresolvedPlaceholder(result)) {
+            return result;
+        }
+        placeholderConcepts.push({
+            concept: result.concept,
+            priority: result.priority || "INFO",
+            previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+            placeholderVariations: (result.variations || [])
+                .map((variation) => variation?.phrase)
+                .filter((phrase) => /※\d+[⛬〓]?/.test(String(phrase || "")))
+                .slice(0, 5),
+        });
+        return {
+            ...result,
+            status: "Needs Review",
+            latestVerificationStatus: "unresolved_placeholder_artifact",
+            verificationNote: "This finding includes unresolved WTR placeholder markers, so it needs manual review before applying.",
+        };
+    });
+    if (placeholderConcepts.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Marked ${placeholderConcepts.length} placeholder-derived finding${placeholderConcepts.length === 1 ? "" : "s"} as Needs Review due to unresolved markers.`, placeholderConcepts);
+    }
+    return reviewedResults;
+}
+function markLowEvidenceResultsForReview(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const lowEvidenceConcepts = [];
+    const reviewedResults = results.map((result) => {
+        if (!result || result.error || !result.concept) {
+            return result;
+        }
+        const priority = String(result.priority || "INFO").toUpperCase();
+        const variationCount = Array.isArray(result.variations) ? result.variations.length : 0;
+        const isInformational = priority === "INFO" || priority === "STYLISTIC";
+        if (isInformational || variationCount >= 2) {
+            return result;
+        }
+        lowEvidenceConcepts.push({
+            concept: result.concept,
+            priority,
+            variationCount,
+            previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+        });
+        return {
+            ...result,
+            status: "Needs Review",
+            latestVerificationStatus: "low_evidence_variation_count",
+            verificationNote: "This non-informational finding has fewer than two extracted variations, so it needs manual review before applying.",
+        };
+    });
+    if (lowEvidenceConcepts.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Marked ${lowEvidenceConcepts.length} low-evidence finding${lowEvidenceConcepts.length === 1 ? "" : "s"} as Needs Review due to insufficient variations.`, lowEvidenceConcepts);
+    }
+    return reviewedResults;
 }
 function createStreamingRequestState(config) {
     if (!(0,providerConfig/* providerUsesStreaming */._C)(config)) {
@@ -2251,7 +2390,7 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
         chapterCount: chapterData.length,
         characterCount: combinedText.length,
     });
-    const prompt = buildPrompt(combinedText, existingResults);
+    const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
     const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
     const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
     GM_xmlhttpRequest({
@@ -2333,8 +2472,8 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
                     handleApiError("Invalid response format for verification run. Expected 'verified_inconsistencies' and 'new_inconsistencies' keys.");
                     return;
                 }
-                const verifiedItems = parsedResponse.verified_inconsistencies || [];
-                const newItems = parsedResponse.new_inconsistencies || [];
+                const verifiedItems = filterOfficialAliasOnlyFindings(parsedResponse.verified_inconsistencies || [], operationName);
+                const newItems = filterOfficialAliasOnlyFindings(parsedResponse.new_inconsistencies || [], operationName);
                 verifiedItems.forEach((item) => {
                     item.isNew = false;
                     item.status = "Verified";
@@ -2358,9 +2497,14 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
                     handleApiError("Invalid response format for initial run. Expected a JSON array.");
                     return;
                 }
-                parsedResponse.forEach((r) => (r.isNew = true));
-                state/* appState */.XJ.runtime.cumulativeResults = parsedResponse;
+                const filteredInitialResults = filterOfficialAliasOnlyFindings(parsedResponse, operationName);
+                filteredInitialResults.forEach((r) => (r.isNew = true));
+                state/* appState */.XJ.runtime.cumulativeResults = filteredInitialResults;
             }
+            state/* appState */.XJ.runtime.cumulativeResults = normalizeActionableSuggestions(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+            state/* appState */.XJ.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+            state/* appState */.XJ.runtime.cumulativeResults = markLowEvidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+            logResultSummary(operationName, state/* appState */.XJ.runtime.cumulativeResults);
             (0,state/* saveSessionResults */.I6)();
             (0,ui/* updateStatusIndicator */.LI)("complete", "Complete!");
             const continueBtn = document.getElementById("wtr-if-continue-btn");
@@ -2466,7 +2610,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
             chapterCount: chapterData.length,
             characterCount: combinedText.length,
         });
-        const prompt = buildDeepAnalysisPrompt(combinedText, existingResults);
+        const prompt = buildDeepAnalysisPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
         const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
         const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
         GM_xmlhttpRequest({
@@ -2551,8 +2695,8 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                         delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey];
                         return;
                     }
-                    const verifiedItems = parsedResponse.verified_inconsistencies || [];
-                    const newItems = parsedResponse.new_inconsistencies || [];
+                    const verifiedItems = filterOfficialAliasOnlyFindings(parsedResponse.verified_inconsistencies || [], operationName);
+                    let newItems = filterOfficialAliasOnlyFindings(parsedResponse.new_inconsistencies || [], operationName);
                     verifiedItems.forEach((item) => {
                         item.isNew = false;
                         item.status = "Verified";
@@ -2560,6 +2704,9 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                     newItems.forEach((item) => {
                         item.isNew = true;
                     });
+                    if (currentDepth >= targetDepth) {
+                        newItems = markFinalVerificationNewItemsForReview(newItems, operationName);
+                    }
                     (0,utils/* log */.Rm)(`${operationName}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`);
                     const allNewItems = [...verifiedItems, ...newItems];
                     if (allNewItems.length === 0 &&
@@ -2577,15 +2724,20 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                         delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey];
                         return;
                     }
-                    parsedResponse.forEach((r) => (r.isNew = true));
-                    const resultsToMerge = currentDepth >= targetDepth && parsedResponse.length > 0
-                        ? markFinalInitialResultsForReview(parsedResponse)
-                        : parsedResponse;
-                    if (resultsToMerge !== parsedResponse) {
-                        (0,utils/* log */.Rm)(`${operationName}: Final iteration produced ${parsedResponse.length} new unverified result${parsedResponse.length === 1 ? "" : "s"}; marking as Needs Review because no verification pass remains.`);
+                    const filteredInitialResults = filterOfficialAliasOnlyFindings(parsedResponse, operationName);
+                    filteredInitialResults.forEach((r) => (r.isNew = true));
+                    const resultsToMerge = currentDepth >= targetDepth && filteredInitialResults.length > 0
+                        ? markFinalInitialResultsForReview(filteredInitialResults)
+                        : filteredInitialResults;
+                    if (resultsToMerge !== filteredInitialResults) {
+                        (0,utils/* log */.Rm)(`${operationName}: Final iteration produced ${filteredInitialResults.length} new unverified result${filteredInitialResults.length === 1 ? "" : "s"}; marking as Needs Review because no verification pass remains.`);
                     }
                     state/* appState */.XJ.runtime.cumulativeResults = (0,utils/* mergeAnalysisResults */.bd)(state/* appState */.XJ.runtime.cumulativeResults, resultsToMerge);
                 }
+                state/* appState */.XJ.runtime.cumulativeResults = normalizeActionableSuggestions(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+                state/* appState */.XJ.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+                state/* appState */.XJ.runtime.cumulativeResults = markLowEvidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+                logResultSummary(operationName, state/* appState */.XJ.runtime.cumulativeResults);
                 // Save session results after each iteration
                 (0,state/* saveSessionResults */.I6)();
                 // Continue to next iteration or complete
@@ -3297,6 +3449,13 @@ const appState = {
         model: "",
         useJson: false,
         useLiveTermReplacerSync: true,
+        chapterSource: "page",
+        wtrApiRangeMode: "nearby",
+        wtrApiPreviousChapters: 2,
+        wtrApiNextChapters: 2,
+        wtrApiStartChapter: "",
+        wtrApiEndChapter: "",
+        useOfficialWtrGlossary: true,
         loggingEnabled: false,
         temperature: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].defaultTemperature,
         reasoningMode: "off",
@@ -3312,6 +3471,7 @@ const appState = {
         apiKeyCooldowns: new Map(),
         failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
         providerModelMetadata: {},
+        officialGlossaryContext: null,
         currentIteration: 1,
         totalIterations: 1,
     },
@@ -3402,6 +3562,27 @@ async function loadConfig() {
     }
     if (typeof savedConfig.reasoningMode !== "string") {
         savedConfig.reasoningMode = "off";
+    }
+    if (savedConfig.chapterSource !== "wtr-api") {
+        savedConfig.chapterSource = "page";
+    }
+    if (savedConfig.wtrApiRangeMode !== "custom") {
+        savedConfig.wtrApiRangeMode = "nearby";
+    }
+    if (typeof savedConfig.wtrApiPreviousChapters !== "number") {
+        savedConfig.wtrApiPreviousChapters = 2;
+    }
+    if (typeof savedConfig.wtrApiNextChapters !== "number") {
+        savedConfig.wtrApiNextChapters = 2;
+    }
+    if (typeof savedConfig.wtrApiStartChapter !== "string" && typeof savedConfig.wtrApiStartChapter !== "number") {
+        savedConfig.wtrApiStartChapter = "";
+    }
+    if (typeof savedConfig.wtrApiEndChapter !== "string" && typeof savedConfig.wtrApiEndChapter !== "number") {
+        savedConfig.wtrApiEndChapter = "";
+    }
+    if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
+        savedConfig.useOfficialWtrGlossary = true;
     }
     if (typeof savedConfig.temperature !== "number") {
         savedConfig.temperature = providerDefaults.defaultTemperature;
@@ -4009,6 +4190,7 @@ function displayResults(results) {
 /* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(598);
 /* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(675);
 /* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(200);
+/* harmony import */ var _wtrLabApi__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(41);
 // src/modules/ui/events.ts
 
 
@@ -4016,6 +4198,80 @@ function displayResults(results) {
 
 
 
+
+function summarizeChapterCollection(chapterData) {
+    return (Array.isArray(chapterData) ? chapterData : []).map((chapter) => ({
+        chapter: chapter.chapter,
+        title: chapter.title || "",
+        textLength: typeof chapter.text === "string" ? chapter.text.length : 0,
+        charCount: chapter.charCount || null,
+        placeholderCount: chapter.placeholderCount || 0,
+        glossaryTermCount: Array.isArray(chapter.glossaryTerms) ? chapter.glossaryTerms.length : 0,
+    }));
+}
+function summarizeUnresolvedPlaceholders(chapterData) {
+    return (Array.isArray(chapterData) ? chapterData : [])
+        .map((chapter) => {
+        const text = typeof chapter.text === "string" ? chapter.text : "";
+        const matches = [...text.matchAll(/※\d+[⛬〓]?/g)].map((match) => match[0]);
+        return {
+            chapter: chapter.chapter,
+            count: matches.length,
+            markers: [...new Set(matches)].slice(0, 10),
+        };
+    })
+        .filter((summary) => summary.count > 0);
+}
+function logUnresolvedPlaceholderAudit(stage, chapterData) {
+    const summaries = summarizeUnresolvedPlaceholders(chapterData);
+    if (summaries.length === 0) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`${stage}: No unresolved WTR placeholders detected after preprocessing.`);
+        return;
+    }
+    (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`${stage}: Unresolved WTR placeholders remain after preprocessing.`, {
+        chapterCount: summaries.length,
+        totalMarkers: summaries.reduce((total, summary) => total + summary.count, 0),
+        chapters: summaries,
+    });
+}
+async function collectChapterDataForAnalysis(liveTerms) {
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = null;
+    const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .getWtrPageContext */ .Yj)();
+    if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary && pageContext) {
+        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", "Loading WTR official glossary...");
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+    }
+    if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource === "wtr-api" && pageContext) {
+        const chapterRange = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .buildWtrApiChapterRange */ .OO)(pageContext, _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config);
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR reader API chapter request prepared.", {
+            rawId: pageContext.rawId,
+            serieSlug: pageContext.serieSlug,
+            currentChapter: pageContext.chapterNo,
+            rangeMode: _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode || "nearby",
+            requestedChapters: chapterRange,
+        });
+        const fetchedChapters = [];
+        for (let index = 0; index < chapterRange.length; index++) {
+            const chapterNo = chapterRange[index];
+            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", `Fetching WTR chapter ${chapterNo} (${index + 1}/${chapterRange.length})...`);
+            fetchedChapters.push(await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchWtrChapter */ .vm)(pageContext, chapterNo));
+        }
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Collected ${fetchedChapters.length} chapter${fetchedChapters.length === 1 ? "" : "s"} from WTR Lab reader API.`, summarizeChapterCollection(fetchedChapters));
+        logUnresolvedPlaceholderAudit("WTR API fetch", fetchedChapters);
+        const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(fetchedChapters, liveTerms);
+        logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters);
+        return processedChapters;
+    }
+    if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource === "wtr-api" && !pageContext) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR reader API source was selected, but the current page URL did not expose raw_id/chapter metadata. Falling back to loaded page chapters.");
+    }
+    const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
+    (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Collected loaded page chapters for analysis.", summarizeChapterCollection(chapterData));
+    logUnresolvedPlaceholderAudit("Loaded page crawl", chapterData);
+    const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms);
+    logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters);
+    return processedChapters;
+}
 async function startAnalysis(isContinuation = false) {
     try {
         if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.isAnalysisRunning) {
@@ -4071,8 +4327,30 @@ async function startAnalysis(isContinuation = false) {
                 }
             }
         }
-        const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
-        const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms);
+        let processedData;
+        try {
+            processedData = await collectChapterDataForAnalysis(liveTerms);
+        }
+        catch (error) {
+            if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource !== "wtr-api") {
+                throw error;
+            }
+            (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR reader API collection failed. Falling back to loaded page chapters.", error);
+            const statusEl = document.getElementById("wtr-if-status");
+            if (statusEl) {
+                statusEl.textContent = "WTR API fetch failed; using loaded page chapters instead.";
+                setTimeout(() => {
+                    if (statusEl) {
+                        statusEl.textContent = "";
+                    }
+                }, 4500);
+            }
+            const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
+            processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms);
+        }
+        if (!processedData.length) {
+            throw new Error("No chapter text was available for analysis.");
+        }
         (0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(processedData, isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [], deepAnalysisDepth);
         (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false);
     }
@@ -4113,6 +4391,13 @@ async function handleSaveConfig() {
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = document.getElementById("wtr-if-model").value;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson = document.getElementById("wtr-if-use-json").checked;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource = document.getElementById("wtr-if-chapter-source").value;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode = document.getElementById("wtr-if-wtr-api-range-mode").value;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiPreviousChapters = parseInt(document.getElementById("wtr-if-wtr-api-previous").value, 10) || 0;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiNextChapters = parseInt(document.getElementById("wtr-if-wtr-api-next").value, 10) || 0;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiStartChapter = document.getElementById("wtr-if-wtr-api-start").value.trim();
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim();
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary = document.getElementById("wtr-if-use-official-wtr-glossary").checked;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value);
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode = document.getElementById("wtr-if-reasoning-mode").value;
@@ -4135,7 +4420,7 @@ function handleFileImportAndAnalyze(event) {
     }
     const isContinuation = event.target.dataset.continuation === "true";
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const data = JSON.parse(String(e.target.result));
             const novelSlug = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .getNovelSlug */ .Ir)();
@@ -4161,6 +4446,11 @@ function handleFileImportAndAnalyze(event) {
                 throw new Error(`Term objects for "${novelSlug}" must contain 'original' and 'replacement' properties.`);
             }
             // --- End Validation ---
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = null;
+            const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .getWtrPageContext */ .Yj)();
+            if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary && pageContext) {
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+            }
             const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
             const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, terms || []);
             const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1);
@@ -4627,6 +4917,14 @@ function importConfiguration() {
                 document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
                     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync;
                 document.getElementById("wtr-if-use-json").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson;
+                document.getElementById("wtr-if-use-official-wtr-glossary").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary;
+                document.getElementById("wtr-if-chapter-source").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource || "page";
+                document.getElementById("wtr-if-wtr-api-range-mode").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode || "nearby";
+                document.getElementById("wtr-if-wtr-api-previous").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiPreviousChapters ?? 2);
+                document.getElementById("wtr-if-wtr-api-next").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiNextChapters ?? 2);
+                document.getElementById("wtr-if-wtr-api-start").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiStartChapter || "");
+                document.getElementById("wtr-if-wtr-api-end").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiEndChapter || "");
+                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
                 document.getElementById("wtr-if-logging-enabled").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled;
                 (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
                 (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
@@ -4723,6 +5021,29 @@ function addEventListeners() {
         document.getElementById("wtr-if-temp-value").textContent = e.target.value;
     });
     panel.querySelector("#wtr-if-reasoning-mode").addEventListener("change", _panel__WEBPACK_IMPORTED_MODULE_4__/* .updateAIControlHints */ .jg);
+    panel.querySelector("#wtr-if-chapter-source").addEventListener("change", (e) => {
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource = e.target.value;
+        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
+        (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+    });
+    panel.querySelector("#wtr-if-wtr-api-range-mode").addEventListener("change", (e) => {
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode = e.target.value;
+        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
+        (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+    });
+    panel.querySelectorAll("#wtr-if-wtr-api-previous, #wtr-if-wtr-api-next, #wtr-if-wtr-api-start, #wtr-if-wtr-api-end").forEach((input) => {
+        input.addEventListener("change", () => {
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiPreviousChapters = parseInt(document.getElementById("wtr-if-wtr-api-previous").value, 10) || 0;
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiNextChapters = parseInt(document.getElementById("wtr-if-wtr-api-next").value, 10) || 0;
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiStartChapter = document.getElementById("wtr-if-wtr-api-start").value.trim();
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim();
+            (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+        });
+    });
+    panel.querySelector("#wtr-if-use-official-wtr-glossary").addEventListener("change", (e) => {
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary = e.target.checked;
+        (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+    });
     panel.querySelector("#wtr-if-logging-enabled").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = e.target.checked;
         (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
@@ -4857,6 +5178,7 @@ __webpack_require__.d(__webpack_exports__, {
   ah: () => (/* binding */ toggleApiKeyVisibility),
   Pj: () => (/* binding */ togglePanel),
   jg: () => (/* binding */ updateAIControlHints),
+  ku: () => (/* binding */ updateChapterSourceUI),
   o_: () => (/* binding */ updateDebugLoggingUI),
   LI: () => (/* binding */ updateStatusIndicator),
   cB: () => (/* binding */ updateTermReplacerIntegrationUI)
@@ -4876,14 +5198,14 @@ var utils = __webpack_require__(158);
 // src/version.ts
 // Shared runtime version information for the userscript UI
 const VERSION_INFO = {
-    SEMANTIC: "5.5.0",
-    DISPLAY: "v5.5.0",
+    SEMANTIC: "5.5.1",
+    DISPLAY: "v5.5.1",
     BUILD_ENV: "production",
-    BUILD_DATE: "2026-04-28",
-    GREASYFORK: "5.5.0",
-    NPM: "5.5.0",
-    BADGE: "5.5.0",
-    CHANGELOG: "5.5.0",
+    BUILD_DATE: "2026-04-30",
+    GREASYFORK: "5.5.1",
+    NPM: "5.5.1",
+    BADGE: "5.5.1",
+    CHANGELOG: "5.5.1",
 };
 const VERSION = VERSION_INFO.SEMANTIC;
 if (typeof window !== "undefined") {
@@ -4945,6 +5267,52 @@ function createUI() {
                             <div class="wtr-if-finder-controls">
                                 <button id="wtr-if-find-btn" class="wtr-if-btn wtr-if-btn-primary wtr-if-btn-large">Find Inconsistencies</button>
                                 <button id="wtr-if-continue-btn" class="wtr-if-btn wtr-if-btn-secondary wtr-if-btn-large" disabled>Continue Analysis</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chapter Source Section -->
+                    <div class="wtr-if-section">
+                        <div class="wtr-if-section-header">
+                            <h3>Chapter Source</h3>
+                        </div>
+                        <div class="wtr-if-section-content">
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-chapter-source">Analysis Source</label>
+                                <select id="wtr-if-chapter-source">
+                                    <option value="page">Loaded page chapters</option>
+                                    <option value="wtr-api">WTR Lab reader API</option>
+                                </select>
+                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves official glossary placeholders before AI analysis.</small>
+                            </div>
+                            <div id="wtr-if-wtr-api-range-controls" class="wtr-if-api-range-controls">
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-wtr-api-range-mode">API Chapter Range</label>
+                                    <select id="wtr-if-wtr-api-range-mode">
+                                        <option value="nearby">Current chapter with nearby chapters</option>
+                                        <option value="custom">Custom chapter range</option>
+                                    </select>
+                                </div>
+                                <div class="wtr-if-range-grid" data-range-mode="nearby">
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-previous">Previous chapters</label>
+                                        <input type="number" id="wtr-if-wtr-api-previous" min="0" max="25" step="1" value="2">
+                                    </div>
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-next">Next chapters</label>
+                                        <input type="number" id="wtr-if-wtr-api-next" min="0" max="25" step="1" value="2">
+                                    </div>
+                                </div>
+                                <div class="wtr-if-range-grid" data-range-mode="custom">
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-start">Start chapter</label>
+                                        <input type="number" id="wtr-if-wtr-api-start" min="1" step="1" placeholder="e.g. 390">
+                                    </div>
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-end">End chapter</label>
+                                        <input type="number" id="wtr-if-wtr-api-end" min="1" step="1" placeholder="e.g. 400">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -5105,6 +5473,13 @@ function createUI() {
                                     <input type="checkbox" id="wtr-if-use-json">
                                     Use Imported Term Replacer JSON File (Optional Override)
                                 </label>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-official-wtr-glossary">
+                                    Use WTR Lab Official Glossary Context
+                                </label>
+                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary to suppress official alias false positives and improve AI suggestions.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
@@ -5286,6 +5661,19 @@ function syncProviderConfigUI() {
         }
     }
     updateAIControlHints();
+}
+function updateChapterSourceUI() {
+    const sourceEl = document.getElementById("wtr-if-chapter-source");
+    const rangeControls = document.getElementById("wtr-if-wtr-api-range-controls");
+    const rangeModeEl = document.getElementById("wtr-if-wtr-api-range-mode");
+    const source = sourceEl?.value || state/* appState */.XJ.config.chapterSource || "page";
+    const rangeMode = rangeModeEl?.value || state/* appState */.XJ.config.wtrApiRangeMode || "nearby";
+    if (rangeControls) {
+        rangeControls.style.display = source === "wtr-api" ? "" : "none";
+    }
+    document.querySelectorAll(".wtr-if-range-grid[data-range-mode]").forEach((group) => {
+        group.style.display = source === "wtr-api" && group.dataset.rangeMode === rangeMode ? "grid" : "none";
+    });
 }
 function updateAIControlHints() {
     const providerType = document.getElementById("wtr-if-provider-type")?.value || state/* appState */.XJ.config.providerType;
@@ -5531,6 +5919,14 @@ async function togglePanel(show = null) {
         syncProviderConfigUI();
         document.getElementById("wtr-if-use-live-term-replacer-sync").checked = state/* appState */.XJ.config.useLiveTermReplacerSync;
         document.getElementById("wtr-if-use-json").checked = state/* appState */.XJ.config.useJson;
+        document.getElementById("wtr-if-use-official-wtr-glossary").checked = state/* appState */.XJ.config.useOfficialWtrGlossary;
+        document.getElementById("wtr-if-chapter-source").value = state/* appState */.XJ.config.chapterSource || "page";
+        document.getElementById("wtr-if-wtr-api-range-mode").value = state/* appState */.XJ.config.wtrApiRangeMode || "nearby";
+        document.getElementById("wtr-if-wtr-api-previous").value = String(state/* appState */.XJ.config.wtrApiPreviousChapters ?? 2);
+        document.getElementById("wtr-if-wtr-api-next").value = String(state/* appState */.XJ.config.wtrApiNextChapters ?? 2);
+        document.getElementById("wtr-if-wtr-api-start").value = String(state/* appState */.XJ.config.wtrApiStartChapter || "");
+        document.getElementById("wtr-if-wtr-api-end").value = String(state/* appState */.XJ.config.wtrApiEndChapter || "");
+        updateChapterSourceUI();
         document.getElementById("wtr-if-logging-enabled").checked = state/* appState */.XJ.config.loggingEnabled;
         updateDebugLoggingUI();
         document.getElementById("wtr-if-auto-restore").checked = state/* appState */.XJ.preferences.autoRestoreResults;
@@ -6023,6 +6419,8 @@ function getDebugLogReport() {
         `- Temperature: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature ?? "default"}`,
         `- Reasoning mode: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode || "off"}`,
         `- Deep analysis depth: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth || 1}`,
+        `- Chapter source: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource || "page"}`,
+        `- WTR official glossary context: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary ? "enabled" : "disabled"}`,
         `- API key count: ${Array.isArray(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys) ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.filter(Boolean).length : 0}`,
         "",
         "## Runtime",
@@ -6174,8 +6572,15 @@ function applyTermReplacements(chapterData, terms = []) {
     addSimpleGroup(simple_cs_whole, "g", true, true);
     addSimpleGroup(simple_ci_partial, "gi", false, false);
     addSimpleGroup(simple_ci_whole, "gi", true, false);
+    const replacementStats = {
+        chapterCount: chapterData.length,
+        compiledPatternCount: compiledTerms.length,
+        rawMatchCount: 0,
+        appliedMatchCount: 0,
+        chapterSummaries: [],
+    };
     // 2. Process each chapter's text.
-    return chapterData.map((data) => {
+    const processedChapterData = chapterData.map((data) => {
         // Skip processing if this is the active chapter
         if (data.tracker && data.tracker.classList.contains("chapter-tracker active")) {
             log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`);
@@ -6223,12 +6628,24 @@ function applyTermReplacements(chapterData, terms = []) {
             }
         }
         // 6. Apply winning matches to the string, from last to first to avoid index issues.
+        replacementStats.rawMatchCount += allMatches.length;
+        replacementStats.appliedMatchCount += winningMatches.length;
+        if (allMatches.length > 0 || winningMatches.length > 0) {
+            replacementStats.chapterSummaries.push({
+                chapter: data.chapter,
+                rawMatches: allMatches.length,
+                appliedMatches: winningMatches.length,
+                skippedOverlaps: allMatches.length - winningMatches.length,
+            });
+        }
         for (let i = winningMatches.length - 1; i >= 0; i--) {
             const match = winningMatches[i];
             fullText = fullText.substring(0, match.start) + match.replacement + fullText.substring(match.end);
         }
         return { ...data, text: fullText };
     });
+    log("Completed replacement preprocessing for analysis.", replacementStats);
+    return processedChapterData;
 }
 function summarizeContextResults(existingResults, maxItems = 50) {
     // Implement context summarization to prevent exponential growth
@@ -6372,6 +6789,21 @@ function detectScriptCategory(text) {
     // Mixed or unknown scripts; treat conservatively.
     return "mixed";
 }
+function stripParentheticalAnnotations(value) {
+    if (!value || typeof value !== "string") {
+        return "";
+    }
+    const stripped = value
+        .replace(/\s*[([{][^\])}]*[\])}]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    // Only drop annotations when a meaningful base remains. This avoids erasing concepts
+    // that are intentionally just a bracketed name.
+    return stripped || value.trim();
+}
+function getComparableConceptText(value) {
+    return stripParentheticalAnnotations(value);
+}
 function splitConceptVariants(concept) {
     if (!concept || typeof concept !== "string") {
         return [];
@@ -6380,7 +6812,13 @@ function splitConceptVariants(concept) {
     if (!trimmed) {
         return [];
     }
-    const variants = [trimmed, ...trimmed.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i)];
+    const annotationStripped = stripParentheticalAnnotations(trimmed);
+    const variants = [
+        trimmed,
+        annotationStripped,
+        ...trimmed.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i),
+        ...annotationStripped.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i),
+    ];
     const seen = new Set();
     return variants
         .map((variant) => variant.trim())
@@ -6393,7 +6831,7 @@ function splitConceptVariants(concept) {
     });
 }
 function normalizeConceptForComparison(str) {
-    return str
+    return getComparableConceptText(str)
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
@@ -6403,6 +6841,29 @@ function getNormalizedConceptVariants(concept) {
     return splitConceptVariants(concept)
         .map((variant) => normalizeConceptForComparison(variant))
         .filter(Boolean);
+}
+function hasUsefulConceptAnnotation(concept) {
+    return /[([{][^\])}]*([\u3400-\u9fff]|\balias\b|\bsource\b|\bcharacter\b|\btitle\b)[^\])}]*[\])}]/i.test(concept || "");
+}
+function chooseMergedConcept(existingConcept, newConcept, existingQuality, newQuality) {
+    const existingNorm = normalizeConceptForComparison(existingConcept || "");
+    const newNorm = normalizeConceptForComparison(newConcept || "");
+    if (existingNorm && existingNorm === newNorm) {
+        if (hasUsefulConceptAnnotation(existingConcept)) {
+            return existingConcept;
+        }
+        if (hasUsefulConceptAnnotation(newConcept)) {
+            return newConcept;
+        }
+    }
+    return newQuality > existingQuality ? newConcept : existingConcept;
+}
+function mergeUniqueVariations(existingVariations = [], newVariations = []) {
+    return [...existingVariations, ...newVariations].filter((variation, index, arr) => arr.findIndex((candidate) => candidate.phrase === variation.phrase && candidate.chapter === variation.chapter) ===
+        index);
+}
+function mergeUniqueSuggestions(existingSuggestions = [], newSuggestions = []) {
+    return [...existingSuggestions, ...newSuggestions].filter((suggestion, index, arr) => arr.findIndex((candidate) => candidate.suggestion === suggestion.suggestion) === index);
 }
 function areNormalizedConceptsSimilar(norm1, norm2) {
     if (!norm1 || !norm2) {
@@ -6470,8 +6931,10 @@ function areSemanticallySimilar(concept1, concept2, options = {}) {
     }
     const c1 = concept1.toString();
     const c2 = concept2.toString();
-    const script1 = detectScriptCategory(c1);
-    const script2 = detectScriptCategory(c2);
+    const comparable1 = getComparableConceptText(c1);
+    const comparable2 = getComparableConceptText(c2);
+    const script1 = detectScriptCategory(comparable1);
+    const script2 = detectScriptCategory(comparable2);
     // Hard rule: do not treat clearly different scripts as similar.
     if (script1 !== "unknown" && script2 !== "unknown" && script1 !== script2) {
         if (shouldLog) {
@@ -6492,8 +6955,8 @@ function areSemanticallySimilar(concept1, concept2, options = {}) {
     }
     // Block merging clearly unrelated when one looks like a proper name and the other does not.
     // Composite concepts like "A / B" are evaluated per variant so proper-name alternates stay mergeable.
-    const proper1 = isProperNameLike(c1);
-    const proper2 = isProperNameLike(c2);
+    const proper1 = isProperNameLike(comparable1);
+    const proper2 = isProperNameLike(comparable2);
     if (proper1 !== proper2) {
         if (shouldLog) {
             log(`Semantic similarity rejected due to proper-name mismatch: "${c1}" (proper=${proper1}) vs "${c2}" (proper=${proper2})`);
@@ -6530,7 +6993,7 @@ function mergeAnalysisResults(existingResults, newResults) {
             if (!existing || !existing.concept) {
                 return false;
             }
-            return areSemanticallySimilar(existing.concept, newConcept);
+            return areSemanticallySimilar(existing.concept, newConcept, { silent: true });
         });
         if (duplicateIndex === -1) {
             // No duplicate found, add as new entry
@@ -6568,23 +7031,22 @@ function mergeAnalysisResults(existingResults, newResults) {
         if (newQuality > existingQuality) {
             merged[duplicateIndex] = {
                 ...newResult,
-                // Preserve original concept if they are near-identical variants
-                concept: newResult.concept,
+                concept: chooseMergedConcept(existing.concept, newResult.concept, existingQuality, newQuality),
+                variations: mergeUniqueVariations(existing.variations || [], newResult.variations || []),
+                suggestions: mergeUniqueSuggestions(existing.suggestions || [], newResult.suggestions || []),
+                isNew: Boolean(existing.isNew && newResult.isNew),
             };
-            log("Merged duplicate results by favoring higher quality new result for this concept.");
+            log("Merged duplicate results by favoring higher quality new result while preserving useful concept annotations.");
         }
         else {
             // Existing result has equal or higher quality, merge intelligently INTO existing.
             const mergedResult = {
                 ...existing,
-                concept: existing.concept,
+                concept: chooseMergedConcept(existing.concept, newResult.concept, existingQuality, newQuality),
                 priority: existing.priority,
                 explanation: existing.explanation,
-                // Merge variations (avoid duplicates)
-                variations: [...(existing.variations || []), ...(newResult.variations || [])].filter((variation, index, arr) => arr.findIndex((v) => v.phrase === variation.phrase && v.chapter === variation.chapter) ===
-                    index),
-                // Merge suggestions (avoid duplicates)
-                suggestions: [...(existing.suggestions || []), ...(newResult.suggestions || [])].filter((suggestion, index, arr) => arr.findIndex((s) => s.suggestion === suggestion.suggestion) === index),
+                variations: mergeUniqueVariations(existing.variations || [], newResult.variations || []),
+                suggestions: mergeUniqueSuggestions(existing.suggestions || [], newResult.suggestions || []),
                 // Preserve status flags from higher quality result
                 status: existing.status || newResult.status,
                 isNew: Boolean(existing.isNew && newResult.isNew),
@@ -6762,6 +7224,469 @@ function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
             finish(null);
         }
     });
+}
+
+
+/***/ },
+
+/***/ 41
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CO: () => (/* binding */ formatOfficialGlossaryPromptContext),
+/* harmony export */   OO: () => (/* binding */ buildWtrApiChapterRange),
+/* harmony export */   Yj: () => (/* binding */ getWtrPageContext),
+/* harmony export */   sp: () => (/* binding */ fetchOfficialWtrGlossaryContext),
+/* harmony export */   t0: () => (/* binding */ getOfficialAliasOnlyMatch),
+/* harmony export */   vm: () => (/* binding */ fetchWtrChapter)
+/* harmony export */ });
+/* unused harmony exports resolveWtrGlossaryPlaceholders, isOfficialAliasOnlyFinding */
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(158);
+
+const WTR_API_GLOSSARY_CACHE_KEY = "wtr_inconsistency_finder_wtr_glossary_cache";
+const GLOSSARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const MAX_ALIAS_GROUPS_FOR_PROMPT = 20;
+const MAX_CANONICAL_TERMS_FOR_PROMPT = 40;
+const MAX_REPLACEMENTS_FOR_PROMPT = 25;
+const MAX_CORRECTIONS_FOR_PROMPT = 15;
+const MAX_CORRECTION_REASON_CHARS = 160;
+function parseNonNegativeInteger(value, fallback) {
+    const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+function parseOptionalInteger(value) {
+    const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+function wtrApiRequest(config) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: config.method,
+            url: config.url,
+            headers: {
+                Accept: "application/json",
+                ...(config.data ? { "Content-Type": "application/json" } : {}),
+            },
+            data: config.data,
+            onload: (response) => {
+                try {
+                    const data = JSON.parse(response.responseText || "{}");
+                    if (response.status >= 400 || data?.success === false) {
+                        reject(new Error(data?.message || data?.error || response.statusText || `HTTP ${response.status}`));
+                        return;
+                    }
+                    resolve(data);
+                }
+                catch (error) {
+                    reject(error);
+                }
+            },
+            onerror: () => reject(new Error("WTR Lab API network request failed.")),
+        });
+    });
+}
+function getWtrPageContext() {
+    const match = window.location.pathname.match(/^\/(en)\/novel\/(\d+)\/([^/]+)\/chapter-(\d+)/);
+    if (!match) {
+        return null;
+    }
+    return {
+        language: match[1],
+        rawId: Number.parseInt(match[2], 10),
+        serieSlug: match[3],
+        chapterNo: Number.parseInt(match[4], 10),
+    };
+}
+function buildWtrApiChapterRange(pageContext, config) {
+    const mode = config.wtrApiRangeMode === "custom" ? "custom" : "nearby";
+    let startChapter;
+    let endChapter;
+    if (mode === "custom") {
+        startChapter = parseOptionalInteger(config.wtrApiStartChapter) || pageContext.chapterNo;
+        endChapter = parseOptionalInteger(config.wtrApiEndChapter) || startChapter;
+        if (endChapter < startChapter) {
+            const previousStart = startChapter;
+            startChapter = endChapter;
+            endChapter = previousStart;
+        }
+    }
+    else {
+        const previousCount = Math.min(25, parseNonNegativeInteger(config.wtrApiPreviousChapters, 2));
+        const nextCount = Math.min(25, parseNonNegativeInteger(config.wtrApiNextChapters, 2));
+        startChapter = Math.max(1, pageContext.chapterNo - previousCount);
+        endChapter = pageContext.chapterNo + nextCount;
+    }
+    const chapters = [];
+    for (let chapterNo = startChapter; chapterNo <= endChapter; chapterNo++) {
+        chapters.push(chapterNo);
+    }
+    return chapters;
+}
+function normalizeChapterGlossaryTerm(rawTerm, index) {
+    if (!Array.isArray(rawTerm) || rawTerm.length < 2) {
+        return null;
+    }
+    const termValue = Array.isArray(rawTerm[0]) ? rawTerm[0][0] : rawTerm[0];
+    const sourceValue = rawTerm[1];
+    const term = typeof termValue === "string" ? termValue.trim() : "";
+    const source = typeof sourceValue === "string" ? sourceValue.trim() : "";
+    if (!term) {
+        return null;
+    }
+    return { index, term, source };
+}
+function resolveWtrGlossaryPlaceholders(text, glossaryTerms) {
+    if (!text || glossaryTerms.length === 0) {
+        return text || "";
+    }
+    const termsByIndex = new Map(glossaryTerms.map((term) => [term.index, term.term]));
+    return text.replace(/※(\d+)[⛬〓]/g, (match, indexValue) => {
+        const index = Number.parseInt(indexValue, 10);
+        return termsByIndex.get(index) || match;
+    });
+}
+async function fetchWtrChapter(pageContext, chapterNo) {
+    const response = await wtrApiRequest({
+        method: "POST",
+        url: `${window.location.origin}/api/reader/get`,
+        data: JSON.stringify({
+            translate: "ai",
+            language: pageContext.language,
+            raw_id: pageContext.rawId,
+            chapter_no: chapterNo,
+            retry: false,
+            force_retry: false,
+        }),
+    });
+    const chapter = response?.chapter || {};
+    const payload = response?.data?.data || {};
+    const rawBody = Array.isArray(payload.body) ? payload.body.join("\n\n") : "";
+    const rawTitle = payload.title || chapter.title || "";
+    const placeholderCount = ((`${rawTitle}\n${rawBody}`).match(/※\d+[⛬〓]/g) || []).length;
+    const glossaryTerms = Array.isArray(payload.glossary_data?.terms)
+        ? payload.glossary_data.terms
+            .map((term, index) => normalizeChapterGlossaryTerm(term, index))
+            .filter(Boolean)
+        : [];
+    const resolvedTitle = resolveWtrGlossaryPlaceholders(rawTitle, glossaryTerms);
+    const resolvedBody = resolveWtrGlossaryPlaceholders(rawBody, glossaryTerms);
+    const titlePrefix = resolvedTitle ? `Title: ${resolvedTitle}\n\n` : "";
+    if (!resolvedBody.trim()) {
+        throw new Error(`Chapter ${chapterNo} returned no readable body text.`);
+    }
+    return {
+        chapter: String(chapter.order || chapterNo),
+        text: `${titlePrefix}${resolvedBody}`,
+        title: resolvedTitle,
+        chapterId: typeof chapter.id === "number" ? chapter.id : undefined,
+        charCount: typeof chapter.char_count === "number" ? chapter.char_count : resolvedBody.length,
+        placeholderCount,
+        source: "wtr-api",
+        glossaryTerms,
+    };
+}
+function getTermAliases(rawTerm) {
+    if (!Array.isArray(rawTerm) || rawTerm.length === 0) {
+        return [];
+    }
+    const rawAliases = Array.isArray(rawTerm[0]) ? rawTerm[0] : [rawTerm[0]];
+    return rawAliases.filter((alias) => typeof alias === "string").map((alias) => alias.trim()).filter(Boolean);
+}
+function getTermSource(rawTerm) {
+    return Array.isArray(rawTerm) && typeof rawTerm[1] === "string" ? rawTerm[1].trim() : "";
+}
+function getTermCount(rawTerm) {
+    if (!Array.isArray(rawTerm)) {
+        return 0;
+    }
+    return rawTerm.slice(2).reduce((highest, value) => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return Math.max(highest, value);
+        }
+        return highest;
+    }, 0);
+}
+function createOfficialTermGroup(rawTerm) {
+    const aliases = getTermAliases(rawTerm);
+    if (aliases.length === 0) {
+        return null;
+    }
+    return {
+        canonical: aliases[0],
+        aliases: [...new Set(aliases)],
+        source: getTermSource(rawTerm),
+        count: getTermCount(rawTerm),
+    };
+}
+function compareOfficialGroups(a, b) {
+    if (b.count !== a.count) {
+        return b.count - a.count;
+    }
+    return b.aliases.length - a.aliases.length;
+}
+function dedupeOfficialGroups(groups) {
+    const seen = new Set();
+    return groups.filter((group) => {
+        const key = `${group.source}|${group.aliases.join("|")}`.toLowerCase();
+        if (seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+}
+function buildOfficialGlossaryContext(rawId, response) {
+    const glossaries = Array.isArray(response?.glossaries) ? response.glossaries : [];
+    const allTerms = [];
+    const allReplacements = [];
+    const allCorrections = [];
+    let updatedAt = "";
+    glossaries.forEach((glossary) => {
+        if (typeof glossary?.updated_at === "string" && glossary.updated_at > updatedAt) {
+            updatedAt = glossary.updated_at;
+        }
+        const data = glossary?.data || {};
+        if (Array.isArray(data.terms)) {
+            data.terms.forEach((term) => {
+                const group = createOfficialTermGroup(term);
+                if (group) {
+                    allTerms.push(group);
+                }
+            });
+        }
+        if (Array.isArray(data.replacements)) {
+            data.replacements.forEach((term) => {
+                const group = createOfficialTermGroup(term);
+                if (group) {
+                    allReplacements.push(group);
+                }
+            });
+        }
+        if (Array.isArray(data.ai_run?.incorrect)) {
+            data.ai_run.incorrect.forEach((item) => {
+                if (!item || typeof item !== "object") {
+                    return;
+                }
+                const source = typeof item.zh === "string" ? item.zh.trim() : "";
+                const corrected = typeof item.corrected_en === "string" ? item.corrected_en.trim() : "";
+                if (!source || !corrected) {
+                    return;
+                }
+                allCorrections.push({
+                    source,
+                    corrected,
+                    reason: typeof item.reason === "string" ? item.reason : "",
+                    type: typeof item.corrected_type === "string" ? item.corrected_type : undefined,
+                });
+            });
+        }
+    });
+    const canonicalTerms = dedupeOfficialGroups(allTerms).sort(compareOfficialGroups);
+    const aliasGroups = canonicalTerms.filter((group) => group.aliases.length > 1);
+    const replacements = dedupeOfficialGroups(allReplacements).sort(compareOfficialGroups);
+    return {
+        rawId,
+        updatedAt,
+        aliasGroups,
+        canonicalTerms,
+        replacements,
+        corrections: allCorrections,
+        summary: {
+            glossaryCount: glossaries.length,
+            termCount: allTerms.length,
+            replacementCount: allReplacements.length,
+            correctionCount: allCorrections.length,
+        },
+    };
+}
+async function getGlossaryCache() {
+    const cache = await GM_getValue(WTR_API_GLOSSARY_CACHE_KEY, {});
+    return cache && typeof cache === "object" ? cache : {};
+}
+async function fetchOfficialWtrGlossaryContext(rawId) {
+    const cache = await getGlossaryCache();
+    const cacheKey = String(rawId);
+    const cached = cache[cacheKey];
+    const now = Date.now();
+    if (cached?.timestamp && cached?.context && now - cached.timestamp < GLOSSARY_CACHE_TTL_MS) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Using cached WTR official glossary for raw_id ${rawId}.`, cached.context.summary);
+        return cached.context;
+    }
+    try {
+        const response = await wtrApiRequest({
+            method: "GET",
+            url: `${window.location.origin}/api/v2/reader/terms/${rawId}.json`,
+        });
+        const context = buildOfficialGlossaryContext(rawId, response);
+        cache[cacheKey] = {
+            timestamp: now,
+            context,
+        };
+        await GM_setValue(WTR_API_GLOSSARY_CACHE_KEY, cache);
+        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Fetched WTR official glossary for raw_id ${rawId}.`, context.summary);
+        return context;
+    }
+    catch (error) {
+        if (cached?.context) {
+            (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Failed to refresh WTR official glossary for raw_id ${rawId}; using stale cache.`, error);
+            return cached.context;
+        }
+        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Failed to fetch WTR official glossary for raw_id ${rawId}.`, error);
+        return null;
+    }
+}
+function escapeRegExpForSearch(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function containsCjk(value) {
+    return /[\u3400-\u9fff]/.test(value);
+}
+function phraseAppearsInText(phrase, sourceText) {
+    const normalizedPhrase = phrase.trim();
+    if (normalizedPhrase.length < 3 || !sourceText) {
+        return false;
+    }
+    if (containsCjk(normalizedPhrase)) {
+        return sourceText.includes(normalizedPhrase);
+    }
+    const escapedPhrase = escapeRegExpForSearch(normalizedPhrase);
+    return new RegExp(`(^|[^A-Za-z0-9])${escapedPhrase}([^A-Za-z0-9]|$)`, "i").test(sourceText);
+}
+function normalizeIndexTerm(value) {
+    return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+function buildChapterGlossaryIndex(chapterData = []) {
+    const sourceTerms = new Set();
+    const englishTerms = new Set();
+    chapterData.forEach((chapter) => {
+        if (!Array.isArray(chapter.glossaryTerms)) {
+            return;
+        }
+        chapter.glossaryTerms.forEach((term) => {
+            const source = normalizeIndexTerm(term.source);
+            const english = normalizeIndexTerm(term.term);
+            if (source) {
+                sourceTerms.add(source);
+            }
+            if (english) {
+                englishTerms.add(english);
+            }
+        });
+    });
+    return { sourceTerms, englishTerms };
+}
+function calculateGroupRelevance(group, sourceText, chapterIndex) {
+    const normalizedSource = normalizeIndexTerm(group.source);
+    const normalizedAliases = group.aliases.map(normalizeIndexTerm).filter(Boolean);
+    let score = 0;
+    if (normalizedSource && chapterIndex.sourceTerms.has(normalizedSource)) {
+        score += 1_000_000;
+    }
+    if (normalizedAliases.some((alias) => chapterIndex.englishTerms.has(alias))) {
+        score += 500_000;
+    }
+    if (group.source && phraseAppearsInText(group.source, sourceText)) {
+        score += 100_000;
+    }
+    if (group.aliases.some((alias) => phraseAppearsInText(alias, sourceText))) {
+        score += 50_000;
+    }
+    return score > 0 ? score + Math.min(group.count || 0, 10_000) : 0;
+}
+function getRelevantGroups(groups, sourceText, chapterIndex) {
+    return groups
+        .map((group) => ({
+        group,
+        relevance: calculateGroupRelevance(group, sourceText, chapterIndex),
+    }))
+        .filter((item) => item.relevance > 0)
+        .sort((a, b) => b.relevance - a.relevance || compareOfficialGroups(a.group, b.group))
+        .map((item) => item.group);
+}
+function formatAliasGroupForPrompt(group) {
+    return [group.canonical, group.aliases.filter((alias) => alias !== group.canonical), group.source, group.count];
+}
+function formatCanonicalTermForPrompt(group) {
+    return [group.canonical, group.source, group.count];
+}
+function formatCorrectionForPrompt(correction) {
+    const reason = correction.reason.length > MAX_CORRECTION_REASON_CHARS
+        ? `${correction.reason.slice(0, MAX_CORRECTION_REASON_CHARS)}…`
+        : correction.reason;
+    return [correction.source, correction.corrected, correction.type || "", reason];
+}
+function correctionIsRelevant(correction, sourceText, chapterIndex) {
+    const normalizedSource = normalizeIndexTerm(correction.source);
+    const normalizedCorrected = normalizeIndexTerm(correction.corrected);
+    return Boolean((normalizedSource && chapterIndex.sourceTerms.has(normalizedSource)) ||
+        (normalizedCorrected && chapterIndex.englishTerms.has(normalizedCorrected)) ||
+        phraseAppearsInText(correction.source, sourceText) ||
+        phraseAppearsInText(correction.corrected, sourceText));
+}
+function formatOfficialGlossaryPromptContext(context, sourceText = "", chapterData = []) {
+    if (!context) {
+        return "";
+    }
+    const chapterIndex = buildChapterGlossaryIndex(chapterData);
+    const relevantAliasGroups = getRelevantGroups(context.aliasGroups, sourceText, chapterIndex);
+    const relevantCanonicalTerms = getRelevantGroups(context.canonicalTerms, sourceText, chapterIndex);
+    const relevantReplacements = getRelevantGroups(context.replacements, sourceText, chapterIndex);
+    const relevantCorrections = context.corrections.filter((correction) => correctionIsRelevant(correction, sourceText, chapterIndex));
+    if (relevantAliasGroups.length === 0 &&
+        relevantCanonicalTerms.length === 0 &&
+        relevantReplacements.length === 0 &&
+        relevantCorrections.length === 0) {
+        return "";
+    }
+    const included = {
+        aliases: Math.min(relevantAliasGroups.length, MAX_ALIAS_GROUPS_FOR_PROMPT),
+        terms: Math.min(relevantCanonicalTerms.length, MAX_CANONICAL_TERMS_FOR_PROMPT),
+        replacements: Math.min(relevantReplacements.length, MAX_REPLACEMENTS_FOR_PROMPT),
+        corrections: Math.min(relevantCorrections.length, MAX_CORRECTIONS_FOR_PROMPT),
+    };
+    const payload = {
+        total: context.summary,
+        included,
+        aliases: relevantAliasGroups.slice(0, MAX_ALIAS_GROUPS_FOR_PROMPT).map(formatAliasGroupForPrompt),
+        terms: relevantCanonicalTerms.slice(0, MAX_CANONICAL_TERMS_FOR_PROMPT).map(formatCanonicalTermForPrompt),
+        replacements: relevantReplacements.slice(0, MAX_REPLACEMENTS_FOR_PROMPT).map(formatAliasGroupForPrompt),
+        corrections: relevantCorrections.slice(0, MAX_CORRECTIONS_FOR_PROMPT).map(formatCorrectionForPrompt),
+    };
+    const serialized = JSON.stringify(payload);
+    (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Prepared WTR official glossary prompt context.", {
+        included,
+        relevantBeforeCaps: {
+            aliases: relevantAliasGroups.length,
+            terms: relevantCanonicalTerms.length,
+            replacements: relevantReplacements.length,
+            corrections: relevantCorrections.length,
+        },
+        contextLength: serialized.length,
+        sourceTextLength: sourceText.length,
+        chapterGlossaryTermCount: chapterIndex.sourceTerms.size,
+    });
+    return serialized;
+}
+function getOfficialAliasOnlyMatch(result, context) {
+    if (!result || !context || !Array.isArray(result.variations) || result.variations.length < 2) {
+        return null;
+    }
+    const phrases = [
+        ...new Set(result.variations
+            .map((variation) => (typeof variation?.phrase === "string" ? variation.phrase.trim().toLowerCase() : ""))
+            .filter((phrase) => Boolean(phrase))),
+    ];
+    if (phrases.length < 2) {
+        return null;
+    }
+    const matchingGroup = context.aliasGroups.find((group) => {
+        const aliasSet = new Set(group.aliases.map((alias) => alias.trim().toLowerCase()).filter(Boolean));
+        return phrases.every((phrase) => aliasSet.has(phrase));
+    });
+    return matchingGroup ? { group: matchingGroup, phrases } : null;
+}
+function isOfficialAliasOnlyFinding(result, context) {
+    return Boolean(getOfficialAliasOnlyMatch(result, context));
 }
 
 
