@@ -2,7 +2,7 @@
 
 ## Project Structure
 - `src/index.ts` is the userscript entry point; it loads saved configuration, creates the UI, injects the WTR Lab control, and registers the Tampermonkey menu command.
-- `src/modules/` contains runtime behavior: analysis, provider configuration/API handling, retry/error helpers, state, utilities, and UI modules under `src/modules/ui/`.
+- `src/modules/` contains runtime behavior: analysis, provider configuration/API handling, retry/error helpers, state, utilities, WTR Lab reader API and official glossary handling, and UI modules under `src/modules/ui/`.
 - `src/styles/` contains CSS imported by `src/styles/main.css` and bundled through webpack style/css loaders.
 - `config/versions.ts` and `src/version.ts` hold version data used by build and release scripts.
 - `scripts/update-versions.ts` updates versioned files and generates `src/banner.ts` and `src/header.ts`.
@@ -25,7 +25,7 @@
 - Write TypeScript in the style already used: tab indentation, double quotes, no semicolons, and named exports for shared helpers.
 - Keep `tsconfig.json` constraints in mind: ES2021 target, ESNext modules, bundler module resolution, and `allowJs: false`.
 - Keep userscript-specific globals typed through `src/types/userscript.d.ts`; do not replace GM APIs with browser-only APIs without checking userscript support.
-- Follow existing module boundaries: provider URL/model logic belongs in `src/modules/providerConfig.ts`, persisted settings in `src/modules/state.ts`, analysis flow in `src/modules/analysisEngine.ts`, and DOM event/UI work under `src/modules/ui/`.
+- Follow existing module boundaries: provider URL/model logic belongs in `src/modules/providerConfig.ts`, persisted settings in `src/modules/state.ts`, analysis flow in `src/modules/analysisEngine.ts`, WTR Lab reader API and official glossary logic belongs in `src/modules/wtrLabApi.ts`, and DOM event/UI work under `src/modules/ui/`.
 - Keep CSS changes in the relevant file under `src/styles/` and ensure `src/styles/main.css` imports any new stylesheet.
 - Preserve provider-aware request behavior: unsupported model options such as temperature or reasoning effort are intentionally filtered based on metadata.
 

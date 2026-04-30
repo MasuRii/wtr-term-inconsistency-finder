@@ -1,6 +1,6 @@
 # WTR Lab Term Inconsistency Finder
 
-[![Version](https://img.shields.io/badge/version-5.5.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.5.1-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
@@ -21,6 +21,8 @@ A userscript for finding translation term inconsistencies in WTR Lab chapters. I
 - Deep analysis carries findings forward between iterations, verifies them in later passes, and downgrades uncertain findings to Needs Review instead of silently dropping or over-confirming them.
 - Session persistence for continuing analysis later.
 - Optional live sync with WTR Lab Term Replacer terms and optional JSON import fallback.
+- Optional WTR Lab reader API source mode for directly fetching nearby or custom chapter ranges without relying only on loaded page content.
+- Optional WTR Lab official glossary context with compact relevance filtering to reduce alias false positives and improve suggestions.
 - Debug logging mode with copy-ready, redacted Markdown reports for easier issue reporting.
 - Responsive modal UI for desktop and mobile.
 
@@ -38,9 +40,21 @@ For OpenAI-compatible providers, enter the base URL only. Examples: `https://api
 1. Open the Finder panel on a WTR Lab chapter.
 2. Configure provider, API keys, model, temperature, and optional reasoning/thinking effort.
 3. Use Show Keys only when you need to inspect or edit saved API key values.
-4. Choose whether to use live Term Replacer sync when the companion userscript is installed.
-5. Start analysis from the Finder tab.
-6. Review results, including Verified and Needs Review badges, then filter by priority/status and apply through Term Replacer or copy suggestions.
+4. Choose the chapter source in the Finder tab:
+   - Loaded page chapters analyzes chapters already present in the page DOM.
+   - WTR Lab reader API can fetch the current chapter with nearby chapters or a custom chapter range.
+5. Choose whether to use WTR Lab official glossary context and live Term Replacer sync when available.
+6. Start analysis from the Finder tab.
+7. Review results, including Verified and Needs Review badges, then filter by priority/status and apply through Term Replacer or copy suggestions.
+
+## Chapter Sources and Glossary Context
+
+The Finder supports two chapter sources:
+
+- Loaded page chapters: Uses chapter text already rendered on the WTR Lab page. This is the safest fallback and matches earlier behavior.
+- WTR Lab reader API: Fetches chapter text directly from WTR Lab for the current, nearby, or custom chapter range. The script resolves WTR glossary placeholders such as `※8⛬` before sending text to the AI.
+
+When Use WTR Lab Official Glossary Context is enabled, the script fetches the novel's official WTR glossary, caches it locally, and injects only relevant compact context into the prompt. Official alias groups are used to reduce false positives; glossary entries alone do not create findings unless the analyzed chapter text supports them.
 
 ## Debug Reports
 
@@ -94,6 +108,7 @@ src/
     analysisEngine.ts
     providerConfig.ts
     state.ts
+    wtrLabApi.ts
     ui/
   styles/
 dist/
