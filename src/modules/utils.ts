@@ -78,6 +78,8 @@ export function getDebugLogReport() {
 		`- Temperature: ${appState.config.temperature ?? "default"}`,
 		`- Reasoning mode: ${appState.config.reasoningMode || "off"}`,
 		`- Deep analysis depth: ${appState.config.deepAnalysisDepth || 1}`,
+		`- Chapter source: ${appState.config.chapterSource || "page"}`,
+		`- WTR official glossary context: ${appState.config.useOfficialWtrGlossary ? "enabled" : "disabled"}`,
 		`- API key count: ${Array.isArray(appState.config.apiKeys) ? appState.config.apiKeys.filter(Boolean).length : 0}`,
 		"",
 		"## Runtime",
@@ -244,8 +246,16 @@ export function applyTermReplacements(chapterData, terms = []) {
 	addSimpleGroup(simple_ci_partial, "gi", false, false)
 	addSimpleGroup(simple_ci_whole, "gi", true, false)
 
+	const replacementStats = {
+		chapterCount: chapterData.length,
+		compiledPatternCount: compiledTerms.length,
+		rawMatchCount: 0,
+		appliedMatchCount: 0,
+		chapterSummaries: [],
+	}
+
 	// 2. Process each chapter's text.
-	return chapterData.map((data) => {
+	const processedChapterData = chapterData.map((data) => {
 		// Skip processing if this is the active chapter
 		if (data.tracker && data.tracker.classList.contains("chapter-tracker active")) {
 			log(`Skipping term replacements on active chapter #${data.chapter} to avoid conflicts`)
@@ -299,6 +309,17 @@ export function applyTermReplacements(chapterData, terms = []) {
 		}
 
 		// 6. Apply winning matches to the string, from last to first to avoid index issues.
+		replacementStats.rawMatchCount += allMatches.length
+		replacementStats.appliedMatchCount += winningMatches.length
+		if (allMatches.length > 0 || winningMatches.length > 0) {
+			replacementStats.chapterSummaries.push({
+				chapter: data.chapter,
+				rawMatches: allMatches.length,
+				appliedMatches: winningMatches.length,
+				skippedOverlaps: allMatches.length - winningMatches.length,
+			})
+		}
+
 		for (let i = winningMatches.length - 1; i >= 0; i--) {
 			const match = winningMatches[i]
 			fullText = fullText.substring(0, match.start) + match.replacement + fullText.substring(match.end)
@@ -306,6 +327,9 @@ export function applyTermReplacements(chapterData, terms = []) {
 
 		return { ...data, text: fullText }
 	})
+
+	log("Completed replacement preprocessing for analysis.", replacementStats)
+	return processedChapterData
 }
 
 export function summarizeContextResults(existingResults, maxItems = 50) {
@@ -483,6 +507,25 @@ function detectScriptCategory(text) {
 	return "mixed"
 }
 
+function stripParentheticalAnnotations(value) {
+	if (!value || typeof value !== "string") {
+		return ""
+	}
+
+	const stripped = value
+		.replace(/\s*[([{][^\])}]*[\])}]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+
+	// Only drop annotations when a meaningful base remains. This avoids erasing concepts
+	// that are intentionally just a bracketed name.
+	return stripped || value.trim()
+}
+
+function getComparableConceptText(value) {
+	return stripParentheticalAnnotations(value)
+}
+
 function splitConceptVariants(concept) {
 	if (!concept || typeof concept !== "string") {
 		return []
@@ -493,7 +536,13 @@ function splitConceptVariants(concept) {
 		return []
 	}
 
-	const variants = [trimmed, ...trimmed.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i)]
+	const annotationStripped = stripParentheticalAnnotations(trimmed)
+	const variants = [
+		trimmed,
+		annotationStripped,
+		...trimmed.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i),
+		...annotationStripped.split(/\s*(?:\/|\||;|\bvs\.?\b|\bversus\b)\s*/i),
+	]
 	const seen = new Set()
 
 	return variants
@@ -508,7 +557,7 @@ function splitConceptVariants(concept) {
 }
 
 function normalizeConceptForComparison(str) {
-	return str
+	return getComparableConceptText(str)
 		.toLowerCase()
 		.replace(/[^a-z0-9\s]/g, " ")
 		.replace(/\s+/g, " ")
@@ -519,6 +568,43 @@ function getNormalizedConceptVariants(concept) {
 	return splitConceptVariants(concept)
 		.map((variant) => normalizeConceptForComparison(variant))
 		.filter(Boolean)
+}
+
+function hasUsefulConceptAnnotation(concept) {
+	return /[([{][^\])}]*([\u3400-\u9fff]|\balias\b|\bsource\b|\bcharacter\b|\btitle\b)[^\])}]*[\])}]/i.test(
+		concept || "",
+	)
+}
+
+function chooseMergedConcept(existingConcept, newConcept, existingQuality, newQuality) {
+	const existingNorm = normalizeConceptForComparison(existingConcept || "")
+	const newNorm = normalizeConceptForComparison(newConcept || "")
+
+	if (existingNorm && existingNorm === newNorm) {
+		if (hasUsefulConceptAnnotation(existingConcept)) {
+			return existingConcept
+		}
+		if (hasUsefulConceptAnnotation(newConcept)) {
+			return newConcept
+		}
+	}
+
+	return newQuality > existingQuality ? newConcept : existingConcept
+}
+
+function mergeUniqueVariations(existingVariations = [], newVariations = []) {
+	return [...existingVariations, ...newVariations].filter(
+		(variation, index, arr) =>
+			arr.findIndex((candidate) => candidate.phrase === variation.phrase && candidate.chapter === variation.chapter) ===
+			index,
+	)
+}
+
+function mergeUniqueSuggestions(existingSuggestions = [], newSuggestions = []) {
+	return [...existingSuggestions, ...newSuggestions].filter(
+		(suggestion, index, arr) =>
+			arr.findIndex((candidate) => candidate.suggestion === suggestion.suggestion) === index,
+	)
 }
 
 function areNormalizedConceptsSimilar(norm1, norm2) {
@@ -599,9 +685,11 @@ export function areSemanticallySimilar(concept1, concept2, options: any = {}) {
 
 	const c1 = concept1.toString()
 	const c2 = concept2.toString()
+	const comparable1 = getComparableConceptText(c1)
+	const comparable2 = getComparableConceptText(c2)
 
-	const script1 = detectScriptCategory(c1)
-	const script2 = detectScriptCategory(c2)
+	const script1 = detectScriptCategory(comparable1)
+	const script2 = detectScriptCategory(comparable2)
 
 	// Hard rule: do not treat clearly different scripts as similar.
 	if (script1 !== "unknown" && script2 !== "unknown" && script1 !== script2) {
@@ -626,8 +714,8 @@ export function areSemanticallySimilar(concept1, concept2, options: any = {}) {
 
 	// Block merging clearly unrelated when one looks like a proper name and the other does not.
 	// Composite concepts like "A / B" are evaluated per variant so proper-name alternates stay mergeable.
-	const proper1 = isProperNameLike(c1)
-	const proper2 = isProperNameLike(c2)
+	const proper1 = isProperNameLike(comparable1)
+	const proper2 = isProperNameLike(comparable2)
 	if (proper1 !== proper2) {
 		if (shouldLog) {
 			log(
@@ -675,7 +763,7 @@ export function mergeAnalysisResults(existingResults, newResults) {
 			if (!existing || !existing.concept) {
 				return false
 			}
-			return areSemanticallySimilar(existing.concept, newConcept)
+			return areSemanticallySimilar(existing.concept, newConcept, { silent: true })
 		})
 
 		if (duplicateIndex === -1) {
@@ -731,27 +819,21 @@ export function mergeAnalysisResults(existingResults, newResults) {
 		if (newQuality > existingQuality) {
 			merged[duplicateIndex] = {
 				...newResult,
-				// Preserve original concept if they are near-identical variants
-				concept: newResult.concept,
+				concept: chooseMergedConcept(existing.concept, newResult.concept, existingQuality, newQuality),
+				variations: mergeUniqueVariations(existing.variations || [], newResult.variations || []),
+				suggestions: mergeUniqueSuggestions(existing.suggestions || [], newResult.suggestions || []),
+				isNew: Boolean(existing.isNew && newResult.isNew),
 			}
-			log("Merged duplicate results by favoring higher quality new result for this concept.")
+			log("Merged duplicate results by favoring higher quality new result while preserving useful concept annotations.")
 		} else {
 			// Existing result has equal or higher quality, merge intelligently INTO existing.
 			const mergedResult = {
 				...existing,
-				concept: existing.concept,
+				concept: chooseMergedConcept(existing.concept, newResult.concept, existingQuality, newQuality),
 				priority: existing.priority,
 				explanation: existing.explanation,
-				// Merge variations (avoid duplicates)
-				variations: [...(existing.variations || []), ...(newResult.variations || [])].filter(
-					(variation, index, arr) =>
-						arr.findIndex((v) => v.phrase === variation.phrase && v.chapter === variation.chapter) ===
-						index,
-				),
-				// Merge suggestions (avoid duplicates)
-				suggestions: [...(existing.suggestions || []), ...(newResult.suggestions || [])].filter(
-					(suggestion, index, arr) => arr.findIndex((s) => s.suggestion === suggestion.suggestion) === index,
-				),
+				variations: mergeUniqueVariations(existing.variations || [], newResult.variations || []),
+				suggestions: mergeUniqueSuggestions(existing.suggestions || [], newResult.suggestions || []),
 				// Preserve status flags from higher quality result
 				status: existing.status || newResult.status,
 				isNew: Boolean(existing.isNew && newResult.isNew),

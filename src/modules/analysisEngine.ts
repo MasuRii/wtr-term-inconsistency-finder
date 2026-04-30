@@ -32,6 +32,7 @@ import {
 
 // Import from apiErrorHandler module
 import { handleApiError, classifyApiError, handleRateLimitError } from "./apiErrorHandler"
+import { formatOfficialGlossaryPromptContext, getOfficialAliasOnlyMatch } from "./wtrLabApi"
 
 /**
  * Get next available API key from the pool
@@ -130,6 +131,322 @@ function summarizeParsedResponse(parsedResponse) {
 			.map((item) => item?.concept)
 			.filter(Boolean),
 	}
+}
+
+function getOfficialGlossaryPromptContext(chapterText, chapterData) {
+	return formatOfficialGlossaryPromptContext(appState.runtime.officialGlossaryContext || null, chapterText, chapterData)
+}
+
+function filterOfficialAliasOnlyFindings(results, operationName) {
+	if (!Array.isArray(results) || !appState.runtime.officialGlossaryContext) {
+		return results
+	}
+
+	const suppressedMatches = []
+	const filteredResults = results.filter((result) => {
+		const match = getOfficialAliasOnlyMatch(result, appState.runtime.officialGlossaryContext)
+		if (match) {
+			suppressedMatches.push({
+				concept: result?.concept || "Unknown concept",
+				phrases: match.phrases,
+				officialCanonical: match.group.canonical,
+				officialSource: match.group.source,
+				officialAliases: match.group.aliases,
+			})
+			return false
+		}
+		return true
+	})
+
+	if (suppressedMatches.length > 0) {
+		log(
+			`${operationName}: Suppressed ${suppressedMatches.length} official WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`,
+			suppressedMatches,
+		)
+	}
+	return filteredResults
+}
+
+function summarizeResultsForDebug(results) {
+	return (Array.isArray(results) ? results : [])
+		.filter((result) => result && !result.error && result.concept)
+		.map((result) => {
+			const recommendedSuggestion = Array.isArray(result.suggestions)
+				? result.suggestions.find((suggestion) => suggestion?.is_recommended)?.suggestion ||
+					result.suggestions[0]?.suggestion ||
+					""
+				: ""
+			return {
+				concept: result.concept,
+				priority: result.priority || "INFO",
+				status: result.status || (result.isNew ? "New" : "Unverified"),
+				variationCount: Array.isArray(result.variations) ? result.variations.length : 0,
+				recommendedSuggestion,
+			}
+		})
+}
+
+function logResultSummary(operationName, results) {
+	const summary = summarizeResultsForDebug(results)
+	log(`${operationName}: Current result summary.`, {
+		resultCount: summary.length,
+		results: summary,
+	})
+}
+
+function isActionableFinding(result) {
+	const priority = String(result?.priority || "INFO").toUpperCase()
+	return Boolean(result && !result.error && result.concept && priority !== "INFO")
+}
+
+function getCleanSuggestionText(value) {
+	return typeof value === "string" ? value.trim() : ""
+}
+
+function createFallbackSuggestion(_result, suggestion, label, reasoning) {
+	const cleanSuggestion = getCleanSuggestionText(suggestion)
+	return {
+		display_text: cleanSuggestion ? `${label}: '${cleanSuggestion}'` : label,
+		suggestion: cleanSuggestion,
+		reasoning,
+	}
+}
+
+function getSuggestionCandidates(result) {
+	const candidates = []
+	if (Array.isArray(result?.suggestions)) {
+		result.suggestions.forEach((suggestion) => {
+			const cleanSuggestion = getCleanSuggestionText(suggestion?.suggestion)
+			if (cleanSuggestion) {
+				candidates.push(cleanSuggestion)
+			}
+		})
+	}
+	if (Array.isArray(result?.variations)) {
+		result.variations.forEach((variation) => {
+			const phrase = getCleanSuggestionText(variation?.phrase)
+			if (phrase) {
+				candidates.push(phrase)
+			}
+		})
+	}
+	const concept = getCleanSuggestionText(result?.concept).replace(/\s*[([{][^\])}]*[\])}]/g, "").trim()
+	if (concept) {
+		candidates.push(concept)
+	}
+
+	const seen = new Set()
+	return candidates.filter((candidate) => {
+		const normalizedCandidate = candidate.toLowerCase()
+		if (seen.has(normalizedCandidate)) {
+			return false
+		}
+		seen.add(normalizedCandidate)
+		return true
+	})
+}
+
+function normalizeActionableSuggestions(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const normalizationLog = []
+	const normalizedResults = results.map((result) => {
+		if (!isActionableFinding(result)) {
+			return result
+		}
+
+		const originalSuggestions = Array.isArray(result.suggestions) ? result.suggestions : []
+		const validSuggestions = originalSuggestions.filter((suggestion) => {
+			const hasSuggestion = getCleanSuggestionText(suggestion?.suggestion)
+			const hasDisplayText = getCleanSuggestionText(suggestion?.display_text)
+			return hasSuggestion || hasDisplayText
+		})
+		const candidates = getSuggestionCandidates({ ...result, suggestions: validSuggestions })
+		const nextSuggestions = validSuggestions.slice(0, 3).map((suggestion) => ({
+			...suggestion,
+			is_recommended: false,
+		}))
+
+		const fallbackRoles = [
+			{
+				label: "Dominant usage",
+				reasoning:
+					"Fallback dominant-usage option added because the AI returned fewer than three actionable suggestions. Review variation frequency before applying.",
+			},
+			{
+				label: "Glossary-informed option",
+				reasoning:
+					"Fallback glossary/editing option added because the AI returned fewer than three actionable suggestions. Treat as advisory unless supported by analyzed text.",
+			},
+			{
+				label: "Editorial option",
+				reasoning:
+					"Fallback editorial option added to preserve the required three-suggestion structure. Validate manually before applying.",
+			},
+		]
+
+		let candidateIndex = 0
+		while (nextSuggestions.length < 3) {
+			const candidate = candidates[candidateIndex] || candidates[0] || getCleanSuggestionText(result.concept)
+			const role = fallbackRoles[nextSuggestions.length]
+			nextSuggestions.push(createFallbackSuggestion(result, candidate, role.label, role.reasoning))
+			candidateIndex++
+		}
+
+		const originalRecommendedIndex = validSuggestions.findIndex((suggestion) => suggestion?.is_recommended === true)
+		const recommendedIndex = originalRecommendedIndex >= 0 && originalRecommendedIndex < 3 ? originalRecommendedIndex : 0
+		nextSuggestions.forEach((suggestion, index) => {
+			if (index === recommendedIndex) {
+				suggestion.is_recommended = true
+			} else {
+				delete suggestion.is_recommended
+			}
+		})
+
+		if (
+			originalSuggestions.length !== 3 ||
+			originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true).length !== 1
+		) {
+			normalizationLog.push({
+				concept: result.concept,
+				originalSuggestionCount: originalSuggestions.length,
+				normalizedSuggestionCount: nextSuggestions.length,
+				originalRecommendedCount: originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true)
+					.length,
+			})
+		}
+
+		return {
+			...result,
+			suggestions: nextSuggestions,
+		}
+	})
+
+	if (normalizationLog.length > 0) {
+		log(
+			`${operationName}: Normalized actionable suggestions to exactly 3 entries with exactly one recommendation.`,
+			normalizationLog,
+		)
+	}
+
+	return normalizedResults
+}
+
+function markFinalVerificationNewItemsForReview(items, operationName) {
+	if (!Array.isArray(items) || items.length === 0) {
+		return items
+	}
+
+	log(
+		`${operationName}: Marking ${items.length} final-pass new finding${items.length === 1 ? "" : "s"} as Needs Review because no later verification pass remains.`,
+		items.map((item) => item?.concept).filter(Boolean),
+	)
+
+	return items.map((item) => {
+		if (!item || item.error || !item.concept) {
+			return item
+		}
+		return {
+			...item,
+			status: "Needs Review",
+			latestVerificationStatus: "final_unverified_discovery",
+			verificationNote:
+				"This finding was newly discovered on the final verification pass and has not been verified by a later pass.",
+		}
+	})
+}
+
+function resultContainsUnresolvedPlaceholder(result) {
+	if (!Array.isArray(result?.variations)) {
+		return false
+	}
+	return result.variations.some((variation) => /※\d+[⛬〓]?/.test(String(variation?.phrase || "")))
+}
+
+function markPlaceholderArtifactResultsForReview(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const placeholderConcepts = []
+	const reviewedResults = results.map((result) => {
+		if (!result || result.error || !result.concept || !resultContainsUnresolvedPlaceholder(result)) {
+			return result
+		}
+
+		placeholderConcepts.push({
+			concept: result.concept,
+			priority: result.priority || "INFO",
+			previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+			placeholderVariations: (result.variations || [])
+				.map((variation) => variation?.phrase)
+				.filter((phrase) => /※\d+[⛬〓]?/.test(String(phrase || "")))
+				.slice(0, 5),
+		})
+
+		return {
+			...result,
+			status: "Needs Review",
+			latestVerificationStatus: "unresolved_placeholder_artifact",
+			verificationNote:
+				"This finding includes unresolved WTR placeholder markers, so it needs manual review before applying.",
+		}
+	})
+
+	if (placeholderConcepts.length > 0) {
+		log(
+			`${operationName}: Marked ${placeholderConcepts.length} placeholder-derived finding${placeholderConcepts.length === 1 ? "" : "s"} as Needs Review due to unresolved markers.`,
+			placeholderConcepts,
+		)
+	}
+
+	return reviewedResults
+}
+
+function markLowEvidenceResultsForReview(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const lowEvidenceConcepts = []
+	const reviewedResults = results.map((result) => {
+		if (!result || result.error || !result.concept) {
+			return result
+		}
+
+		const priority = String(result.priority || "INFO").toUpperCase()
+		const variationCount = Array.isArray(result.variations) ? result.variations.length : 0
+		const isInformational = priority === "INFO" || priority === "STYLISTIC"
+		if (isInformational || variationCount >= 2) {
+			return result
+		}
+
+		lowEvidenceConcepts.push({
+			concept: result.concept,
+			priority,
+			variationCount,
+			previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+		})
+
+		return {
+			...result,
+			status: "Needs Review",
+			latestVerificationStatus: "low_evidence_variation_count",
+			verificationNote:
+				"This non-informational finding has fewer than two extracted variations, so it needs manual review before applying.",
+		}
+	})
+
+	if (lowEvidenceConcepts.length > 0) {
+		log(
+			`${operationName}: Marked ${lowEvidenceConcepts.length} low-evidence finding${lowEvidenceConcepts.length === 1 ? "" : "s"} as Needs Review due to insufficient variations.`,
+			lowEvidenceConcepts,
+		)
+	}
+
+	return reviewedResults
 }
 
 function createStreamingRequestState(config) {
@@ -353,7 +670,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 		characterCount: combinedText.length,
 	})
 
-	const prompt = buildPrompt(combinedText, existingResults)
+	const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData))
 	const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 	const streamingRequestState = createStreamingRequestState(appState.config)
 
@@ -453,8 +770,11 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 					)
 					return
 				}
-				const verifiedItems = parsedResponse.verified_inconsistencies || []
-				const newItems = parsedResponse.new_inconsistencies || []
+				const verifiedItems = filterOfficialAliasOnlyFindings(
+					parsedResponse.verified_inconsistencies || [],
+					operationName,
+				)
+				const newItems = filterOfficialAliasOnlyFindings(parsedResponse.new_inconsistencies || [], operationName)
 
 				verifiedItems.forEach((item) => {
 					item.isNew = false
@@ -487,10 +807,24 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 					handleApiError("Invalid response format for initial run. Expected a JSON array.")
 					return
 				}
-				parsedResponse.forEach((r) => (r.isNew = true))
-				appState.runtime.cumulativeResults = parsedResponse
+				const filteredInitialResults = filterOfficialAliasOnlyFindings(parsedResponse, operationName)
+				filteredInitialResults.forEach((r) => (r.isNew = true))
+				appState.runtime.cumulativeResults = filteredInitialResults
 			}
 
+			appState.runtime.cumulativeResults = normalizeActionableSuggestions(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
+			appState.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
+			appState.runtime.cumulativeResults = markLowEvidenceResultsForReview(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
+			logResultSummary(operationName, appState.runtime.cumulativeResults)
 			saveSessionResults()
 			updateStatusIndicator("complete", "Complete!")
 			const continueBtn = document.getElementById("wtr-if-continue-btn")
@@ -620,7 +954,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 			characterCount: combinedText.length,
 		})
 
-		const prompt = buildDeepAnalysisPrompt(combinedText, existingResults)
+		const prompt = buildDeepAnalysisPrompt(
+			combinedText,
+			existingResults,
+			getOfficialGlossaryPromptContext(combinedText, chapterData),
+		)
 		const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 		const streamingRequestState = createStreamingRequestState(appState.config)
 
@@ -724,8 +1062,11 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 						delete appState.runtime.deepAnalysisStartTimes[iterationKey]
 						return
 					}
-					const verifiedItems = parsedResponse.verified_inconsistencies || []
-					const newItems = parsedResponse.new_inconsistencies || []
+					const verifiedItems = filterOfficialAliasOnlyFindings(
+						parsedResponse.verified_inconsistencies || [],
+						operationName,
+					)
+					let newItems = filterOfficialAliasOnlyFindings(parsedResponse.new_inconsistencies || [], operationName)
 
 					verifiedItems.forEach((item) => {
 						item.isNew = false
@@ -734,6 +1075,9 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					newItems.forEach((item) => {
 						item.isNew = true
 					})
+					if (currentDepth >= targetDepth) {
+						newItems = markFinalVerificationNewItemsForReview(newItems, operationName)
+					}
 
 					log(
 						`${operationName}: ${verifiedItems.length} concepts re-verified. ${newItems.length} new concepts found.`,
@@ -763,14 +1107,15 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 						delete appState.runtime.deepAnalysisStartTimes[iterationKey]
 						return
 					}
-					parsedResponse.forEach((r) => (r.isNew = true))
+					const filteredInitialResults = filterOfficialAliasOnlyFindings(parsedResponse, operationName)
+					filteredInitialResults.forEach((r) => (r.isNew = true))
 					const resultsToMerge =
-						currentDepth >= targetDepth && parsedResponse.length > 0
-							? markFinalInitialResultsForReview(parsedResponse)
-							: parsedResponse
-					if (resultsToMerge !== parsedResponse) {
+						currentDepth >= targetDepth && filteredInitialResults.length > 0
+							? markFinalInitialResultsForReview(filteredInitialResults)
+							: filteredInitialResults
+					if (resultsToMerge !== filteredInitialResults) {
 						log(
-							`${operationName}: Final iteration produced ${parsedResponse.length} new unverified result${parsedResponse.length === 1 ? "" : "s"}; marking as Needs Review because no verification pass remains.`,
+							`${operationName}: Final iteration produced ${filteredInitialResults.length} new unverified result${filteredInitialResults.length === 1 ? "" : "s"}; marking as Needs Review because no verification pass remains.`,
 						)
 					}
 					appState.runtime.cumulativeResults = mergeAnalysisResults(
@@ -778,6 +1123,20 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 						resultsToMerge,
 					)
 				}
+
+				appState.runtime.cumulativeResults = normalizeActionableSuggestions(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
+				appState.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
+				appState.runtime.cumulativeResults = markLowEvidenceResultsForReview(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
+				logResultSummary(operationName, appState.runtime.cumulativeResults)
 
 				// Save session results after each iteration
 				saveSessionResults()

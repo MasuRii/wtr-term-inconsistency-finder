@@ -68,6 +68,52 @@ export function createUI() {
                         </div>
                     </div>
 
+                    <!-- Chapter Source Section -->
+                    <div class="wtr-if-section">
+                        <div class="wtr-if-section-header">
+                            <h3>Chapter Source</h3>
+                        </div>
+                        <div class="wtr-if-section-content">
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-chapter-source">Analysis Source</label>
+                                <select id="wtr-if-chapter-source">
+                                    <option value="page">Loaded page chapters</option>
+                                    <option value="wtr-api">WTR Lab reader API</option>
+                                </select>
+                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves official glossary placeholders before AI analysis.</small>
+                            </div>
+                            <div id="wtr-if-wtr-api-range-controls" class="wtr-if-api-range-controls">
+                                <div class="wtr-if-form-group">
+                                    <label for="wtr-if-wtr-api-range-mode">API Chapter Range</label>
+                                    <select id="wtr-if-wtr-api-range-mode">
+                                        <option value="nearby">Current chapter with nearby chapters</option>
+                                        <option value="custom">Custom chapter range</option>
+                                    </select>
+                                </div>
+                                <div class="wtr-if-range-grid" data-range-mode="nearby">
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-previous">Previous chapters</label>
+                                        <input type="number" id="wtr-if-wtr-api-previous" min="0" max="25" step="1" value="2">
+                                    </div>
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-next">Next chapters</label>
+                                        <input type="number" id="wtr-if-wtr-api-next" min="0" max="25" step="1" value="2">
+                                    </div>
+                                </div>
+                                <div class="wtr-if-range-grid" data-range-mode="custom">
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-start">Start chapter</label>
+                                        <input type="number" id="wtr-if-wtr-api-start" min="1" step="1" placeholder="e.g. 390">
+                                    </div>
+                                    <div class="wtr-if-form-group">
+                                        <label for="wtr-if-wtr-api-end">End chapter</label>
+                                        <input type="number" id="wtr-if-wtr-api-end" min="1" step="1" placeholder="e.g. 400">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Deep Analysis Configuration Section -->
                     <div class="wtr-if-section">
                         <div class="wtr-if-section-header">
@@ -224,6 +270,13 @@ export function createUI() {
                                     <input type="checkbox" id="wtr-if-use-json">
                                     Use Imported Term Replacer JSON File (Optional Override)
                                 </label>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-official-wtr-glossary">
+                                    Use WTR Lab Official Glossary Context
+                                </label>
+                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary to suppress official alias false positives and improve AI suggestions.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
@@ -419,6 +472,21 @@ export function syncProviderConfigUI() {
 		}
 	}
 	updateAIControlHints()
+}
+
+export function updateChapterSourceUI() {
+	const sourceEl = document.getElementById("wtr-if-chapter-source")
+	const rangeControls = document.getElementById("wtr-if-wtr-api-range-controls")
+	const rangeModeEl = document.getElementById("wtr-if-wtr-api-range-mode")
+	const source = sourceEl?.value || appState.config.chapterSource || "page"
+	const rangeMode = rangeModeEl?.value || appState.config.wtrApiRangeMode || "nearby"
+
+	if (rangeControls) {
+		rangeControls.style.display = source === "wtr-api" ? "" : "none"
+	}
+	document.querySelectorAll<HTMLElement>(".wtr-if-range-grid[data-range-mode]").forEach((group) => {
+		group.style.display = source === "wtr-api" && group.dataset.rangeMode === rangeMode ? "grid" : "none"
+	})
 }
 
 export function updateAIControlHints() {
@@ -686,6 +754,14 @@ export async function togglePanel(show = null) {
 		syncProviderConfigUI()
 		document.getElementById("wtr-if-use-live-term-replacer-sync").checked = appState.config.useLiveTermReplacerSync
 		document.getElementById("wtr-if-use-json").checked = appState.config.useJson
+		document.getElementById("wtr-if-use-official-wtr-glossary").checked = appState.config.useOfficialWtrGlossary
+		document.getElementById("wtr-if-chapter-source").value = appState.config.chapterSource || "page"
+		document.getElementById("wtr-if-wtr-api-range-mode").value = appState.config.wtrApiRangeMode || "nearby"
+		document.getElementById("wtr-if-wtr-api-previous").value = String(appState.config.wtrApiPreviousChapters ?? 2)
+		document.getElementById("wtr-if-wtr-api-next").value = String(appState.config.wtrApiNextChapters ?? 2)
+		document.getElementById("wtr-if-wtr-api-start").value = String(appState.config.wtrApiStartChapter || "")
+		document.getElementById("wtr-if-wtr-api-end").value = String(appState.config.wtrApiEndChapter || "")
+		updateChapterSourceUI()
 		document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
 		updateDebugLoggingUI()
 		document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults

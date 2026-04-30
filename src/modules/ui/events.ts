@@ -28,10 +28,102 @@ import {
 	updateStatusIndicator,
 	updateTermReplacerIntegrationUI,
 	updateAIControlHints,
+	updateChapterSourceUI,
 	toggleApiKeyVisibility,
 	updateDebugLoggingUI,
 } from "./panel"
 import { displayResults } from "./display"
+import {
+	buildWtrApiChapterRange,
+	fetchOfficialWtrGlossaryContext,
+	fetchWtrChapter,
+	getWtrPageContext,
+} from "../wtrLabApi"
+
+function summarizeChapterCollection(chapterData) {
+	return (Array.isArray(chapterData) ? chapterData : []).map((chapter) => ({
+		chapter: chapter.chapter,
+		title: chapter.title || "",
+		textLength: typeof chapter.text === "string" ? chapter.text.length : 0,
+		charCount: chapter.charCount || null,
+		placeholderCount: chapter.placeholderCount || 0,
+		glossaryTermCount: Array.isArray(chapter.glossaryTerms) ? chapter.glossaryTerms.length : 0,
+	}))
+}
+
+function summarizeUnresolvedPlaceholders(chapterData) {
+	return (Array.isArray(chapterData) ? chapterData : [])
+		.map((chapter) => {
+			const text = typeof chapter.text === "string" ? chapter.text : ""
+			const matches = [...text.matchAll(/※\d+[⛬〓]?/g)].map((match) => match[0])
+			return {
+				chapter: chapter.chapter,
+				count: matches.length,
+				markers: [...new Set(matches)].slice(0, 10),
+			}
+		})
+		.filter((summary) => summary.count > 0)
+}
+
+function logUnresolvedPlaceholderAudit(stage, chapterData) {
+	const summaries = summarizeUnresolvedPlaceholders(chapterData)
+	if (summaries.length === 0) {
+		log(`${stage}: No unresolved WTR placeholders detected after preprocessing.`)
+		return
+	}
+
+	log(`${stage}: Unresolved WTR placeholders remain after preprocessing.`, {
+		chapterCount: summaries.length,
+		totalMarkers: summaries.reduce((total, summary) => total + summary.count, 0),
+		chapters: summaries,
+	})
+}
+
+async function collectChapterDataForAnalysis(liveTerms) {
+	appState.runtime.officialGlossaryContext = null
+	const pageContext = getWtrPageContext()
+
+	if (appState.config.useOfficialWtrGlossary && pageContext) {
+		updateStatusIndicator("running", "Loading WTR official glossary...")
+		appState.runtime.officialGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+	}
+
+	if (appState.config.chapterSource === "wtr-api" && pageContext) {
+		const chapterRange = buildWtrApiChapterRange(pageContext, appState.config)
+		log("WTR reader API chapter request prepared.", {
+			rawId: pageContext.rawId,
+			serieSlug: pageContext.serieSlug,
+			currentChapter: pageContext.chapterNo,
+			rangeMode: appState.config.wtrApiRangeMode || "nearby",
+			requestedChapters: chapterRange,
+		})
+		const fetchedChapters = []
+		for (let index = 0; index < chapterRange.length; index++) {
+			const chapterNo = chapterRange[index]
+			updateStatusIndicator("running", `Fetching WTR chapter ${chapterNo} (${index + 1}/${chapterRange.length})...`)
+			fetchedChapters.push(await fetchWtrChapter(pageContext, chapterNo))
+		}
+		log(
+			`Collected ${fetchedChapters.length} chapter${fetchedChapters.length === 1 ? "" : "s"} from WTR Lab reader API.`,
+			summarizeChapterCollection(fetchedChapters),
+		)
+		logUnresolvedPlaceholderAudit("WTR API fetch", fetchedChapters)
+		const processedChapters = applyTermReplacements(fetchedChapters, liveTerms)
+		logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters)
+		return processedChapters
+	}
+
+	if (appState.config.chapterSource === "wtr-api" && !pageContext) {
+		log("WTR reader API source was selected, but the current page URL did not expose raw_id/chapter metadata. Falling back to loaded page chapters.")
+	}
+
+	const chapterData = crawlChapterData()
+	log("Collected loaded page chapters for analysis.", summarizeChapterCollection(chapterData))
+	logUnresolvedPlaceholderAudit("Loaded page crawl", chapterData)
+	const processedChapters = applyTermReplacements(chapterData, liveTerms)
+	logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters)
+	return processedChapters
+}
 
 async function startAnalysis(isContinuation = false) {
 	try {
@@ -95,8 +187,31 @@ async function startAnalysis(isContinuation = false) {
 			}
 		}
 
-		const chapterData = crawlChapterData()
-		const processedData = applyTermReplacements(chapterData, liveTerms)
+		let processedData
+		try {
+			processedData = await collectChapterDataForAnalysis(liveTerms)
+		} catch (error) {
+			if (appState.config.chapterSource !== "wtr-api") {
+				throw error
+			}
+			log("WTR reader API collection failed. Falling back to loaded page chapters.", error)
+			const statusEl = document.getElementById("wtr-if-status")
+			if (statusEl) {
+				statusEl.textContent = "WTR API fetch failed; using loaded page chapters instead."
+				setTimeout(() => {
+					if (statusEl) {
+						statusEl.textContent = ""
+					}
+				}, 4500)
+			}
+			const chapterData = crawlChapterData()
+			processedData = applyTermReplacements(chapterData, liveTerms)
+		}
+
+		if (!processedData.length) {
+			throw new Error("No chapter text was available for analysis.")
+		}
+
 		findInconsistenciesDeepAnalysis(
 			processedData,
 			isContinuation ? appState.runtime.cumulativeResults : [],
@@ -144,6 +259,13 @@ export async function handleSaveConfig() {
 	appState.config.model = document.getElementById("wtr-if-model").value
 	appState.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked
 	appState.config.useJson = document.getElementById("wtr-if-use-json").checked
+	appState.config.chapterSource = document.getElementById("wtr-if-chapter-source").value
+	appState.config.wtrApiRangeMode = document.getElementById("wtr-if-wtr-api-range-mode").value
+	appState.config.wtrApiPreviousChapters = parseInt(document.getElementById("wtr-if-wtr-api-previous").value, 10) || 0
+	appState.config.wtrApiNextChapters = parseInt(document.getElementById("wtr-if-wtr-api-next").value, 10) || 0
+	appState.config.wtrApiStartChapter = document.getElementById("wtr-if-wtr-api-start").value.trim()
+	appState.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim()
+	appState.config.useOfficialWtrGlossary = document.getElementById("wtr-if-use-official-wtr-glossary").checked
 	appState.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
 	appState.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
 	appState.config.reasoningMode = document.getElementById("wtr-if-reasoning-mode").value
@@ -169,7 +291,7 @@ export function handleFileImportAndAnalyze(event) {
 	}
 	const isContinuation = event.target.dataset.continuation === "true"
 	const reader = new FileReader()
-	reader.onload = (e) => {
+	reader.onload = async (e) => {
 		try {
 			const data = JSON.parse(String(e.target.result))
 			const novelSlug = getNovelSlug()
@@ -199,6 +321,11 @@ export function handleFileImportAndAnalyze(event) {
 			}
 			// --- End Validation ---
 
+			appState.runtime.officialGlossaryContext = null
+			const pageContext = getWtrPageContext()
+			if (appState.config.useOfficialWtrGlossary && pageContext) {
+				appState.runtime.officialGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+			}
 			const chapterData = crawlChapterData()
 			const processedData = applyTermReplacements(chapterData, terms || [])
 			const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
@@ -721,6 +848,14 @@ function importConfiguration() {
 				document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
 					appState.config.useLiveTermReplacerSync
 				document.getElementById("wtr-if-use-json").checked = appState.config.useJson
+				document.getElementById("wtr-if-use-official-wtr-glossary").checked = appState.config.useOfficialWtrGlossary
+				document.getElementById("wtr-if-chapter-source").value = appState.config.chapterSource || "page"
+				document.getElementById("wtr-if-wtr-api-range-mode").value = appState.config.wtrApiRangeMode || "nearby"
+				document.getElementById("wtr-if-wtr-api-previous").value = String(appState.config.wtrApiPreviousChapters ?? 2)
+				document.getElementById("wtr-if-wtr-api-next").value = String(appState.config.wtrApiNextChapters ?? 2)
+				document.getElementById("wtr-if-wtr-api-start").value = String(appState.config.wtrApiStartChapter || "")
+				document.getElementById("wtr-if-wtr-api-end").value = String(appState.config.wtrApiEndChapter || "")
+				updateChapterSourceUI()
 				document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
 				updateDebugLoggingUI()
 				updateTermReplacerIntegrationUI()
@@ -827,6 +962,33 @@ export function addEventListeners() {
 	})
 
 	panel.querySelector("#wtr-if-reasoning-mode").addEventListener("change", updateAIControlHints)
+
+	panel.querySelector("#wtr-if-chapter-source").addEventListener("change", (e) => {
+		appState.config.chapterSource = e.target.value
+		updateChapterSourceUI()
+		saveConfig()
+	})
+
+	panel.querySelector("#wtr-if-wtr-api-range-mode").addEventListener("change", (e) => {
+		appState.config.wtrApiRangeMode = e.target.value
+		updateChapterSourceUI()
+		saveConfig()
+	})
+
+	panel.querySelectorAll("#wtr-if-wtr-api-previous, #wtr-if-wtr-api-next, #wtr-if-wtr-api-start, #wtr-if-wtr-api-end").forEach((input) => {
+		input.addEventListener("change", () => {
+			appState.config.wtrApiPreviousChapters = parseInt(document.getElementById("wtr-if-wtr-api-previous").value, 10) || 0
+			appState.config.wtrApiNextChapters = parseInt(document.getElementById("wtr-if-wtr-api-next").value, 10) || 0
+			appState.config.wtrApiStartChapter = document.getElementById("wtr-if-wtr-api-start").value.trim()
+			appState.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim()
+			saveConfig()
+		})
+	})
+
+	panel.querySelector("#wtr-if-use-official-wtr-glossary").addEventListener("change", (e) => {
+		appState.config.useOfficialWtrGlossary = e.target.checked
+		saveConfig()
+	})
 
 	panel.querySelector("#wtr-if-logging-enabled").addEventListener("change", (e) => {
 		appState.config.loggingEnabled = e.target.checked

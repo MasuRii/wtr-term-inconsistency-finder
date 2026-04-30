@@ -26,6 +26,13 @@ export const appState: any = {
 		model: "",
 		useJson: false,
 		useLiveTermReplacerSync: true,
+		chapterSource: "page",
+		wtrApiRangeMode: "nearby",
+		wtrApiPreviousChapters: 2,
+		wtrApiNextChapters: 2,
+		wtrApiStartChapter: "",
+		wtrApiEndChapter: "",
+		useOfficialWtrGlossary: true,
 		loggingEnabled: false,
 		temperature: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].defaultTemperature,
 		reasoningMode: "off",
@@ -41,6 +48,7 @@ export const appState: any = {
 		apiKeyCooldowns: new Map(),
 		failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
 		providerModelMetadata: {},
+		officialGlossaryContext: null,
 		currentIteration: 1,
 		totalIterations: 1,
 	},
@@ -146,6 +154,27 @@ export async function loadConfig() {
 	}
 	if (typeof savedConfig.reasoningMode !== "string") {
 		savedConfig.reasoningMode = "off"
+	}
+	if (savedConfig.chapterSource !== "wtr-api") {
+		savedConfig.chapterSource = "page"
+	}
+	if (savedConfig.wtrApiRangeMode !== "custom") {
+		savedConfig.wtrApiRangeMode = "nearby"
+	}
+	if (typeof savedConfig.wtrApiPreviousChapters !== "number") {
+		savedConfig.wtrApiPreviousChapters = 2
+	}
+	if (typeof savedConfig.wtrApiNextChapters !== "number") {
+		savedConfig.wtrApiNextChapters = 2
+	}
+	if (typeof savedConfig.wtrApiStartChapter !== "string" && typeof savedConfig.wtrApiStartChapter !== "number") {
+		savedConfig.wtrApiStartChapter = ""
+	}
+	if (typeof savedConfig.wtrApiEndChapter !== "string" && typeof savedConfig.wtrApiEndChapter !== "number") {
+		savedConfig.wtrApiEndChapter = ""
+	}
+	if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
+		savedConfig.useOfficialWtrGlossary = true
 	}
 	if (typeof savedConfig.temperature !== "number") {
 		savedConfig.temperature = providerDefaults.defaultTemperature

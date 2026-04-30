@@ -198,6 +198,19 @@
 }
 
 .wtr-if-deep-analysis-controls,
-.wtr-if-filter-controls {
+.wtr-if-filter-controls,
+.wtr-if-api-range-controls {
 	width: 100%;
+}
+
+.wtr-if-range-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (width <= 768px) {
+	.wtr-if-range-grid {
+		grid-template-columns: 1fr;
+	}
 }
