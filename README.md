@@ -1,7 +1,8 @@
 # WTR Lab Term Inconsistency Finder
 
-[![Version](https://img.shields.io/badge/version-5.5.1-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.5.2-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
 
 [![WTR Lab Term Inconsistency](https://pixvid.org/images/2025/11/11/kBrXW.gif)](https://pixvid.org/image/kBrXW)
@@ -28,7 +29,7 @@ A userscript for finding translation term inconsistencies in WTR Lab chapters. I
 
 ## Installation
 
-1. Install a userscript manager such as [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
+1. Install a userscript manager. Recommended: [Violentmonkey](https://violentmonkey.github.io/), [Stay](https://github.com/nicennnnnnnlee/stay), or [ScriptCat](https://github.com/ScriptCatOrg/scriptcat). Tampermonkey is also supported for compatibility but is not the recommended choice.
 2. Install the script from [Greasy Fork](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder).
 3. Open a WTR Lab chapter and click the Finder control.
 4. In Configuration, choose Gemini or OpenAI-Compatible, enter your API key, set the base URL, refresh models, select a model, and save.
