@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ---
+## [5.5.2] - 2026-05-01
+
+### Added
+- Shared userscript API compatibility helpers for legacy `GM_*` and modern `GM.*` managers, with local fallback storage/request handling when those APIs are unavailable.
+
+### Changed
+- Updated installation guidance to recommend Violentmonkey, Stay, or ScriptCat first while keeping Tampermonkey documented as a compatibility option.
+- Reworked the AI system and glossary prompt format into XML-style sections with stronger context-aware disambiguation rules for titles, aliases, ordinary nouns, dialogue, and glossary-assisted matching.
+- Adjusted tablet/mobile modal sizing to preserve margins, rounded corners, and safe-area padding on narrow viewports while still allowing full-screen fallback on tiny screens.
+
+### Fixed
+- Reset deep-analysis retry timing state between new runs and after successful iterations so completed or aborted passes do not trigger false-positive retry exhaustion on later analyses.
+- Routed userscript requests, storage, and menu registration through compatibility wrappers so model loading, glossary fetching, and menu actions keep working across broader userscript manager implementations.
+
+---
 ## [5.5.1] - 2026-04-30
 
 ### Added

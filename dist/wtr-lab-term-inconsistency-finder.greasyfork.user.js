@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.5.1
+// @version 5.5.2
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -11,9 +11,13 @@
 // @grant GM_addStyle
 // @grant GM_registerMenuCommand
 // @grant GM_xmlhttpRequest
+// @grant GM.setValue
+// @grant GM.getValue
+// @grant GM.registerMenuCommand
+// @grant GM.xmlHttpRequest
 // @icon https://www.google.com/s2/favicons?sz=64&domain=wtr-lab.com
 // @license MIT
-// @namespace http://tampermonkey.net/
+// @namespace https://github.com/MasuRii/wtr-term-inconsistency-finder
 // @run-at document-idle
 // @website https://github.com/MasuRii/wtr-term-inconsistency-finder
 // ==/UserScript==
@@ -417,12 +421,17 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 	margin-top: 12px;
 }
 
+/* Narrow viewports: tablets and large phones in portrait.
+	   Modal stays centered with margin, not full-screen. */
 @media (width <= 768px) {
 	#wtr-if-panel {
-		border-radius: 0;
-		height: 100dvh;
-		max-height: none;
-		width: 100%;
+		border-radius: 10px;
+		max-height: calc(100dvh - 24px);
+		width: min(96vw, 860px);
+	}
+
+	.wtr-if-content {
+		padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
 	}
 
 	.wtr-if-finder-controls,
@@ -453,7 +462,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 	.wtr-if-section {
 		border-left: none;
 		border-right: none;
-		border-radius: 0;
+		border-radius: 8px;
 		margin-bottom: 12px;
 	}
 
@@ -468,6 +477,21 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 
 	.wtr-if-api-keys-container-wrapper {
 		max-height: 150px;
+	}
+}
+
+/* Tiny viewports: very narrow phones or ultra-short screens.
+	   Full-screen to maximize every pixel of usable space. */
+@media (width <= 480px), (width <= 768px) and (height <= 480px) {
+	#wtr-if-panel {
+		border-radius: 0;
+		height: 100dvh;
+		max-height: none;
+		width: 100%;
+	}
+
+	.wtr-if-section {
+		border-radius: 0;
 	}
 }
 
@@ -581,6 +605,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 	font-family: var(--bs-body-font-family, sans-serif);
 	left: 50%;
 	max-height: min(88vh, 900px);
+	max-height: min(88dvh, 900px);
 	max-width: 860px;
 	position: fixed;
 	top: 50%;
@@ -1698,53 +1723,79 @@ function createUserFriendlyErrorMessage(errorClassification) {
  * Advanced system prompt template for AI analysis
  * Contains comprehensive instructions for detecting translation inconsistencies
  */
-const ADVANCED_SYSTEM_PROMPT = `You are a Translation Consistency Editor for machine-translated novels. Detect only user-actionable term inconsistencies in the supplied text, then return strict JSON matching the requested schema.
+const ADVANCED_SYSTEM_PROMPT = `<role>
+You are a Translation Consistency Editor for machine-translated novels. Detect only user-actionable term inconsistencies in the supplied text. Return strict JSON matching the requested schema.
+</role>
 
-## Goal
-Find recurring entities translated inconsistently across chapters: character names, aliases used incorrectly, locations, organizations, titles, items, abilities, techniques, species, realms, and important recurring concepts. Prefer high-confidence issues that harm readability.
+<objective>
+Find recurring entities translated inconsistently across chapters: character names, incorrectly used aliases, locations, organizations, titles, items, abilities, techniques, species, realms, and important recurring concepts. Prefer high-confidence issues that harm readability.
+</objective>
 
-## Method
+<analysis_workflow>
 1. Scan recurring terms and build entity profiles from context.
-2. Normalize harmless formatting before comparing: quote style, surrounding punctuation, capitalization-only differences when meaning is unchanged.
-3. Link variants only when context supports the same source/entity. Use character/location context, speaker, chapter order, component-based names, and source-term clues.
-4. Discard weak matches, intentional aliases, contextual nuance, and true term evolutions.
-5. For each remaining issue, provide concise evidence snippets and practical standardization suggestions.
+2. Normalize harmless formatting before comparison: quote style, surrounding punctuation, and capitalization-only differences when meaning is unchanged.
+3. Link variants ONLY when context supports the same source/entity. Use character/location context, speaker, chapter order, component-based names, and source-term clues.
+4. Decide whether each difference changes consistency by reading the surrounding sentence/paragraph, chapter title, nearby actions, narrator wording, dialogue speaker, and glossary clues before treating terms as variants.
+5. Discard weak matches, intentional aliases, contextual nuance, and true term evolutions.
+6. For each remaining issue, provide concise evidence snippets and practical standardization suggestions.
+</analysis_workflow>
 
-## Do Not Flag
+<context_aware_requirements>
+- MUST judge meaning in chapter context, not isolated word similarity. Different English terms are valid when surrounding text shows different referents, abilities, ranks, locations, speakers, tones, or narrative functions.
+- MUST disambiguate proper names, titles, aliases, epithets, ranks, and common nouns. A word used as a title/name in one passage and as an ordinary noun or descriptive phrase in another is NOT an inconsistency unless context proves the same source concept was rendered two ways.
+- MUST treat dialogue and narration separately when needed. Speaker-specific nicknames, honorific choices, insults, jokes, or in-world terminology MAY be intentional; flag them ONLY when another context clearly uses a conflicting translation for the same entity/concept.
+- MUST use chapter-local evidence such as titles, introductions, repeated nearby descriptors, pronouns, relationships, and action continuity to decide whether two terms refer to the same thing.
+- MUST use official glossary aliases as context for accepted variants and source mapping. MUST NOT flag alias-only differences unless the chapter text proves one alias is a mistaken translation in that specific usage.
+- MUST flag genuine consistency issues when context shows the same source/entity/concept is rendered incompatibly across chapters or passages, especially when the variation affects names, titles, abilities, organizations, locations, or recurring key terms.
+</context_aware_requirements>
+
+<do_not_flag>
 - Official glossary alias groups supplied in glossary context unless the chapter text proves one alias is used as an actual mistaken translation.
 - Terms differing only by straight/smart quote style or trivial title colon punctuation.
 - Systematic site-level chapter number/title offsets that repeat across consecutive chapters.
 - Author notes, translator notes, casual expressions, onomatopoeia, emotional sounds, or intentionally flavorful speech.
 - Character aliases, nicknames, undercover names, online handles, shortened usernames, or progression names when context shows they are intentional.
 - Similar terms used by different speakers/entities with distinct meanings, such as two different techniques.
+</do_not_flag>
 
-## What To Flag
-- Same entity/source concept rendered with incompatible English names.
-- Root terms whose inconsistency causes dependent title/location/organization variants.
-- Pinyin/romanized terms mixed into otherwise English terminology when context suggests they should be localized.
-- Username formatting/localization issues only when context clearly indicates a player ID/handle. Do not flag NPC names or single concatenated handles such as PlayerName.
-- Non-English honorific usage only when it creates a consistency/localization issue worth reviewing.
+<flag_when>
+- Same entity/source concept is rendered with incompatible English names.
+- Root terms cause dependent title/location/organization variants.
+- Pinyin/romanized terms are mixed into otherwise English terminology when context suggests localization.
+- Username formatting/localization issues exist and context clearly indicates a player ID/handle. MUST NOT flag NPC names or single concatenated handles such as PlayerName.
+- Non-English honorific usage creates a consistency/localization issue worth reviewing.
+</flag_when>
 
-## Priority
-Use CRITICAL for central, frequent, ongoing root/main-character issues; HIGH for important recurring names/places/abilities; MEDIUM for supporting recurring issues; LOW for minor or likely term-evolution reviews; STYLISTIC for username/honorific/localization style suggestions; INFO only for non-actionable nuance/alias notes.
+<priority_policy>
+Use CRITICAL for central, frequent, ongoing root/main-character issues. Use HIGH for important recurring names/places/abilities. Use MEDIUM for supporting recurring issues. Use LOW for minor or likely term-evolution reviews. Use STYLISTIC for username/honorific/localization style suggestions. Use INFO only for non-actionable nuance/alias notes.
+</priority_policy>
 
-## Recommendation Policy
-- For actionable findings, provide exactly 3 suggestions: one dominant analyzed-text usage option, one glossary-informed option when available, and one editorial best/readability option. If a role has no distinct candidate, still provide 3 text-supported options by varying the reasoning, not by inventing unsupported terms.
-- Mark exactly one suggestion with is_recommended: true.
-- The recommended suggestion should usually be the dominant consistent usage in the supplied text, especially if it appears across multiple chapters after preprocessing.
-- Official glossary data is advisory for source mapping, aliases, and possible corrections. Do not automatically recommend a glossary term over a dominant text term.
-- Let a glossary correction override dominant usage only when the correction clearly says the dominant usage is wrong and the chapter evidence supports that correction.
+<recommendation_policy>
+- Actionable findings MUST provide exactly 3 suggestions: one dominant analyzed-text usage option, one glossary-informed option when available, and one editorial best/readability option. If a role has no distinct candidate, still provide 3 text-supported options by varying the reasoning, not by inventing unsupported terms.
+- MUST mark exactly one suggestion with is_recommended: true.
+- The recommended suggestion SHOULD usually be the dominant consistent usage in the supplied text, especially if it appears across multiple chapters after preprocessing.
+- Official glossary data is advisory for source mapping, aliases, and possible corrections. MUST NOT automatically recommend a glossary term over a dominant text term.
+- A glossary correction MAY override dominant usage only when the correction clearly says the dominant usage is wrong and the chapter evidence supports that correction.
 - If dominant usage and glossary wording conflict, include both as suggestions and explain the conflict in reasoning.
+</recommendation_policy>
 
-## Output Rules
-- Base all findings exclusively on the supplied text plus relevant glossary context.
-- Each distinct concept must be a separate item; do not group unrelated entities.
-- Always populate variations with exact phrases, chapter numbers, and short context snippets.
-- Actionable findings must have exactly 3 suggestions. Non-actionable INFO findings may use an empty suggestions array or one empty informational suggestion.
-- The suggestion field must contain only the replacement text, never phrases like "standardize to". Use an empty string for informational items.
-- Use plain text only inside JSON values. No markdown, no commentary outside JSON.
+<output_rules>
+- MUST base all findings exclusively on the supplied text plus relevant glossary context.
+- Each distinct concept MUST be a separate item. MUST NOT group unrelated entities.
+- MUST always populate variations with exact phrases, chapter numbers, and short context snippets.
+- Actionable findings MUST have exactly 3 suggestions. Non-actionable INFO findings MAY use an empty suggestions array or one empty informational suggestion.
+- The suggestion field MUST contain only the replacement text, never phrases like "standardize to". Use an empty string for informational items.
+- Use plain text only inside JSON values. No markdown. No commentary outside JSON.
+</output_rules>
 
-Example issue: Li Fuchen / Lee Fu Chen for the same hero across chapters should be one concept with both variants and a recommendation such as Li Fuchen. Example non-issue: "Project Doomsday" vs 'Project Doomsday' is quote formatting only and must be ignored.`;
+<examples>
+<issue>Li Fuchen / Lee Fu Chen for the same hero across chapters MUST be one concept with both variants and a recommendation such as Li Fuchen.</issue>
+<non_issue>"Project Doomsday" vs 'Project Doomsday' is quote formatting only and MUST be ignored.</non_issue>
+</examples>
+
+<final_directive>
+Return only schema-valid JSON containing evidence-backed, context-aware term inconsistency findings.
+</final_directive>`;
 /**
  * Generate AI prompt with chapter text and existing results
  * @param {string} chapterText - The chapter text to analyze
@@ -1754,9 +1805,9 @@ Example issue: Li Fuchen / Lee Fu Chen for the same hero across chapters should 
 function buildPrompt(chapterText, existingResults = [], officialGlossaryContext = "") {
     let prompt = ADVANCED_SYSTEM_PROMPT;
     if (officialGlossaryContext) {
-        prompt += `\n\n## Relevant WTR Lab Official Glossary Context\nThis compact JSON is pre-filtered to terms relevant to the supplied text. Formats: aliases = [canonical, alternate_aliases, source_term, count]; terms = [canonical, source_term, count]; replacements = [canonical, alternates, source_term, count]; corrections = [source_term, corrected_english, type, brief_reason]. Treat aliases as accepted variants unless the text proves a real error. Treat terms/replacements/corrections as advisory candidates, not automatic winners. Use them as one of the three suggestion perspectives when relevant, and recommend them only when they beat dominant analyzed-text usage on evidence. Do not create findings from glossary context alone.\n\`\`\`json\n${officialGlossaryContext}\n\`\`\``;
+        prompt += `\n\n<official_glossary_context>\n<format_reference>\naliases = [canonical, alternate_aliases, source_term, count]; terms = [canonical, source_term, count]; replacements = [canonical, alternates, source_term, count]; corrections = [source_term, corrected_english, type, brief_reason].\n</format_reference>\n<glossary_rules>\n- This compact JSON is pre-filtered to terms relevant to the supplied text.\n- MUST treat aliases as accepted variants unless the text proves a real error.\n- MUST treat terms/replacements/corrections as advisory candidates, not automatic winners.\n- SHOULD use glossary data as one of the three suggestion perspectives when relevant.\n- MUST recommend glossary wording only when it beats dominant analyzed-text usage on evidence.\n- MUST NOT create findings from glossary context alone.\n</glossary_rules>\n\`\`\`json\n${officialGlossaryContext}\n\`\`\`\n</official_glossary_context>`;
     }
-    prompt += `\n\nHere is the text to analyze:\n---\n${chapterText}\n---`;
+    prompt += `\n\n<chapter_text>\n---\n${chapterText}\n---\n</chapter_text>`;
     const schemaDefinition = `
          [
            {
@@ -1802,32 +1853,44 @@ function buildPrompt(chapterText, existingResults = [], officialGlossaryContext 
             explanation,
             variations,
         })), null, 2);
-        prompt += `\n\n## Verification & Continuation Task
-Re-check previous findings against the current supplied text, then scan for new issues. Use strict evidence from the current text only; do not copy old snippets or priorities.
+        prompt += `\n\n<verification_and_continuation_task>
+<instruction>
+Re-check previous findings against the current supplied text, then scan for new issues. Use strict evidence from the current text only. MUST NOT copy old snippets or priorities.
+</instruction>
 
-Tasks:
+<tasks>
 1. Put still-valid, high-confidence previous findings in verified_inconsistencies as freshly rebuilt objects. Re-extract variations, snippets, chapters, priority, explanation, and suggestions from the current text.
-2. Omit previous findings that are now resolved, unsupported, intentional aliases/nicknames, contextual nuance, confirmed term evolutions, official glossary aliases, or false positives. Do not list discarded items.
+2. Omit previous findings that are now resolved, unsupported, intentional aliases/nicknames, contextual nuance, distinct speaker/narration usage, title/name/common-noun ambiguity, confirmed term evolutions, official glossary aliases, or false positives. MUST NOT list discarded items.
 3. Put newly discovered issues in new_inconsistencies using the same schema.
+</tasks>
 
-Previously Identified Inconsistencies for Verification:
+<previously_identified_inconsistencies_for_verification>
 \`\`\`json
 ${existingJson}
 \`\`\`
+</previously_identified_inconsistencies_for_verification>
 
-Required Output Format:
-Return only one valid JSON object: {"verified_inconsistencies": [], "new_inconsistencies": []}. Both arrays must contain objects matching this schema; use empty arrays when no items exist.
+<required_output_format>
+Return only one valid JSON object: {"verified_inconsistencies": [], "new_inconsistencies": []}. Both arrays MUST contain objects matching this schema. Use empty arrays when no items exist.
+</required_output_format>
 
-Schema Reference:
+<schema_reference>
 \`\`\`json
 ${schemaDefinition}
 \`\`\`
+</schema_reference>
+</verification_and_continuation_task>
 `;
     }
     else {
-        prompt += `\n\nIMPORTANT: Your final output MUST be ONLY a single, valid JSON array matching this specific schema. Do not include any other text, explanations, or markdown formatting outside of the JSON array itself.
-        Schema:
-        ${schemaDefinition}`;
+        prompt += `\n\n<required_output_format>
+Your final output MUST be ONLY a single, valid JSON array matching this specific schema. MUST NOT include any other text, explanations, or markdown formatting outside of the JSON array itself.
+</required_output_format>
+<schema_reference>
+\`\`\`json
+${schemaDefinition}
+\`\`\`
+</schema_reference>`;
     }
     return prompt;
 }
@@ -1854,6 +1917,8 @@ function parseApiResponse(_resultText) {
     throw new Error("parseApiResponse should be implemented in the analysis engine module");
 }
 
+// EXTERNAL MODULE: ./src/modules/userscriptApi.ts
+var userscriptApi = __webpack_require__(799);
 // EXTERNAL MODULE: ./src/modules/providerConfig.ts
 var providerConfig = __webpack_require__(980);
 // EXTERNAL MODULE: ./src/modules/wtrLabApi.ts
@@ -1868,6 +1933,7 @@ var wtrLabApi = __webpack_require__(41);
 // Import from ui module
 
 // Import from utils module
+
 
 // Import from retryLogic module
 
@@ -2393,7 +2459,7 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
     const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
     const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
     const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
-    GM_xmlhttpRequest({
+    (0,userscriptApi/* gmXmlhttpRequest */.hb)({
         method: requestConfig.method,
         url: requestConfig.url,
         headers: requestConfig.headers,
@@ -2534,12 +2600,14 @@ function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targ
         // Deep analysis complete
         state/* appState */.XJ.runtime.currentIteration = targetDepth;
         state/* appState */.XJ.runtime.isAnalysisRunning = false;
+        state/* appState */.XJ.runtime.deepAnalysisStartTimes = {};
         const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : "Complete!";
         (0,ui/* updateStatusIndicator */.LI)("complete", statusMessage);
         document.getElementById("wtr-if-continue-btn").disabled = false;
         (0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults);
         return;
     }
+    state/* appState */.XJ.runtime.isAnalysisRunning = true;
     (0,utils/* log */.Rm)(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`);
     // Update status to show iteration progress
     if (targetDepth > 1) {
@@ -2613,7 +2681,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
         const prompt = buildDeepAnalysisPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
         const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
         const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
-        GM_xmlhttpRequest({
+        (0,userscriptApi/* gmXmlhttpRequest */.hb)({
             method: requestConfig.method,
             url: requestConfig.url,
             headers: requestConfig.headers,
@@ -2740,17 +2808,18 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                 logResultSummary(operationName, state/* appState */.XJ.runtime.cumulativeResults);
                 // Save session results after each iteration
                 (0,state/* saveSessionResults */.I6)();
+                // Current iteration succeeded; its retry safety window must not leak into future runs.
+                delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey];
                 // Continue to next iteration or complete
                 state/* appState */.XJ.runtime.currentIteration = currentDepth < targetDepth ? currentDepth + 1 : targetDepth;
                 if (currentDepth < targetDepth) {
-                    // Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
                     setTimeout(() => {
                         findInconsistenciesDeepAnalysis(chapterData, state/* appState */.XJ.runtime.cumulativeResults, targetDepth, currentDepth + 1);
                     }, 1000);
                 }
                 else {
                     // Deep analysis complete for this path
-                    delete state/* appState */.XJ.runtime.deepAnalysisStartTimes[iterationKey];
+                    state/* appState */.XJ.runtime.deepAnalysisStartTimes = {};
                     state/* appState */.XJ.runtime.isAnalysisRunning = false;
                     (0,ui/* updateStatusIndicator */.LI)("complete", `Complete! (Deep Analysis: ${targetDepth} iterations)`);
                     const continueBtn = document.getElementById("wtr-if-continue-btn");
@@ -3429,7 +3498,9 @@ function parseModelsResponse(config, payload) {
 /* unused harmony exports CONFIG_KEY, SESSION_RESULTS_KEY, KEY_STATE_KEY, loadKeyStates, saveKeyStates, initializeKeyStates */
 /* harmony import */ var _providerConfig__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(980);
 /* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(158);
+/* harmony import */ var _userscriptApi__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(799);
 // src/modules/state.ts
+
 
 
 const SCRIPT_PREFIX = "wtr_inconsistency_finder_";
@@ -3474,6 +3545,7 @@ const appState = {
         officialGlossaryContext: null,
         currentIteration: 1,
         totalIterations: 1,
+        persistedKeyStates: {},
     },
     // Session data
     session: {
@@ -3530,7 +3602,7 @@ function sanitizeResultsData(results) {
 }
 // --- STATE MANAGEMENT FUNCTIONS ---
 async function loadConfig() {
-    const savedConfig = (await GM_getValue(CONFIG_KEY, {}));
+    const savedConfig = (await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmGetValue */ .Ar)(CONFIG_KEY, {}));
     // --- Migration for single API key to multiple ---
     if (savedConfig.apiKey && !savedConfig.apiKeys) {
         (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Migrating legacy single API key to new array format.");
@@ -3605,6 +3677,7 @@ async function loadConfig() {
     appState.config.providerChatCompletionsPath = resolvedProvider.chatCompletionsPath;
     appState.config.providerModelsPath = resolvedProvider.modelsPath;
     appState.config.providerUseManualPaths = resolvedProvider.useManualPaths;
+    appState.runtime.persistedKeyStates = (await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmGetValue */ .Ar)(KEY_STATE_KEY, {})) || {};
     // Load session results if available
     const sessionResults = sessionStorage.getItem(SESSION_RESULTS_KEY);
     if (sessionResults) {
@@ -3657,7 +3730,7 @@ async function saveConfig() {
             providerUseManualPaths: resolvedProvider.useManualPaths,
             preferences: appState.preferences,
         };
-        await GM_setValue(CONFIG_KEY, configToSave);
+        await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmSetValue */ .Qp)(CONFIG_KEY, configToSave);
         return true;
     }
     catch (e) {
@@ -3737,7 +3810,7 @@ function clearSessionResults() {
  */
 function loadKeyStates() {
     try {
-        const savedStates = GM_getValue(KEY_STATE_KEY, {}) || {};
+        const savedStates = appState.runtime.persistedKeyStates || {};
         const now = Date.now();
         const normalizedStates = {};
         Object.keys(savedStates).forEach((key) => {
@@ -3788,7 +3861,10 @@ function loadKeyStates() {
  */
 function saveKeyStates(keyStates) {
     try {
-        GM_setValue(KEY_STATE_KEY, keyStates);
+        appState.runtime.persistedKeyStates = keyStates;
+        (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmSetValue */ .Qp)(KEY_STATE_KEY, keyStates).catch((error) => {
+            console.error("Inconsistency Finder: Error saving key states:", error);
+        });
     }
     catch (e) {
         console.error("Inconsistency Finder: Error saving key states:", e);
@@ -4285,6 +4361,10 @@ async function startAnalysis(isContinuation = false) {
             return;
         }
         const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1);
+        // Each button press starts a new request lifecycle. Keep continuation results,
+        // but never reuse retry timers from a completed or aborted run.
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.analysisStartedAt = null;
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.deepAnalysisStartTimes = {};
         if (!isContinuation) {
             _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults = [];
             _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.apiKeyCooldowns.clear();
@@ -5194,18 +5274,20 @@ var geminiApi = __webpack_require__(598);
 var providerConfig = __webpack_require__(980);
 // EXTERNAL MODULE: ./src/modules/utils.ts
 var utils = __webpack_require__(158);
+// EXTERNAL MODULE: ./src/modules/userscriptApi.ts
+var userscriptApi = __webpack_require__(799);
 ;// ./src/version.ts
 // src/version.ts
 // Shared runtime version information for the userscript UI
 const VERSION_INFO = {
-    SEMANTIC: "5.5.1",
-    DISPLAY: "v5.5.1",
+    SEMANTIC: "5.5.2",
+    DISPLAY: "v5.5.2",
     BUILD_ENV: "production",
-    BUILD_DATE: "2026-04-30",
-    GREASYFORK: "5.5.1",
-    NPM: "5.5.1",
-    BADGE: "5.5.1",
-    CHANGELOG: "5.5.1",
+    BUILD_DATE: "2026-05-01",
+    GREASYFORK: "5.5.2",
+    NPM: "5.5.2",
+    BADGE: "5.5.2",
+    CHANGELOG: "5.5.2",
 };
 const VERSION = VERSION_INFO.SEMANTIC;
 if (typeof window !== "undefined") {
@@ -5218,6 +5300,7 @@ var events = __webpack_require__(753);
 ;// ./src/modules/ui/panel.ts
 /* unused harmony import specifier */ var log;
 // src/modules/ui/panel.ts
+
 
 
 
@@ -5699,7 +5782,7 @@ async function populateModelSelector() {
     selectEl.innerHTML = "<option>Loading from cache...</option>";
     selectEl.disabled = true;
     const providerBucket = (0,state/* getModelsCacheBucket */.ne)(state/* appState */.XJ.config);
-    const cacheState = await GM_getValue(state/* MODELS_CACHE_KEY */.ES, null);
+    const cacheState = await (0,userscriptApi/* gmGetValue */.Ar)(state/* MODELS_CACHE_KEY */.ES, null);
     const cachedData = getCachedModelsData(cacheState, providerBucket);
     const cachedModels = Array.isArray(cachedData?.models) ? [...cachedData.models] : [];
     const cachedMetadata = getCachedModelMetadata(cachedData);
@@ -5724,7 +5807,7 @@ async function populateModelSelector() {
 }
 function requestModelCatalog(requestConfig) {
     return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
+        (0,userscriptApi/* gmXmlhttpRequest */.hb)({
             method: requestConfig.method,
             url: requestConfig.url,
             headers: requestConfig.headers,
@@ -5780,7 +5863,7 @@ async function fetchAndCacheModels() {
                     continue;
                 }
                 const modelMetadata = (0,providerConfig/* buildModelCatalogMetadata */.uJ)(modelEntries.filter((entry) => filteredModels.includes(entry.id)));
-                const existingCache = await GM_getValue(state/* MODELS_CACHE_KEY */.ES, null);
+                const existingCache = await (0,userscriptApi/* gmGetValue */.Ar)(state/* MODELS_CACHE_KEY */.ES, null);
                 const nextCacheState = existingCache && typeof existingCache === "object" && !Array.isArray(existingCache.models)
                     ? existingCache
                     : {};
@@ -5790,7 +5873,7 @@ async function fetchAndCacheModels() {
                     metadata: modelMetadata,
                 };
                 state/* appState */.XJ.runtime.providerModelMetadata = modelMetadata;
-                await GM_setValue(state/* MODELS_CACHE_KEY */.ES, nextCacheState);
+                await (0,userscriptApi/* gmSetValue */.Qp)(state/* MODELS_CACHE_KEY */.ES, nextCacheState);
                 statusEl.textContent = `Success! Found ${filteredModels.length} models.`;
                 (0,utils/* log */.Rm)(`Fetched model catalog from ${url}`, { metadataCount: Object.keys(modelMetadata).length });
                 await populateModelSelector();
@@ -6322,6 +6405,145 @@ function getCollisionAvoidanceStatus() {
         indicatorRect: indicator ? indicator.getBoundingClientRect() : null,
         nigWidgetVisible: nigWidget ? getComputedStyle(nigWidget).display !== "none" : false,
     };
+}
+
+
+/***/ },
+
+/***/ 799
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Ar: () => (/* binding */ gmGetValue),
+/* harmony export */   Qp: () => (/* binding */ gmSetValue),
+/* harmony export */   es: () => (/* binding */ gmRegisterMenuCommand),
+/* harmony export */   hb: () => (/* binding */ gmXmlhttpRequest)
+/* harmony export */ });
+const STORAGE_PREFIX = "wtr_if_gm_fallback_";
+function getUserscriptGlobal() {
+    return globalThis;
+}
+function isThenableResponse(value) {
+    return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
+}
+function getStoredFallbackValue(key, defaultValue) {
+    try {
+        const rawValue = window.localStorage.getItem(`${STORAGE_PREFIX}${key}`);
+        return rawValue === null ? defaultValue : JSON.parse(rawValue);
+    }
+    catch (error) {
+        console.warn("Inconsistency Finder: Failed to read fallback storage value.", error);
+        return defaultValue;
+    }
+}
+function setStoredFallbackValue(key, value) {
+    try {
+        window.localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
+    }
+    catch (error) {
+        console.warn("Inconsistency Finder: Failed to write fallback storage value.", error);
+    }
+}
+function fetchFallback(details) {
+    const fetchOptions = {
+        method: details.method,
+        headers: details.headers,
+        body: details.data,
+        credentials: "include",
+    };
+    fetch(details.url, fetchOptions)
+        .then(async (response) => {
+        const responseText = await response.text();
+        details.onload?.({
+            status: response.status,
+            statusText: response.statusText,
+            responseText,
+            finalUrl: response.url,
+        });
+    })
+        .catch((error) => details.onerror?.(error));
+}
+function gmXmlhttpRequest(details) {
+    const userscriptGlobal = getUserscriptGlobal();
+    const modernApi = userscriptGlobal.GM;
+    const legacyRequestApi = userscriptGlobal.GM_xmlhttpRequest;
+    const modernRequestApi = modernApi?.xmlHttpRequest;
+    if (!legacyRequestApi && !modernRequestApi) {
+        fetchFallback(details);
+        return;
+    }
+    let callbackHandled = false;
+    const wrappedDetails = {
+        ...details,
+        onload: (response) => {
+            callbackHandled = true;
+            details.onload?.(response);
+        },
+        onerror: (error) => {
+            callbackHandled = true;
+            details.onerror?.(error);
+        },
+    };
+    try {
+        const result = legacyRequestApi
+            ? legacyRequestApi(wrappedDetails)
+            : modernRequestApi?.call(modernApi, wrappedDetails);
+        if (isThenableResponse(result)) {
+            result.then((response) => {
+                if (!callbackHandled) {
+                    details.onload?.(response);
+                }
+            }, (error) => {
+                if (!callbackHandled) {
+                    details.onerror?.(error);
+                }
+            });
+        }
+    }
+    catch (error) {
+        details.onerror?.(error);
+    }
+}
+async function gmGetValue(key, defaultValue) {
+    const userscriptGlobal = getUserscriptGlobal();
+    const modernApi = userscriptGlobal.GM;
+    const legacyGetValue = userscriptGlobal.GM_getValue;
+    const modernGetValue = modernApi?.getValue;
+    if (legacyGetValue) {
+        return await legacyGetValue(key, defaultValue);
+    }
+    if (modernGetValue) {
+        return await modernGetValue.call(modernApi, key, defaultValue);
+    }
+    return getStoredFallbackValue(key, defaultValue);
+}
+async function gmSetValue(key, value) {
+    const userscriptGlobal = getUserscriptGlobal();
+    const modernApi = userscriptGlobal.GM;
+    const legacySetValue = userscriptGlobal.GM_setValue;
+    const modernSetValue = modernApi?.setValue;
+    if (legacySetValue) {
+        await legacySetValue(key, value);
+        return;
+    }
+    if (modernSetValue) {
+        await modernSetValue.call(modernApi, key, value);
+        return;
+    }
+    setStoredFallbackValue(key, value);
+}
+function gmRegisterMenuCommand(caption, commandFunc) {
+    const userscriptGlobal = getUserscriptGlobal();
+    const modernApi = userscriptGlobal.GM;
+    const legacyRegisterMenuCommand = userscriptGlobal.GM_registerMenuCommand;
+    const modernRegisterMenuCommand = modernApi?.registerMenuCommand;
+    if (legacyRegisterMenuCommand) {
+        legacyRegisterMenuCommand(caption, commandFunc);
+        return;
+    }
+    if (modernRegisterMenuCommand) {
+        modernRegisterMenuCommand.call(modernApi, caption, commandFunc);
+    }
 }
 
 
@@ -7242,6 +7464,8 @@ function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
 /* harmony export */ });
 /* unused harmony exports resolveWtrGlossaryPlaceholders, isOfficialAliasOnlyFinding */
 /* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(158);
+/* harmony import */ var _userscriptApi__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(799);
+
 
 const WTR_API_GLOSSARY_CACHE_KEY = "wtr_inconsistency_finder_wtr_glossary_cache";
 const GLOSSARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -7260,7 +7484,7 @@ function parseOptionalInteger(value) {
 }
 function wtrApiRequest(config) {
     return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
+        (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmXmlhttpRequest */ .hb)({
             method: config.method,
             url: config.url,
             headers: {
@@ -7500,7 +7724,7 @@ function buildOfficialGlossaryContext(rawId, response) {
     };
 }
 async function getGlossaryCache() {
-    const cache = await GM_getValue(WTR_API_GLOSSARY_CACHE_KEY, {});
+    const cache = await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmGetValue */ .Ar)(WTR_API_GLOSSARY_CACHE_KEY, {});
     return cache && typeof cache === "object" ? cache : {};
 }
 async function fetchOfficialWtrGlossaryContext(rawId) {
@@ -7522,7 +7746,7 @@ async function fetchOfficialWtrGlossaryContext(rawId) {
             timestamp: now,
             context,
         };
-        await GM_setValue(WTR_API_GLOSSARY_CACHE_KEY, cache);
+        await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmSetValue */ .Qp)(WTR_API_GLOSSARY_CACHE_KEY, cache);
         (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Fetched WTR official glossary for raw_id ${rawId}.`, context.summary);
         return context;
     }
@@ -7809,6 +8033,8 @@ var state = __webpack_require__(654);
 var ui = __webpack_require__(782);
 // EXTERNAL MODULE: ./src/modules/utils.ts
 var utils = __webpack_require__(158);
+// EXTERNAL MODULE: ./src/modules/userscriptApi.ts
+var userscriptApi = __webpack_require__(799);
 ;// ./src/index.ts
 // src/index.ts
 // Import styles - Webpack will handle injection
@@ -7816,6 +8042,7 @@ var utils = __webpack_require__(158);
 // Import version information (fallback for build time)
 // import { VERSION } from "./version";
 // Import core modules
+
 
 
 
@@ -7827,7 +8054,7 @@ async function src_main() {
         (0,ui/* createUI */.RD)();
         (0,ui/* injectControlButton */.rz)();
         (0,ui/* initializeCollisionAvoidance */.bp)();
-        GM_registerMenuCommand("Term Inconsistency Finder", () => (0,ui/* togglePanel */.Pj)(true));
+        (0,userscriptApi/* gmRegisterMenuCommand */.es)("Term Inconsistency Finder", () => (0,ui/* togglePanel */.Pj)(true));
         (0,utils/* log */.Rm)("WTR Term Inconsistency Finder initialized successfully.");
     }
     catch (error) {
