@@ -140,6 +140,11 @@ async function startAnalysis(isContinuation = false) {
 
 		const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
 
+		// Each button press starts a new request lifecycle. Keep continuation results,
+		// but never reuse retry timers from a completed or aborted run.
+		appState.runtime.analysisStartedAt = null
+		appState.runtime.deepAnalysisStartTimes = {}
+
 		if (!isContinuation) {
 			appState.runtime.cumulativeResults = []
 			appState.runtime.apiKeyCooldowns.clear()

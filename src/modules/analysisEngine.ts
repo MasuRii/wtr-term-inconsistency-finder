@@ -859,6 +859,7 @@ export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [
 		// Deep analysis complete
 		appState.runtime.currentIteration = targetDepth
 		appState.runtime.isAnalysisRunning = false
+		appState.runtime.deepAnalysisStartTimes = {}
 		const statusMessage = targetDepth > 1 ? `Complete! (Deep Analysis: ${targetDepth} iterations)` : "Complete!"
 		updateStatusIndicator("complete", statusMessage)
 		document.getElementById("wtr-if-continue-btn").disabled = false
@@ -866,6 +867,7 @@ export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [
 		return
 	}
 
+	appState.runtime.isAnalysisRunning = true
 	log(`Starting deep analysis iteration ${currentDepth}/${targetDepth}`)
 
 	// Update status to show iteration progress
@@ -1142,10 +1144,12 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 				// Save session results after each iteration
 				saveSessionResults()
 
+				// Current iteration succeeded; its retry safety window must not leak into future runs.
+				delete appState.runtime.deepAnalysisStartTimes[iterationKey]
+
 				// Continue to next iteration or complete
 				appState.runtime.currentIteration = currentDepth < targetDepth ? currentDepth + 1 : targetDepth
 				if (currentDepth < targetDepth) {
-					// Next iteration; we keep per-iteration timing, so do not reset deepAnalysisStartTimes
 					setTimeout(() => {
 						findInconsistenciesDeepAnalysis(
 							chapterData,
@@ -1156,7 +1160,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					}, 1000)
 				} else {
 					// Deep analysis complete for this path
-					delete appState.runtime.deepAnalysisStartTimes[iterationKey]
+					appState.runtime.deepAnalysisStartTimes = {}
 					appState.runtime.isAnalysisRunning = false
 					updateStatusIndicator("complete", `Complete! (Deep Analysis: ${targetDepth} iterations)`)
 					const continueBtn = document.getElementById("wtr-if-continue-btn")
