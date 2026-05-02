@@ -35,8 +35,6 @@ export const appState: any = {
 		wtrApiEndChapter: "",
 		useOfficialWtrGlossary: true,
 		loggingEnabled: false,
-		temperature: PROVIDER_DEFAULTS[DEFAULT_PROVIDER_TYPE].defaultTemperature,
-		reasoningMode: "off",
 		activeTab: "finder",
 		activeFilter: "all",
 		deepAnalysisDepth: 1,
@@ -154,9 +152,8 @@ export async function loadConfig() {
 	if (typeof savedConfig.providerUseManualPaths !== "boolean") {
 		savedConfig.providerUseManualPaths = isManualPathConfig(savedConfig)
 	}
-	if (typeof savedConfig.reasoningMode !== "string") {
-		savedConfig.reasoningMode = "off"
-	}
+	delete savedConfig.reasoningMode
+	delete savedConfig.temperature
 	if (savedConfig.chapterSource !== "wtr-api") {
 		savedConfig.chapterSource = "page"
 	}
@@ -178,10 +175,6 @@ export async function loadConfig() {
 	if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
 		savedConfig.useOfficialWtrGlossary = true
 	}
-	if (typeof savedConfig.temperature !== "number") {
-		savedConfig.temperature = providerDefaults.defaultTemperature
-	}
-
 	// Load preferences from saved config if they exist
 	if (savedConfig.preferences) {
 		appState.preferences = {
@@ -314,7 +307,6 @@ export function saveSessionResults() {
 			timestamp: Date.now(),
 			config: {
 				model: appState.config.model,
-				temperature: appState.config.temperature,
 			},
 		}
 		sessionStorage.setItem(SESSION_RESULTS_KEY, JSON.stringify(sessionData))

@@ -8,7 +8,6 @@ export const AI_PROVIDERS = Object.freeze({
 })
 
 export type ProviderType = (typeof AI_PROVIDERS)[keyof typeof AI_PROVIDERS]
-export type ReasoningMode = "off" | "low" | "medium" | "high"
 export type ModelEndpointType = "chat" | "models"
 
 export const DEFAULT_PROVIDER_TYPE: ProviderType = AI_PROVIDERS.OPENAI_COMPATIBLE
@@ -19,7 +18,6 @@ export interface ProviderDefaults {
 	modelsPath: string
 	modelLabel: string
 	apiKeyLabel: string
-	defaultTemperature: number
 }
 
 export interface ProviderConfig {
@@ -29,8 +27,6 @@ export interface ProviderConfig {
 	providerModelsPath?: string
 	providerUseManualPaths?: boolean
 	model?: string
-	temperature?: number | string
-	reasoningMode?: ReasoningMode | string
 	providerModelMetadata?: ModelCatalogMetadata
 }
 
@@ -41,7 +37,6 @@ export interface ProviderSettings {
 	modelsPath: string
 	modelLabel: string
 	apiKeyLabel: string
-	defaultTemperature: number
 	useManualPaths: boolean
 }
 
@@ -82,7 +77,6 @@ export const PROVIDER_DEFAULTS: Readonly<Record<ProviderType, Readonly<ProviderD
 		modelsPath: "/models",
 		modelLabel: "OpenAI-Compatible Model",
 		apiKeyLabel: "[REDACTED] Keys",
-		defaultTemperature: 0.5,
 	}),
 	[AI_PROVIDERS.GEMINI]: Object.freeze({
 		baseUrl: "https://generativelanguage.googleapis.com/v1beta",
@@ -90,13 +84,14 @@ export const PROVIDER_DEFAULTS: Readonly<Record<ProviderType, Readonly<ProviderD
 		modelsPath: "/models",
 		modelLabel: "Gemini Model",
 		apiKeyLabel: "[REDACTED] API Keys",
-		defaultTemperature: 1.0,
 	}),
 })
 
 const COMMON_VERSIONED_PREFIXES = ["/v1", "/api/v1", "/openai/v1", "/v1beta/openai"]
 const OPENAI_STYLE_CHAT_PATH = "/chat/completions"
 const OPENAI_STYLE_MODELS_PATH = "/models"
+const ANALYSIS_TEMPERATURE = 1
+const HIGH_REASONING_EFFORT = "high"
 
 function ensureProviderType(providerType: unknown): ProviderType {
 	return providerType === AI_PROVIDERS.GEMINI ? AI_PROVIDERS.GEMINI : AI_PROVIDERS.OPENAI_COMPATIBLE
@@ -118,29 +113,12 @@ export function getProviderDefaults(providerType: unknown): Readonly<ProviderDef
 	return PROVIDER_DEFAULTS[ensureProviderType(providerType)]
 }
 
-export function getProviderDefaultTemperature(providerType: unknown): number {
-	return getProviderDefaults(providerType).defaultTemperature
-}
-
 function parseUrl(value: string): URL | null {
 	try {
 		return new URL(value)
 	} catch {
 		return null
 	}
-}
-
-function normalizeReasoningMode(value: unknown): ReasoningMode {
-	return value === "low" || value === "medium" || value === "high" ? value : "off"
-}
-
-function normalizeTemperature(value: unknown, providerType: ProviderType): number {
-	const fallback = getProviderDefaultTemperature(providerType)
-	const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""))
-	if (!Number.isFinite(parsed)) {
-		return fallback
-	}
-	return Math.min(2, Math.max(0, parsed))
 }
 
 function isDeepSeekBase(url: URL | null): boolean {
@@ -211,7 +189,6 @@ export function resolveProviderSettings(config: ProviderConfig = {}): ProviderSe
 			: deriveAutomaticPath(baseUrl, "models"),
 		modelLabel: defaults.modelLabel,
 		apiKeyLabel: defaults.apiKeyLabel,
-		defaultTemperature: defaults.defaultTemperature,
 		useManualPaths,
 	}
 }
@@ -308,17 +285,24 @@ function modelSupportsTemperature(metadata: ModelCatalogEntry | null): boolean {
 	return supportsOpenAiParameter(metadata, "temperature") !== false
 }
 
+function metadataSupportsReasoningEffort(metadata: ModelCatalogEntry | null): boolean {
+	return metadata?.capabilities?.reasoning === true || supportsOpenAiParameter(metadata, "reasoning_effort") === true
+}
+
+function metadataRejectsReasoningEffort(metadata: ModelCatalogEntry | null): boolean {
+	return metadata?.capabilities?.reasoning === false || supportsOpenAiParameter(metadata, "reasoning_effort") === false
+}
+
 function modelSupportsReasoningEffort(model: unknown, metadata: ModelCatalogEntry | null = null): boolean {
-	const parameterSupport = supportsOpenAiParameter(metadata, "reasoning_effort")
-	if (metadata?.capabilities?.reasoning === true || parameterSupport === true) {
+	if (metadataSupportsReasoningEffort(metadata)) {
 		return true
 	}
-	if (metadata?.capabilities?.reasoning === false || parameterSupport === false) {
+	if (metadataRejectsReasoningEffort(metadata)) {
 		return false
 	}
 
 	const modelId = typeof model === "string" ? model.toLowerCase() : ""
-	return /(^|[-_/])(o1|o3|o4|gpt-5|r1|qwq|qwen3|reasoning)([-_/]|$)/i.test(modelId)
+	return /(^|[-_/])(o1|o3|o4|gpt-5|r1|qwq|qwen3|reasoning|codex)([-_/]|$)/i.test(modelId)
 }
 
 function modelSupportsGeminiThinking(model: unknown): boolean {
@@ -326,28 +310,25 @@ function modelSupportsGeminiThinking(model: unknown): boolean {
 	return modelId.includes("gemini-2.5") || modelId.includes("thinking")
 }
 
-function thinkingBudgetForEffort(reasoningMode: ReasoningMode): number {
-	switch (reasoningMode) {
-		case "low":
-			return 1024
-		case "medium":
-			return 4096
-		case "high":
-			return 8192
-		default:
-			return 0
+function highGeminiThinkingBudget(model: unknown): number {
+	const modelId = typeof model === "string" ? model.toLowerCase() : ""
+	if (modelId.includes("gemini-2.5-pro")) {
+		return 32768
 	}
+	if (modelId.includes("gemini-2.5-flash")) {
+		return 24576
+	}
+	return 8192
 }
 
 function buildGeminiGenerationConfig(config: ProviderConfig): Record<string, unknown> {
-	const reasoningMode = normalizeReasoningMode(config.reasoningMode)
 	const generationConfig: Record<string, unknown> = {
-		temperature: normalizeTemperature(config.temperature, AI_PROVIDERS.GEMINI),
+		temperature: ANALYSIS_TEMPERATURE,
 	}
 
-	if (reasoningMode !== "off" && modelSupportsGeminiThinking(config.model)) {
+	if (modelSupportsGeminiThinking(config.model)) {
 		generationConfig.thinkingConfig = {
-			thinkingBudget: thinkingBudgetForEffort(reasoningMode),
+			thinkingBudget: highGeminiThinkingBudget(config.model),
 		}
 	}
 
@@ -357,27 +338,28 @@ function buildGeminiGenerationConfig(config: ProviderConfig): Record<string, unk
 function buildOpenAiCompatibleBody(config: ProviderConfig): Record<string, unknown> {
 	const provider = resolveProviderSettings(config)
 	const providerUrl = parseUrl(provider.baseUrl)
-	const reasoningMode = normalizeReasoningMode(config.reasoningMode)
 	const modelMetadata = getConfiguredModelMetadata(config)
-	const metadataAllowsReasoning = modelSupportsReasoningEffort(config.model, modelMetadata)
+	const explicitReasoningSupport = metadataSupportsReasoningEffort(modelMetadata)
+	const explicitReasoningRejection = metadataRejectsReasoningEffort(modelMetadata)
 	const supportsReasoning =
-		reasoningMode !== "off" &&
-		!isAnthropicBase(providerUrl) &&
-		(metadataAllowsReasoning || isOllamaBase(providerUrl))
+		!explicitReasoningRejection &&
+		(explicitReasoningSupport ||
+			(!isAnthropicBase(providerUrl) &&
+				(modelSupportsReasoningEffort(config.model, modelMetadata) || isOllamaBase(providerUrl))))
 	const body: Record<string, unknown> = {
 		model: config.model,
 		stream: true,
 		messages: [],
 	}
 
-	if (modelSupportsTemperature(modelMetadata) && !(supportsReasoning && metadataAllowsReasoning)) {
-		body.temperature = normalizeTemperature(config.temperature, AI_PROVIDERS.OPENAI_COMPATIBLE)
+	if (modelSupportsTemperature(modelMetadata) && !supportsReasoning) {
+		body.temperature = ANALYSIS_TEMPERATURE
 	}
 
 	if (supportsReasoning) {
-		body.reasoning_effort = reasoningMode
+		body.reasoning_effort = HIGH_REASONING_EFFORT
 		if (isOllamaBase(providerUrl)) {
-			body.reasoning = { effort: reasoningMode }
+			body.reasoning = { effort: HIGH_REASONING_EFFORT }
 		}
 	}
 
@@ -673,15 +655,27 @@ function modelCatalogEntryFromValue(value: unknown): ModelCatalogEntry | null {
 		toFiniteNumber(record.context_length) ||
 		toFiniteNumber(record.context_window) ||
 		toFiniteNumber(record.max_context_tokens) ||
+		toFiniteNumber(record.max_input_tokens) ||
+		toFiniteNumber(record.maxInputTokens) ||
+		toFiniteNumber(record.inputTokenLimit) ||
+		toFiniteNumber(record.input_token_limit) ||
 		toFiniteNumber(getRecord(record.limits)?.context_window)
 	const maxCompletionTokens =
 		toFiniteNumber(record.max_completion_tokens) ||
 		toFiniteNumber(record.max_output_tokens) ||
+		toFiniteNumber(record.maxOutputTokens) ||
+		toFiniteNumber(record.outputTokenLimit) ||
+		toFiniteNumber(record.output_token_limit) ||
 		toFiniteNumber(getRecord(record.limits)?.max_output)
 
 	return {
 		id: rawId.trim(),
-		displayName: typeof record.display_name === "string" ? record.display_name : undefined,
+		displayName:
+			typeof record.display_name === "string"
+				? record.display_name
+				: typeof record.displayName === "string"
+					? record.displayName
+					: undefined,
 		ownedBy: typeof record.owned_by === "string" ? record.owned_by : undefined,
 		description: typeof record.description === "string" ? record.description : undefined,
 		contextLength,

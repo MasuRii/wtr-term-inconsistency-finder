@@ -6,7 +6,6 @@ import {
 	PROVIDER_DEFAULTS,
 	buildModelCatalogMetadata,
 	buildModelsRequests,
-	getProviderDefaultTemperature,
 	parseModelCatalogEntries,
 	parseModelsResponse,
 	type ModelCatalogEntry,
@@ -81,7 +80,7 @@ export function createUI() {
                                     <option value="page">Loaded page chapters</option>
                                     <option value="wtr-api">WTR Lab reader API</option>
                                 </select>
-                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves official glossary placeholders before AI analysis.</small>
+                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves glossary placeholders before AI analysis.</small>
                             </div>
                             <div id="wtr-if-wtr-api-range-controls" class="wtr-if-api-range-controls">
                                 <div class="wtr-if-form-group">
@@ -236,21 +235,6 @@ export function createUI() {
                                     <button id="wtr-if-refresh-models-btn" class="wtr-if-btn wtr-if-btn-secondary">Refresh List</button>
                                 </div>
                             </div>
-                            <div class="wtr-if-form-group">
-                                <label for="wtr-if-temperature">AI Temperature (<span id="wtr-if-temp-value">0.5</span>)</label>
-                                <input type="range" id="wtr-if-temperature" min="0" max="2" step="0.1" value="0.5">
-                                <small id="wtr-if-temperature-hint" class="wtr-if-hint">Lower is more predictable, higher is more creative.</small>
-                            </div>
-                            <div class="wtr-if-form-group">
-                                <label for="wtr-if-reasoning-mode">Reasoning / Thinking</label>
-                                <select id="wtr-if-reasoning-mode">
-                                    <option value="off">Off</option>
-                                    <option value="low">Low effort</option>
-                                    <option value="medium">Medium effort</option>
-                                    <option value="high">High effort</option>
-                                </select>
-                                <small id="wtr-if-reasoning-hint" class="wtr-if-hint">Used only for models/providers that advertise reasoning or thinking controls.</small>
-                            </div>
                         </div>
                     </div>
 
@@ -275,9 +259,9 @@ export function createUI() {
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-official-wtr-glossary">
-                                    Use WTR Lab Official Glossary Context
+                                    Use WTR Lab Glossary Context (Advisory)
                                 </label>
-                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary to suppress official alias false positives and improve AI suggestions.</small>
+                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary as advisory context for AI suggestions. Chapter text and story context should still win.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
@@ -472,7 +456,6 @@ export function syncProviderConfigUI() {
 			openAiFields.open = Boolean(appState.config.providerUseManualPaths)
 		}
 	}
-	updateAIControlHints()
 }
 
 export function updateChapterSourceUI() {
@@ -488,24 +471,6 @@ export function updateChapterSourceUI() {
 	document.querySelectorAll<HTMLElement>(".wtr-if-range-grid[data-range-mode]").forEach((group) => {
 		group.style.display = source === "wtr-api" && group.dataset.rangeMode === rangeMode ? "grid" : "none"
 	})
-}
-
-export function updateAIControlHints() {
-	const providerType = document.getElementById("wtr-if-provider-type")?.value || appState.config.providerType
-	const temperatureHint = document.getElementById("wtr-if-temperature-hint")
-	const reasoningHint = document.getElementById("wtr-if-reasoning-hint")
-	const isGemini = providerType === AI_PROVIDERS.GEMINI
-
-	if (temperatureHint) {
-		temperatureHint.textContent = isGemini
-			? "Gemini usually works best near 1.0. Thinking models may ignore custom sampling settings."
-			: "Lower is more predictable, higher is more creative. Reasoning models may ignore or reject custom temperature."
-	}
-	if (reasoningHint) {
-		reasoningHint.textContent = isGemini
-			? "Gemini thinking is sent only for likely thinking-capable Gemini models."
-			: "Reasoning effort is sent only for known reasoning models or Ollama-compatible local models."
-	}
 }
 
 export async function populateModelSelector() {
@@ -766,12 +731,6 @@ export async function togglePanel(show = null) {
 		document.getElementById("wtr-if-logging-enabled").checked = appState.config.loggingEnabled
 		updateDebugLoggingUI()
 		document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
-		const tempSlider = document.getElementById("wtr-if-temperature")
-		const tempValue = document.getElementById("wtr-if-temp-value")
-		tempSlider.value = appState.config.temperature ?? getProviderDefaultTemperature(appState.config.providerType)
-		tempValue.textContent = tempSlider.value
-		document.getElementById("wtr-if-reasoning-mode").value = appState.config.reasoningMode || "off"
-
 		// Restore tab
 		panel.querySelectorAll(".wtr-if-tab-btn").forEach((b) => b.classList.remove("active"))
 		panel.querySelectorAll(".wtr-if-tab-content").forEach((c) => c.classList.remove("active"))

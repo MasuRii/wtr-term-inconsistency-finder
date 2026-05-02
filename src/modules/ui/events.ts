@@ -1,11 +1,6 @@
 // src/modules/ui/events.ts
 import { appState, saveConfig, clearSessionResults } from "../state"
-import {
-	AI_PROVIDERS,
-	PROVIDER_DEFAULTS,
-	getProviderDefaultTemperature,
-	resolveProviderSettings,
-} from "../providerConfig"
+import { AI_PROVIDERS, PROVIDER_DEFAULTS, resolveProviderSettings } from "../providerConfig"
 import {
 	crawlChapterData,
 	applyTermReplacements,
@@ -27,7 +22,6 @@ import {
 	syncProviderConfigUI,
 	updateStatusIndicator,
 	updateTermReplacerIntegrationUI,
-	updateAIControlHints,
 	updateChapterSourceUI,
 	toggleApiKeyVisibility,
 	updateDebugLoggingUI,
@@ -84,7 +78,7 @@ async function collectChapterDataForAnalysis(liveTerms) {
 	const pageContext = getWtrPageContext()
 
 	if (appState.config.useOfficialWtrGlossary && pageContext) {
-		updateStatusIndicator("running", "Loading WTR official glossary...")
+		updateStatusIndicator("running", "Loading WTR glossary context...")
 		appState.runtime.officialGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
 	}
 
@@ -272,8 +266,6 @@ export async function handleSaveConfig() {
 	appState.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim()
 	appState.config.useOfficialWtrGlossary = document.getElementById("wtr-if-use-official-wtr-glossary").checked
 	appState.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked
-	appState.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value)
-	appState.config.reasoningMode = document.getElementById("wtr-if-reasoning-mode").value
 	const statusEl = document.getElementById("wtr-if-status")
 	statusEl.textContent = "Saving..."
 	const success = await saveConfig()
@@ -563,7 +555,16 @@ export function handleApplyClick(event) {
 		}
 	}
 
-	const uniqueVariations = [...new Set(variationsToApply)]
+	let uniqueVariations = [...new Set(variationsToApply)]
+	if (button.dataset.safeVariations) {
+		try {
+			const safeVariations = new Set(JSON.parse(button.dataset.safeVariations || "[]"))
+			uniqueVariations = uniqueVariations.filter((variation) => safeVariations.has(variation))
+		} catch (e) {
+			log("Failed to parse safe variations for apply-selected/copy-selected.", e)
+			uniqueVariations = []
+		}
+	}
 
 	if (uniqueVariations.length === 0) {
 		const originalText = button.textContent
@@ -865,10 +866,6 @@ function importConfiguration() {
 				updateDebugLoggingUI()
 				updateTermReplacerIntegrationUI()
 				document.getElementById("wtr-if-auto-restore").checked = appState.preferences.autoRestoreResults
-				document.getElementById("wtr-if-temperature").value = appState.config.temperature
-				document.getElementById("wtr-if-temp-value").textContent = appState.config.temperature
-				document.getElementById("wtr-if-reasoning-mode").value = appState.config.reasoningMode || "off"
-				updateAIControlHints()
 
 				const statusEl = document.getElementById("wtr-if-status")
 				statusEl.textContent = "Configuration imported successfully"
@@ -962,11 +959,6 @@ export function addEventListeners() {
 	})
 
 	document.getElementById("wtr-if-status-indicator").addEventListener("click", handleStatusClick)
-	panel.querySelector("#wtr-if-temperature").addEventListener("input", (e) => {
-		document.getElementById("wtr-if-temp-value").textContent = e.target.value
-	})
-
-	panel.querySelector("#wtr-if-reasoning-mode").addEventListener("change", updateAIControlHints)
 
 	panel.querySelector("#wtr-if-chapter-source").addEventListener("change", (e) => {
 		appState.config.chapterSource = e.target.value
@@ -1019,17 +1011,11 @@ export function addEventListeners() {
 		document.getElementById("wtr-if-provider-chat-path").value = defaults.chatCompletionsPath
 		document.getElementById("wtr-if-provider-models-path").value = defaults.modelsPath
 		document.getElementById("wtr-if-provider-use-manual-paths").checked = false
-		const defaultTemperature = getProviderDefaultTemperature(providerType)
-		document.getElementById("wtr-if-temperature").value = String(defaultTemperature)
-		document.getElementById("wtr-if-temp-value").textContent = String(defaultTemperature)
 		appState.config.providerType = providerType
 		appState.config.providerBaseUrl = defaults.baseUrl
 		appState.config.providerChatCompletionsPath = defaults.chatCompletionsPath
 		appState.config.providerModelsPath = defaults.modelsPath
 		appState.config.providerUseManualPaths = false
-		appState.config.temperature = defaultTemperature
-		appState.config.reasoningMode = "off"
-		document.getElementById("wtr-if-reasoning-mode").value = "off"
 		appState.config.model = ""
 		syncProviderConfigUI()
 		populateModelSelector()
