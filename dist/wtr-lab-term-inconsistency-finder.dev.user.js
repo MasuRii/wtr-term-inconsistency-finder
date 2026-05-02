@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.5.2-dev.1777574089630
+// @version 5.6.0-dev.1777739767397
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -762,13 +762,49 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 	padding: 12px;
 }
 
-.wtr-if-details-section h4 {
+.wtr-if-details-section h4,
+.wtr-if-decision-guide summary {
 	border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
 	font-size: 14px;
 	font-weight: bold;
 	margin-bottom: 8px;
 	margin-top: 0;
 	padding-bottom: 4px;
+}
+
+.wtr-if-decision-guide summary {
+	cursor: pointer;
+	margin-bottom: 0;
+}
+
+.wtr-if-decision-guide[open] summary {
+	margin-bottom: 8px;
+}
+
+.wtr-if-decision-guide {
+	background-color: var(--bs-body-bg, #fff);
+	border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
+}
+
+.wtr-if-confidence,
+.wtr-if-confidence-factors {
+	font-size: 13px;
+	margin: 0 0 6px;
+}
+
+.wtr-if-confidence span {
+	color: var(--bs-secondary-color, #6c757d);
+	font-style: italic;
+}
+
+.wtr-if-decision-steps {
+	font-size: 13px;
+	margin: 0 0 6px 18px;
+	padding: 0;
+}
+
+.wtr-if-decision-steps li + li {
+	margin-top: 4px;
 }
 
 .wtr-if-variations,
@@ -1713,11 +1749,14 @@ function createUserFriendlyErrorMessage(errorClassification) {
     }
 }
 
+// EXTERNAL MODULE: ./src/modules/promptBudget.ts
+var promptBudget = __webpack_require__(392);
 ;// ./src/modules/promptManager.ts
 /**
  * Prompt Manager Module
  * Handles AI prompt generation and management for translation consistency analysis
  */
+
 
 /**
  * Advanced system prompt template for AI analysis
@@ -1737,20 +1776,69 @@ Find recurring entities translated inconsistently across chapters: character nam
 3. Link variants ONLY when context supports the same source/entity. Use character/location context, speaker, chapter order, component-based names, and source-term clues.
 4. Decide whether each difference changes consistency by reading the surrounding sentence/paragraph, chapter title, nearby actions, narrator wording, dialogue speaker, and glossary clues before treating terms as variants.
 5. Discard weak matches, intentional aliases, contextual nuance, and true term evolutions.
-6. For each remaining issue, provide concise evidence snippets and practical standardization suggestions.
+6. For each remaining issue, provide concise evidence snippets, a user-visible evidence chain, confidence assessment, and practical standardization suggestions.
 </analysis_workflow>
+
+<entity_tracking>
+When building entity profiles, track only details grounded in the supplied text:
+- First-mention context: how the entity/concept is introduced, named, titled, or described.
+- Descriptor chains: recurring roles, titles, relationships, places, abilities, pronouns, or nearby actions attached to the same referent.
+- Speaker and narration anchors: who says the term, whether it appears in dialogue or narration, and whether the speaker has reason to use a nickname, insult, honorific, joke, or alias.
+- Temporal/chapter anchors: where each variant first appears, where it changes, and whether later chapters consistently prefer one form.
+- Compound-term anchors: whether a root term appears inside titles, locations, organizations, abilities, or item names that should be standardized together.
+</entity_tracking>
 
 <context_aware_requirements>
 - MUST judge meaning in chapter context, not isolated word similarity. Different English terms are valid when surrounding text shows different referents, abilities, ranks, locations, speakers, tones, or narrative functions.
 - MUST disambiguate proper names, titles, aliases, epithets, ranks, and common nouns. A word used as a title/name in one passage and as an ordinary noun or descriptive phrase in another is NOT an inconsistency unless context proves the same source concept was rendered two ways.
 - MUST treat dialogue and narration separately when needed. Speaker-specific nicknames, honorific choices, insults, jokes, or in-world terminology MAY be intentional; flag them ONLY when another context clearly uses a conflicting translation for the same entity/concept.
 - MUST use chapter-local evidence such as titles, introductions, repeated nearby descriptors, pronouns, relationships, and action continuity to decide whether two terms refer to the same thing.
-- MUST use official glossary aliases as context for accepted variants and source mapping. MUST NOT flag alias-only differences unless the chapter text proves one alias is a mistaken translation in that specific usage.
+- MUST treat WTR glossary aliases as advisory hints only. Story context, usage frequency, grammar, world-building consistency, and chapter evidence outrank glossary wording. MUST NOT assume glossary aliases are correct or official.
 - MUST flag genuine consistency issues when context shows the same source/entity/concept is rendered incompatibly across chapters or passages, especially when the variation affects names, titles, abilities, organizations, locations, or recurring key terms.
 </context_aware_requirements>
 
+<overlap_and_granularity_policy>
+- MUST avoid duplicate root-term and compound-term findings for the same evidence. Before output, compare findings and merge or omit overlaps.
+- If a root term appears only as part of a longer title, event, organization, item, technique, or fixed phrase, report the longer compound concept only; do NOT create a separate root-term finding.
+- Create a separate root-term finding ONLY when the root term has independent inconsistent uses outside the compound phrase and those uses need a different replacement than the compound.
+- If one suggested replacement would fix both a compound phrase and its root component, keep the most user-actionable concept and include all targetable variations there.
+- If two candidate findings share the same chapters, snippets, or variation phrases, they are probably duplicates. Consolidate them into one finding with the clearest concept name.
+</overlap_and_granularity_policy>
+
+<evidence_chain_policy>
+- For every finding, provide concise, user-visible reasoning_steps that act as a decision guide, not private hidden deliberation.
+- reasoning_steps MUST explain: which variants were found, what context links them to the same referent/source concept, what evidence rules out intentional alias/nickname/common-noun usage, and why the final recommendation follows.
+- Each reasoning step SHOULD give the user something practical to check, such as frequency, chapter spread, glossary support, grammar fit, or whether the variant could be intentional.
+- If the same entity link depends on weak evidence, downgrade priority or omit the finding. Do not use reasoning_steps to justify speculation.
+</evidence_chain_policy>
+
+<user_guidance_style>
+- Write explanations and suggestion reasoning like a helpful translation editor advising a human, not like a database report.
+- Be concise but specific: say what choice you would make, why it helps the reader, and what tradeoff the user should notice.
+- Avoid robotic boilerplate such as "is translated inconsistently" without context. Prefer concrete wording like "Use this if you want to preserve the glossary/event name; choose the later wording only if chapter 425 intentionally renamed the event."
+- Mention uncertainty plainly when relevant. If two options are both defensible, tell the user what would make you choose one over the other.
+- Do not invent personality, jokes, or unsupported editorial opinions. The tone should be warm, practical, and decisive.
+</user_guidance_style>
+
+<confidence_policy>
+- Provide confidence.score from 1 to 10 for every finding and a short confidence.factors explanation.
+- Use 9-10 only when multiple contextual anchors from the chapter text clearly prove the same entity/source concept and the recommendation is obvious.
+- Do not use 9-10 when the deciding evidence is mainly glossary data; cap such findings at 7 unless chapter context independently proves the issue.
+- Use 7-8 for actionable findings with good evidence but minor uncertainty.
+- Use 5-6 for plausible but incomplete evidence and normally mark such findings LOW, STYLISTIC, or INFO unless user review is clearly useful.
+- Omit findings below 5 unless they are non-actionable INFO notes.
+</confidence_policy>
+
+<anti_hallucination_policy>
+- Do not infer source-language terms, official names, hidden author intent, or glossary authority unless they are explicitly present in the supplied text or advisory glossary context.
+- Do not say a term is official, canonical, verified, or correct because it appears in glossary context.
+- Every variation must be backed by a context_snippet containing that exact surface text. If you cannot quote the targetable text, omit that variation.
+- Every finding must include at least two genuinely different variation phrases after normalization. If all variation phrases would be identical, omit the finding.
+- Do not create a suggestion that introduces a new name unless it is already present in the supplied text, present in advisory glossary context, or strictly required as a grammatical editorial replacement.
+</anti_hallucination_policy>
+
 <do_not_flag>
-- Official glossary alias groups supplied in glossary context unless the chapter text proves one alias is used as an actual mistaken translation.
+- WTR glossary alias groups by themselves. Glossary data is AI/user/site-derived reference context, not proof of a real inconsistency.
 - Terms differing only by straight/smart quote style or trivial title colon punctuation.
 - Systematic site-level chapter number/title offsets that repeat across consecutive chapters.
 - Author notes, translator notes, casual expressions, onomatopoeia, emotional sounds, or intentionally flavorful speech.
@@ -1760,7 +1848,7 @@ Find recurring entities translated inconsistently across chapters: character nam
 
 <flag_when>
 - Same entity/source concept is rendered with incompatible English names.
-- Root terms cause dependent title/location/organization variants.
+- Root terms cause dependent title/location/organization variants that can be handled as one consolidated, user-actionable finding rather than duplicated root and compound findings.
 - Pinyin/romanized terms are mixed into otherwise English terminology when context suggests localization.
 - Username formatting/localization issues exist and context clearly indicates a player ID/handle. MUST NOT flag NPC names or single concatenated handles such as PlayerName.
 - Non-English honorific usage creates a consistency/localization issue worth reviewing.
@@ -1771,41 +1859,116 @@ Use CRITICAL for central, frequent, ongoing root/main-character issues. Use HIGH
 </priority_policy>
 
 <recommendation_policy>
-- Actionable findings MUST provide exactly 3 suggestions: one dominant analyzed-text usage option, one glossary-informed option when available, and one editorial best/readability option. If a role has no distinct candidate, still provide 3 text-supported options by varying the reasoning, not by inventing unsupported terms.
+- Actionable findings MUST provide 1 to 3 useful suggestions. Do NOT add filler suggestions just to reach three.
+- Suggestions SHOULD cover only distinct defensible choices: dominant analyzed-text usage, advisory reference wording when useful, or an editorial/readability option when it is clearly supported.
 - MUST mark exactly one suggestion with is_recommended: true.
+- Count variant occurrences across all supplied chapters and mention frequency/chapter spread in suggestion reasoning when possible.
+- Prefer variants appearing across more distinct chapters over variants clustered in one short passage.
 - The recommended suggestion SHOULD usually be the dominant consistent usage in the supplied text, especially if it appears across multiple chapters after preprocessing.
-- Official glossary data is advisory for source mapping, aliases, and possible corrections. MUST NOT automatically recommend a glossary term over a dominant text term.
-- A glossary correction MAY override dominant usage only when the correction clearly says the dominant usage is wrong and the chapter evidence supports that correction.
-- If dominant usage and glossary wording conflict, include both as suggestions and explain the conflict in reasoning.
+- If frequency is close or tied, prefer later-chapter usage when it appears to be a stable evolution, then prefer clearer standard English, then advisory glossary source mapping.
+- WTR glossary data is advisory for possible source mapping, aliases, and corrections. MUST NOT automatically recommend glossary wording over stronger analyzed-text usage, story context, grammar, or world-building consistency.
+- A glossary correction MAY override dominant usage only when chapter evidence independently supports that correction. A glossary label alone is not enough.
+- If dominant usage and advisory glossary wording conflict, include both only when both are useful choices, and explain the conflict without calling the glossary official or canonical.
+- MUST NOT invent editorial alternatives unless the exact wording appears in the supplied text, appears in advisory glossary context, or is clearly necessary to make a grammatical replacement for the highlighted variation.
+- Ensure the recommended replacement makes grammatical sense in every variation context. If the issue occurs inside compound phrases, recommend the whole compound term when replacing only the root would be unclear.
 </recommendation_policy>
 
+<replacement_target_policy>
+- variation.phrase MUST be the exact targetable term, alias, name, title, or component as it appears in the supplied chapter text.
+- variation.replacement_target MUST be the exact text currently present in the supplied chapter text that should be replaced. It MUST NOT be the recommended replacement unless that exact wording already appears in context_snippet.
+- variation.phrase and variation.replacement_target MUST appear verbatim in context_snippet, allowing only surrounding quote/punctuation differences.
+- NEVER output identical variation phrases for different snippets when the snippets contain different surface text. If the context says "Seventh-Stage", the variation is "Stage", not the recommended "Grade". If the context says "Empty Sword Sect", the variation is "Empty Sword Sect", not "Void Sword Sect".
+- variation.phrase MUST NOT be a surrounding quote, full sentence, or broad evidence phrase; put that context only in context_snippet.
+- If the full compound term should be replaced, set both phrase and replacement_target to the full compound term found in the text.
+- If only one component inside a longer phrase should change, set both phrase and replacement_target to that component found in the text, and include the longer phrase in context_snippet.
+</replacement_target_policy>
+
 <output_rules>
-- MUST base all findings exclusively on the supplied text plus relevant glossary context.
-- Each distinct concept MUST be a separate item. MUST NOT group unrelated entities.
-- MUST always populate variations with exact phrases, chapter numbers, and short context snippets.
-- Actionable findings MUST have exactly 3 suggestions. Non-actionable INFO findings MAY use an empty suggestions array or one empty informational suggestion.
+- MUST base all findings exclusively on the supplied text plus relevant advisory glossary context.
+- Each distinct concept MUST be a separate item. MUST NOT group unrelated entities, and MUST NOT split one overlapping root/compound issue into duplicate findings.
+- MUST always populate variations with exact targetable phrases that appear in their context snippets, replacement_target, chapter numbers, and short context snippets.
+- MUST include at least two different variation.phrase values for an actionable finding; identical phrases in different snippets are supporting evidence, not variations.
+- MUST populate reasoning_steps with concise evidence-chain statements that a user can inspect.
+- MUST populate confidence.score and confidence.factors for every finding.
+- Actionable findings MUST have 1 to 3 useful suggestions. Non-actionable INFO findings MAY use an empty suggestions array or one empty informational suggestion.
+- MUST NOT mention a variant in explanation, reasoning_steps, confidence.factors, or suggestion reasoning unless that variant appears in variations or is explicitly identified as the suggested replacement.
 - The suggestion field MUST contain only the replacement text, never phrases like "standardize to". Use an empty string for informational items.
 - Use plain text only inside JSON values. No markdown. No commentary outside JSON.
 </output_rules>
 
 <examples>
-<issue>Li Fuchen / Lee Fu Chen for the same hero across chapters MUST be one concept with both variants and a recommendation such as Li Fuchen.</issue>
-<non_issue>"Project Doomsday" vs 'Project Doomsday' is quote formatting only and MUST be ignored.</non_issue>
+<positive_issue_example>
+Concept: Li Fuchen.
+Why it is an issue: "Li Fuchen" and "Lee Fu Chen" both refer to the same protagonist because both snippets attach the same sect role, mentor relationship, and ongoing duel context across chapters. Recommend the dominant form when it appears in more chapters and reads consistently.
+Example output fragment:
+[
+  {
+    "concept": "Li Fuchen",
+    "priority": "HIGH",
+    "explanation": "The protagonist's name appears as both Li Fuchen and Lee Fu Chen in matching sect and duel contexts.",
+    "reasoning_steps": [
+      "Found Li Fuchen in chapter 12 and Lee Fu Chen in chapter 13.",
+      "Both snippets describe the same sect disciple continuing the same duel, so the variants refer to the same character rather than separate people.",
+      "Li Fuchen appears in more supplied chapters and is the cleaner romanization, so it is the recommended standard."
+    ],
+    "confidence": { "score": 9, "factors": "Multiple chapter anchors and repeated role/action context support the same-character link." },
+    "suggestions": [
+      { "display_text": "Dominant usage: Li Fuchen", "suggestion": "Li Fuchen", "reasoning": "Appears in more supplied chapters and fits the recurring protagonist context.", "is_recommended": true },
+      { "display_text": "Reference option: Li Fuchen", "suggestion": "Li Fuchen", "reasoning": "Use this if advisory glossary/source mapping supports the same romanization." }
+    ],
+    "variations": [
+      { "phrase": "Li Fuchen", "replacement_target": "Li Fuchen", "chapter": "12", "context_snippet": "Li Fuchen raised his sword before the sect elder." },
+      { "phrase": "Lee Fu Chen", "replacement_target": "Lee Fu Chen", "chapter": "13", "context_snippet": "Lee Fu Chen continued the same duel before the sect elder." }
+    ]
+  }
+]
+</positive_issue_example>
+<borderline_non_issue_example>
+"Cloud Sword" used as an ability by Elder Mo and "Azure Cloud Sword" used as a named technique by another disciple are NOT automatically inconsistent. If speaker, owner, rank, or action context shows distinct techniques, omit the finding even if the terms are lexically similar.
+</borderline_non_issue_example>
+<glossary_conflict_example>
+If the text uses "Heavenly Flame" in five chapters but the advisory glossary lists source 火灵 as "Skyfire Spirit", include both as suggestions. Recommend the glossary term only if chapter context proves "Heavenly Flame" is wrong; otherwise recommend the dominant text usage and explain the conflict.
+</glossary_conflict_example>
+<component_target_example>
+If the text says "Fifth-Stage Spirit Emperor" but the inconsistency is only Stage vs Grade, set phrase and replacement_target to "Stage" and put "Fifth-Stage Spirit Emperor" in context_snippet. If another snippet says "Fourth Rank Flying Sword", its variation is "Rank", not the recommended replacement. If the whole compound title should become "Fifth-Grade Spirit Emperor", set phrase and replacement_target to the full compound title as found in the text.
+</component_target_example>
+<overlap_duplicate_example>
+If "Hand-Pushed Tractor Competition" and "walking tractor" candidates come from the same event/title snippets, output only the event/title finding unless "walking tractor" is also independently inconsistent as a vehicle term outside that event. Do not output both just because one term is contained inside the other.
+</overlap_duplicate_example>
+<formatting_non_issue_example>
+"Project Doomsday" vs 'Project Doomsday' is quote formatting only and MUST be ignored.
+</formatting_non_issue_example>
 </examples>
 
 <final_directive>
 Return only schema-valid JSON containing evidence-backed, context-aware term inconsistency findings.
 </final_directive>`;
+function buildDeepAnalysisFocus(currentDepth, targetDepth) {
+    if (!currentDepth || !targetDepth) {
+        return "";
+    }
+    return `\n\n<deep_analysis_focus>
+You are running deep analysis iteration ${currentDepth} of ${targetDepth}.
+- Re-check previous findings first, then scan for new cross-chapter patterns.
+- Pay special attention to borderline cases from previous passes, weakly supported links, and findings that need fresh corroborating evidence.
+- Look for root-cause patterns across chapters, such as one recurring source term producing several compound variants.
+- Verify whether terms discovered in earlier passes now have more chapter spread, stronger entity anchors, or contradicting evidence.
+- Downgrade or omit findings that remain ambiguous after this pass. New findings discovered on a final pass must be especially conservative.
+</deep_analysis_focus>`;
+}
 /**
  * Generate AI prompt with chapter text and existing results
  * @param {string} chapterText - The chapter text to analyze
  * @param {Array} existingResults - Results from previous analysis for context
  * @returns {string} - Generated prompt for the AI
  */
-function buildPrompt(chapterText, existingResults = [], officialGlossaryContext = "") {
+function buildPrompt(chapterText, existingResults = [], officialGlossaryContext = "", analysisFocus = "", promptCaps = (0,promptBudget/* buildPromptContextCaps */.X)()) {
     let prompt = ADVANCED_SYSTEM_PROMPT;
+    if (analysisFocus) {
+        prompt += analysisFocus;
+    }
     if (officialGlossaryContext) {
-        prompt += `\n\n<official_glossary_context>\n<format_reference>\naliases = [canonical, alternate_aliases, source_term, count]; terms = [canonical, source_term, count]; replacements = [canonical, alternates, source_term, count]; corrections = [source_term, corrected_english, type, brief_reason].\n</format_reference>\n<glossary_rules>\n- This compact JSON is pre-filtered to terms relevant to the supplied text.\n- MUST treat aliases as accepted variants unless the text proves a real error.\n- MUST treat terms/replacements/corrections as advisory candidates, not automatic winners.\n- SHOULD use glossary data as one of the three suggestion perspectives when relevant.\n- MUST recommend glossary wording only when it beats dominant analyzed-text usage on evidence.\n- MUST NOT create findings from glossary context alone.\n</glossary_rules>\n\`\`\`json\n${officialGlossaryContext}\n\`\`\`\n</official_glossary_context>`;
+        prompt += `\n\n<advisory_wtr_glossary_context>\n<format_reference>\naliases = [suggested_primary, alternate_aliases, source_term, count]; terms = [suggested_primary, source_term, count]; replacements = [suggested_primary, alternates, source_term, count]; corrections = [source_term, suggested_english, type, brief_reason].\n</format_reference>\n<glossary_rules>\n- This compact JSON is pre-filtered to terms relevant to the supplied text.\n- This glossary is advisory context only. It may be AI-generated, user-generated, incomplete, or machine-translated. It is NOT official truth.\n- MUST prioritize analyzed chapter text, story/world-building context, continuity, grammar, and actual usage over glossary wording.\n- MUST treat aliases as possible accepted variants, not as proof that no issue exists and not as proof that one term is correct.\n- SHOULD use glossary data as a reference suggestion perspective when relevant, but MUST NOT make it the recommended option unless chapter evidence supports it.\n- MUST NOT create findings from glossary context alone.\n- MUST NOT call glossary terms official, canonical, or verified in explanations, reasoning, confidence factors, or suggestion labels.\n</glossary_rules>\n\`\`\`json\n${officialGlossaryContext}\n\`\`\`\n</advisory_wtr_glossary_context>`;
     }
     prompt += `\n\n<chapter_text>\n---\n${chapterText}\n---\n</chapter_text>`;
     const schemaDefinition = `
@@ -1813,18 +1976,28 @@ function buildPrompt(chapterText, existingResults = [], officialGlossaryContext 
            {
              "concept": "The core concept or inferred original term.",
              "priority": "CRITICAL | HIGH | MEDIUM | LOW | STYLISTIC | INFO",
-             "explanation": "A brief explanation of the inconsistency or issue.",
+             "explanation": "A brief, user-facing explanation of the issue and why it matters for reader clarity.",
+             "reasoning_steps": [
+               "Decision-guide step: identify the variants and where they appear.",
+               "Decision-guide step: explain what contextual anchors prove or weaken the same-entity/source-concept link.",
+               "Decision-guide step: explain what choice you recommend and what tradeoff the user should notice."
+             ],
+             "confidence": {
+               "score": "A number from 1 to 10. Use 7+ for actionable findings and lower scores only for review/info-level items.",
+               "factors": "Short plain-text explanation of what increases or lowers confidence."
+             },
              "suggestions": [
                {
-                 "display_text": "A user-friendly label such as 'Dominant usage: Term A', 'Glossary option: Term B', or 'Editorial option: Term C'.",
-                 "suggestion": "The exact, clean replacement text only. Do not include conversational text like 'Standardize to...'. Use an empty string (\\"\\") for informational suggestions.",
-                 "reasoning": "Explain whether this is dominant analyzed usage, glossary-informed, or editorial/readability-based, with frequency/chapter evidence when possible.",
+                 "display_text": "A user-friendly label such as 'Dominant usage: Term A', 'Reference option: Term B', or 'Editorial option: Term C'.",
+                 "suggestion": "The exact, clean replacement text only. Do not include conversational text like 'Standardize to...'. Use an empty string for informational suggestions.",
+                 "reasoning": "Give practical advice for choosing this option, including whether it is dominant usage, advisory-reference, or editorial/readability-based, with frequency/chapter evidence when possible.",
                  "is_recommended": "Required on exactly one actionable suggestion. A boolean true indicating the best recommendation."
                }
              ],
              "variations": [
                {
-                 "phrase": "The specific incorrect/variant phrase found.",
+                 "phrase": "The exact targetable variation text found in this snippet, not the recommended replacement and not a surrounding quote or context phrase.",
+                 "replacement_target": "The exact text currently present in this snippet to replace with a suggestion. Usually the same value as phrase.",
                  "chapter": "The chapter number as a string.",
                  "context_snippet": "A snippet of text showing the context."
                }
@@ -1847,20 +2020,29 @@ function buildPrompt(chapterText, existingResults = [], officialGlossaryContext 
             (0,utils/* log */.Rm)(`Context validation: ${existingResults.length} results filtered to ${validResults.length} valid results`);
         }
         // Apply context summarization to prevent exponential growth
-        const summarizedResults = (0,utils/* summarizeContextResults */.fN)(validResults, 30); // Limit to 30 detailed items
-        const existingJson = JSON.stringify(summarizedResults.map(({ concept, explanation, variations }) => ({
+        const summarizedResults = (0,utils/* summarizeContextResults */.fN)(validResults, promptCaps.previousResults);
+        const existingJson = JSON.stringify(summarizedResults.map(({ concept, explanation, reasoning_steps, confidence, variations }) => ({
             concept,
             explanation,
-            variations,
+            reasoning_steps,
+            confidence,
+            variations: Array.isArray(variations)
+                ? variations.map((variation) => ({
+                    phrase: variation?.phrase,
+                    replacement_target: variation?.replacement_target || variation?.target_phrase,
+                    chapter: variation?.chapter,
+                    context_snippet: variation?.context_snippet,
+                }))
+                : variations,
         })), null, 2);
         prompt += `\n\n<verification_and_continuation_task>
 <instruction>
-Re-check previous findings against the current supplied text, then scan for new issues. Use strict evidence from the current text only. MUST NOT copy old snippets or priorities.
+Re-check previous findings against the current supplied text, then scan for new issues. Use strict evidence from the current text only. MUST NOT copy old snippets, confidence values, reasoning steps, or priorities.
 </instruction>
 
 <tasks>
-1. Put still-valid, high-confidence previous findings in verified_inconsistencies as freshly rebuilt objects. Re-extract variations, snippets, chapters, priority, explanation, and suggestions from the current text.
-2. Omit previous findings that are now resolved, unsupported, intentional aliases/nicknames, contextual nuance, distinct speaker/narration usage, title/name/common-noun ambiguity, confirmed term evolutions, official glossary aliases, or false positives. MUST NOT list discarded items.
+1. Put still-valid, high-confidence previous findings in verified_inconsistencies as freshly rebuilt objects. Re-extract variations, replacement_target, snippets, chapters, priority, explanation, reasoning_steps, confidence, and suggestions from the current text.
+2. Omit previous findings that are now resolved, unsupported, intentional aliases/nicknames, contextual nuance, distinct speaker/narration usage, title/name/common-noun ambiguity, confirmed term evolutions, advisory glossary-only matches, or false positives. MUST NOT list discarded items.
 3. Put newly discovered issues in new_inconsistencies using the same schema.
 </tasks>
 
@@ -1900,10 +2082,11 @@ ${schemaDefinition}
  * @param {Array} existingResults - Results from previous analysis iterations
  * @returns {string} - Generated prompt for deep analysis
  */
-function buildDeepAnalysisPrompt(chapterText, existingResults = [], officialGlossaryContext = "") {
+function buildDeepAnalysisPrompt(chapterText, existingResults = [], officialGlossaryContext = "", currentDepth = 0, targetDepth = 0, promptCaps = (0,promptBudget/* buildPromptContextCaps */.X)()) {
+    const analysisFocus = buildDeepAnalysisFocus(currentDepth, targetDepth);
     // For deep analysis, we always want the verification mode which includes both
     // verification of existing results and discovery of new ones
-    return buildPrompt(chapterText, existingResults, officialGlossaryContext);
+    return buildPrompt(chapterText, existingResults, officialGlossaryContext, analysisFocus, promptCaps);
 }
 /**
  * Parse and validate API response content
@@ -1942,6 +2125,7 @@ var wtrLabApi = __webpack_require__(41);
 // Import from providerConfig module
 
 // Import from apiErrorHandler module
+
 
 
 /**
@@ -2031,8 +2215,17 @@ function summarizeParsedResponse(parsedResponse) {
             .filter(Boolean),
     };
 }
-function getOfficialGlossaryPromptContext(chapterText, chapterData) {
-    return (0,wtrLabApi/* formatOfficialGlossaryPromptContext */.CO)(state/* appState */.XJ.runtime.officialGlossaryContext || null, chapterText, chapterData);
+function getCurrentModelMetadata() {
+    const modelId = typeof state/* appState */.XJ.config.model === "string" ? state/* appState */.XJ.config.model : "";
+    const metadata = state/* appState */.XJ.runtime.providerModelMetadata || {};
+    return metadata[modelId] || metadata[modelId.replace(/^models\//, "")] || null;
+}
+function getCurrentPromptContextCaps() {
+    const contextLength = getCurrentModelMetadata()?.contextLength;
+    return (0,promptBudget/* buildPromptContextCaps */.X)(contextLength);
+}
+function getOfficialGlossaryPromptContext(chapterText, chapterData, promptCaps) {
+    return (0,wtrLabApi/* formatOfficialGlossaryPromptContext */.CO)(state/* appState */.XJ.runtime.officialGlossaryContext || null, chapterText, chapterData, promptCaps);
 }
 function filterOfficialAliasOnlyFindings(results, operationName) {
     if (!Array.isArray(results) || !state/* appState */.XJ.runtime.officialGlossaryContext) {
@@ -2045,16 +2238,16 @@ function filterOfficialAliasOnlyFindings(results, operationName) {
             suppressedMatches.push({
                 concept: result?.concept || "Unknown concept",
                 phrases: match.phrases,
-                officialCanonical: match.group.canonical,
-                officialSource: match.group.source,
-                officialAliases: match.group.aliases,
+                glossarySuggestedPrimary: match.group.canonical,
+                glossarySource: match.group.source,
+                glossaryAliases: match.group.aliases,
             });
             return false;
         }
         return true;
     });
     if (suppressedMatches.length > 0) {
-        (0,utils/* log */.Rm)(`${operationName}: Suppressed ${suppressedMatches.length} official WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`, suppressedMatches);
+        (0,utils/* log */.Rm)(`${operationName}: Suppressed ${suppressedMatches.length} WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`, suppressedMatches);
     }
     return filteredResults;
 }
@@ -2072,6 +2265,7 @@ function summarizeResultsForDebug(results) {
             priority: result.priority || "INFO",
             status: result.status || (result.isNew ? "New" : "Unverified"),
             variationCount: Array.isArray(result.variations) ? result.variations.length : 0,
+            confidenceScore: getConfidenceScore(result),
             recommendedSuggestion,
         };
     });
@@ -2090,6 +2284,116 @@ function isActionableFinding(result) {
 function getCleanSuggestionText(value) {
     return typeof value === "string" ? value.trim() : "";
 }
+function buildFlexibleCandidatePattern(candidate) {
+    return (0,utils/* escapeRegExp */.Nt)(candidate.trim()).replace(/[\s\-_'"“”‘’]+/g, "[\\s\\-_'\"“”‘’]+");
+}
+function findCandidateInContext(candidate, context) {
+    const cleanCandidate = getCleanSuggestionText(candidate);
+    const cleanContext = getCleanSuggestionText(context);
+    if (!cleanCandidate || !cleanContext) {
+        return "";
+    }
+    if (cleanContext.includes(cleanCandidate)) {
+        return cleanCandidate;
+    }
+    const lowerContext = cleanContext.toLowerCase();
+    const lowerCandidate = cleanCandidate.toLowerCase();
+    const directIndex = lowerContext.indexOf(lowerCandidate);
+    if (directIndex !== -1) {
+        return cleanContext.slice(directIndex, directIndex + cleanCandidate.length);
+    }
+    try {
+        const match = cleanContext.match(new RegExp(buildFlexibleCandidatePattern(cleanCandidate), "i"));
+        return match?.[0]?.trim() || "";
+    }
+    catch {
+        return "";
+    }
+}
+function getVariationApplyTarget(variation) {
+    return (getCleanSuggestionText(variation?.replacement_target) ||
+        getCleanSuggestionText(variation?.target_phrase) ||
+        getCleanSuggestionText(variation?.phrase));
+}
+function normalizeVariationTargets(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const repairLog = [];
+    const normalizedResults = results.map((result) => {
+        if (!Array.isArray(result?.variations) || result.variations.length === 0) {
+            return result;
+        }
+        const suggestionValues = (Array.isArray(result.suggestions) ? result.suggestions : [])
+            .map((suggestion) => getCleanSuggestionText(suggestion?.suggestion))
+            .filter(Boolean);
+        const variations = result.variations.map((variation) => {
+            const context = getCleanSuggestionText(variation?.context_snippet);
+            const phrase = getCleanSuggestionText(variation?.phrase);
+            const target = getVariationApplyTarget(variation);
+            const candidates = [phrase, target, ...suggestionValues].filter(Boolean);
+            let resolved = "";
+            for (const candidate of candidates) {
+                resolved = findCandidateInContext(candidate, context);
+                if (resolved) {
+                    break;
+                }
+            }
+            if (!resolved) {
+                resolved = target || phrase;
+            }
+            if (resolved && (resolved !== phrase || resolved !== target)) {
+                repairLog.push({
+                    concept: result.concept,
+                    chapter: variation?.chapter,
+                    fromPhrase: phrase,
+                    fromTarget: target,
+                    toTarget: resolved,
+                });
+            }
+            return {
+                ...variation,
+                phrase: resolved,
+                replacement_target: resolved,
+            };
+        });
+        return {
+            ...result,
+            variations,
+        };
+    });
+    if (repairLog.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Repaired variation targets from context snippets.`, repairLog);
+    }
+    return normalizedResults;
+}
+function filterNonVariantFindings(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const removed = [];
+    const filtered = results.filter((result) => {
+        if (!isActionableFinding(result) || !Array.isArray(result?.variations)) {
+            return true;
+        }
+        const uniquePhrases = new Set(result.variations
+            .map((variation) => getCleanSuggestionText(variation?.replacement_target || variation?.phrase).toLowerCase())
+            .filter(Boolean));
+        if (uniquePhrases.size >= 2) {
+            return true;
+        }
+        removed.push({
+            concept: result.concept,
+            variationCount: result.variations.length,
+            uniqueVariationCount: uniquePhrases.size,
+        });
+        return false;
+    });
+    if (removed.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Removed findings without at least two distinct variation targets.`, removed);
+    }
+    return filtered;
+}
 function createFallbackSuggestion(_result, suggestion, label, reasoning) {
     const cleanSuggestion = getCleanSuggestionText(suggestion);
     return {
@@ -2097,6 +2401,19 @@ function createFallbackSuggestion(_result, suggestion, label, reasoning) {
         suggestion: cleanSuggestion,
         reasoning,
     };
+}
+function getUniqueSuggestions(suggestions) {
+    const seen = new Set();
+    return suggestions.filter((suggestion) => {
+        const suggestionText = getCleanSuggestionText(suggestion?.suggestion);
+        const displayText = getCleanSuggestionText(suggestion?.display_text);
+        const key = (suggestionText || displayText).toLowerCase();
+        if (!key || seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
 }
 function getSuggestionCandidates(result) {
     const candidates = [];
@@ -2145,34 +2462,23 @@ function normalizeActionableSuggestions(results, operationName) {
             const hasDisplayText = getCleanSuggestionText(suggestion?.display_text);
             return hasSuggestion || hasDisplayText;
         });
-        const candidates = getSuggestionCandidates({ ...result, suggestions: validSuggestions });
-        const nextSuggestions = validSuggestions.slice(0, 3).map((suggestion) => ({
+        const uniqueSuggestions = getUniqueSuggestions(validSuggestions);
+        const candidates = getSuggestionCandidates({ ...result, suggestions: uniqueSuggestions });
+        const nextSuggestions = uniqueSuggestions.slice(0, 3).map((suggestion) => ({
             ...suggestion,
             is_recommended: false,
         }));
-        const fallbackRoles = [
-            {
-                label: "Dominant usage",
-                reasoning: "Fallback dominant-usage option added because the AI returned fewer than three actionable suggestions. Review variation frequency before applying.",
-            },
-            {
-                label: "Glossary-informed option",
-                reasoning: "Fallback glossary/editing option added because the AI returned fewer than three actionable suggestions. Treat as advisory unless supported by analyzed text.",
-            },
-            {
-                label: "Editorial option",
-                reasoning: "Fallback editorial option added to preserve the required three-suggestion structure. Validate manually before applying.",
-            },
-        ];
-        let candidateIndex = 0;
-        while (nextSuggestions.length < 3) {
-            const candidate = candidates[candidateIndex] || candidates[0] || getCleanSuggestionText(result.concept);
-            const role = fallbackRoles[nextSuggestions.length];
-            nextSuggestions.push(createFallbackSuggestion(result, candidate, role.label, role.reasoning));
-            candidateIndex++;
+        if (nextSuggestions.length === 0) {
+            const candidate = candidates[0] || getCleanSuggestionText(result.concept);
+            nextSuggestions.push(createFallbackSuggestion(result, candidate, "Dominant usage", "Fallback option added because the AI returned no actionable suggestions. Review variation frequency before applying."));
         }
-        const originalRecommendedIndex = validSuggestions.findIndex((suggestion) => suggestion?.is_recommended === true);
-        const recommendedIndex = originalRecommendedIndex >= 0 && originalRecommendedIndex < 3 ? originalRecommendedIndex : 0;
+        const originalRecommended = validSuggestions.find((suggestion) => suggestion?.is_recommended === true);
+        const originalRecommendedKey = getCleanSuggestionText(originalRecommended?.suggestion || originalRecommended?.display_text);
+        const originalRecommendedIndex = originalRecommendedKey
+            ? nextSuggestions.findIndex((suggestion) => getCleanSuggestionText(suggestion?.suggestion || suggestion?.display_text).toLowerCase() ===
+                originalRecommendedKey.toLowerCase())
+            : -1;
+        const recommendedIndex = originalRecommendedIndex >= 0 ? originalRecommendedIndex : 0;
         nextSuggestions.forEach((suggestion, index) => {
             if (index === recommendedIndex) {
                 suggestion.is_recommended = true;
@@ -2181,11 +2487,13 @@ function normalizeActionableSuggestions(results, operationName) {
                 delete suggestion.is_recommended;
             }
         });
-        if (originalSuggestions.length !== 3 ||
+        if (originalSuggestions.length !== nextSuggestions.length ||
+            uniqueSuggestions.length !== validSuggestions.length ||
             originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true).length !== 1) {
             normalizationLog.push({
                 concept: result.concept,
                 originalSuggestionCount: originalSuggestions.length,
+                uniqueSuggestionCount: uniqueSuggestions.length,
                 normalizedSuggestionCount: nextSuggestions.length,
                 originalRecommendedCount: originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true)
                     .length,
@@ -2197,7 +2505,7 @@ function normalizeActionableSuggestions(results, operationName) {
         };
     });
     if (normalizationLog.length > 0) {
-        (0,utils/* log */.Rm)(`${operationName}: Normalized actionable suggestions to exactly 3 entries with exactly one recommendation.`, normalizationLog);
+        (0,utils/* log */.Rm)(`${operationName}: Normalized actionable suggestions to 1-3 unique entries with exactly one recommendation.`, normalizationLog);
     }
     return normalizedResults;
 }
@@ -2284,6 +2592,42 @@ function markLowEvidenceResultsForReview(results, operationName) {
     });
     if (lowEvidenceConcepts.length > 0) {
         (0,utils/* log */.Rm)(`${operationName}: Marked ${lowEvidenceConcepts.length} low-evidence finding${lowEvidenceConcepts.length === 1 ? "" : "s"} as Needs Review due to insufficient variations.`, lowEvidenceConcepts);
+    }
+    return reviewedResults;
+}
+function getConfidenceScore(result) {
+    const rawScore = result?.confidence?.score;
+    const score = typeof rawScore === "number" ? rawScore : Number.parseFloat(String(rawScore || ""));
+    return Number.isFinite(score) ? score : null;
+}
+function markLowConfidenceResultsForReview(results, operationName) {
+    if (!Array.isArray(results) || results.length === 0) {
+        return results;
+    }
+    const lowConfidenceConcepts = [];
+    const reviewedResults = results.map((result) => {
+        if (!isActionableFinding(result) || result.status === "Needs Review") {
+            return result;
+        }
+        const score = getConfidenceScore(result);
+        if (score === null || score >= 6) {
+            return result;
+        }
+        lowConfidenceConcepts.push({
+            concept: result.concept,
+            priority: result.priority || "INFO",
+            confidenceScore: score,
+            previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+        });
+        return {
+            ...result,
+            status: "Needs Review",
+            latestVerificationStatus: "low_confidence_score",
+            verificationNote: "This actionable finding has a confidence score below 6, so it needs manual review before applying.",
+        };
+    });
+    if (lowConfidenceConcepts.length > 0) {
+        (0,utils/* log */.Rm)(`${operationName}: Marked ${lowConfidenceConcepts.length} low-confidence finding${lowConfidenceConcepts.length === 1 ? "" : "s"} as Needs Review.`, lowConfidenceConcepts);
     }
     return reviewedResults;
 }
@@ -2456,7 +2800,8 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
         chapterCount: chapterData.length,
         characterCount: combinedText.length,
     });
-    const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
+    const promptCaps = getCurrentPromptContextCaps();
+    const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData, promptCaps), "", promptCaps);
     const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
     const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
     (0,userscriptApi/* gmXmlhttpRequest */.hb)({
@@ -2567,9 +2912,12 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
                 filteredInitialResults.forEach((r) => (r.isNew = true));
                 state/* appState */.XJ.runtime.cumulativeResults = filteredInitialResults;
             }
+            state/* appState */.XJ.runtime.cumulativeResults = normalizeVariationTargets(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+            state/* appState */.XJ.runtime.cumulativeResults = filterNonVariantFindings(state/* appState */.XJ.runtime.cumulativeResults, operationName);
             state/* appState */.XJ.runtime.cumulativeResults = normalizeActionableSuggestions(state/* appState */.XJ.runtime.cumulativeResults, operationName);
             state/* appState */.XJ.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
             state/* appState */.XJ.runtime.cumulativeResults = markLowEvidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+            state/* appState */.XJ.runtime.cumulativeResults = markLowConfidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
             logResultSummary(operationName, state/* appState */.XJ.runtime.cumulativeResults);
             (0,state/* saveSessionResults */.I6)();
             (0,ui/* updateStatusIndicator */.LI)("complete", "Complete!");
@@ -2678,7 +3026,8 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
             chapterCount: chapterData.length,
             characterCount: combinedText.length,
         });
-        const prompt = buildDeepAnalysisPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData));
+        const promptCaps = getCurrentPromptContextCaps();
+        const prompt = buildDeepAnalysisPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData, promptCaps), currentDepth, targetDepth, promptCaps);
         const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt);
         const streamingRequestState = createStreamingRequestState(state/* appState */.XJ.config);
         (0,userscriptApi/* gmXmlhttpRequest */.hb)({
@@ -2802,9 +3151,12 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                     }
                     state/* appState */.XJ.runtime.cumulativeResults = (0,utils/* mergeAnalysisResults */.bd)(state/* appState */.XJ.runtime.cumulativeResults, resultsToMerge);
                 }
+                state/* appState */.XJ.runtime.cumulativeResults = normalizeVariationTargets(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+                state/* appState */.XJ.runtime.cumulativeResults = filterNonVariantFindings(state/* appState */.XJ.runtime.cumulativeResults, operationName);
                 state/* appState */.XJ.runtime.cumulativeResults = normalizeActionableSuggestions(state/* appState */.XJ.runtime.cumulativeResults, operationName);
                 state/* appState */.XJ.runtime.cumulativeResults = markPlaceholderArtifactResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
                 state/* appState */.XJ.runtime.cumulativeResults = markLowEvidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
+                state/* appState */.XJ.runtime.cumulativeResults = markLowConfidenceResultsForReview(state/* appState */.XJ.runtime.cumulativeResults, operationName);
                 logResultSummary(operationName, state/* appState */.XJ.runtime.cumulativeResults);
                 // Save session results after each iteration
                 (0,state/* saveSessionResults */.I6)();
@@ -2900,6 +3252,54 @@ function deprecatedHandleApiError(errorMessage) {
 
 /***/ },
 
+/***/ 392
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   X: () => (/* binding */ buildPromptContextCaps)
+/* harmony export */ });
+const DEFAULT_PROMPT_CONTEXT_CAPS = Object.freeze({
+    aliasGroups: 20,
+    canonicalTerms: 40,
+    replacements: 25,
+    corrections: 15,
+    correctionReasonChars: 160,
+    previousResults: 30,
+});
+function getContextScaleFactor(contextLength) {
+    const parsedContextLength = typeof contextLength === "number" ? contextLength : Number.parseInt(String(contextLength ?? ""), 10);
+    if (!Number.isFinite(parsedContextLength) || parsedContextLength <= 0) {
+        return 1;
+    }
+    if (parsedContextLength < 32_000) {
+        return 0.5;
+    }
+    if (parsedContextLength < 128_000) {
+        return 1;
+    }
+    if (parsedContextLength < 512_000) {
+        return 1.5;
+    }
+    return 2;
+}
+function scaleCap(value, scaleFactor) {
+    return Math.max(1, Math.round(value * scaleFactor));
+}
+function buildPromptContextCaps(contextLength) {
+    const scaleFactor = getContextScaleFactor(contextLength);
+    return {
+        aliasGroups: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.aliasGroups, scaleFactor),
+        canonicalTerms: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.canonicalTerms, scaleFactor),
+        replacements: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.replacements, scaleFactor),
+        corrections: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.corrections, scaleFactor),
+        correctionReasonChars: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.correctionReasonChars, scaleFactor),
+        previousResults: scaleCap(DEFAULT_PROMPT_CONTEXT_CAPS.previousResults, scaleFactor),
+    };
+}
+
+
+/***/ },
+
 /***/ 980
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -2917,7 +3317,6 @@ function deprecatedHandleApiError(errorMessage) {
 /* harmony export */   gL: () => (/* binding */ parseModelCatalogEntries),
 /* harmony export */   hV: () => (/* binding */ PROVIDER_DEFAULTS),
 /* harmony export */   o_: () => (/* binding */ finalizeOpenAiStreamResponse),
-/* harmony export */   tl: () => (/* binding */ getProviderDefaultTemperature),
 /* harmony export */   uJ: () => (/* binding */ buildModelCatalogMetadata),
 /* harmony export */   vy: () => (/* binding */ resolveProviderSettings),
 /* harmony export */   yU: () => (/* binding */ consumeOpenAiStreamResponse)
@@ -2938,7 +3337,6 @@ const PROVIDER_DEFAULTS = Object.freeze({
         modelsPath: "/models",
         modelLabel: "OpenAI-Compatible Model",
         apiKeyLabel: "[REDACTED] Keys",
-        defaultTemperature: 0.5,
     }),
     [AI_PROVIDERS.GEMINI]: Object.freeze({
         baseUrl: "https://generativelanguage.googleapis.com/v1beta",
@@ -2946,12 +3344,13 @@ const PROVIDER_DEFAULTS = Object.freeze({
         modelsPath: "/models",
         modelLabel: "Gemini Model",
         apiKeyLabel: "[REDACTED] API Keys",
-        defaultTemperature: 1.0,
     }),
 });
 const COMMON_VERSIONED_PREFIXES = ["/v1", "/api/v1", "/openai/v1", "/v1beta/openai"];
 const OPENAI_STYLE_CHAT_PATH = "/chat/completions";
 const OPENAI_STYLE_MODELS_PATH = "/models";
+const ANALYSIS_TEMPERATURE = 1;
+const HIGH_REASONING_EFFORT = "high";
 function ensureProviderType(providerType) {
     return providerType === AI_PROVIDERS.GEMINI ? AI_PROVIDERS.GEMINI : AI_PROVIDERS.OPENAI_COMPATIBLE;
 }
@@ -2968,9 +3367,6 @@ function normalizeApiPath(value, fallback) {
 function getProviderDefaults(providerType) {
     return PROVIDER_DEFAULTS[ensureProviderType(providerType)];
 }
-function getProviderDefaultTemperature(providerType) {
-    return getProviderDefaults(providerType).defaultTemperature;
-}
 function parseUrl(value) {
     try {
         return new URL(value);
@@ -2978,17 +3374,6 @@ function parseUrl(value) {
     catch {
         return null;
     }
-}
-function normalizeReasoningMode(value) {
-    return value === "low" || value === "medium" || value === "high" ? value : "off";
-}
-function normalizeTemperature(value, providerType) {
-    const fallback = getProviderDefaultTemperature(providerType);
-    const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
-    if (!Number.isFinite(parsed)) {
-        return fallback;
-    }
-    return Math.min(2, Math.max(0, parsed));
 }
 function isDeepSeekBase(url) {
     return Boolean(url?.hostname.toLowerCase().endsWith("deepseek.com"));
@@ -3047,7 +3432,6 @@ function resolveProviderSettings(config = {}) {
             : deriveAutomaticPath(baseUrl, "models"),
         modelLabel: defaults.modelLabel,
         apiKeyLabel: defaults.apiKeyLabel,
-        defaultTemperature: defaults.defaultTemperature,
         useManualPaths,
     };
 }
@@ -3114,41 +3498,43 @@ function modelSupportsTemperature(metadata) {
     }
     return supportsOpenAiParameter(metadata, "temperature") !== false;
 }
+function metadataSupportsReasoningEffort(metadata) {
+    return metadata?.capabilities?.reasoning === true || supportsOpenAiParameter(metadata, "reasoning_effort") === true;
+}
+function metadataRejectsReasoningEffort(metadata) {
+    return metadata?.capabilities?.reasoning === false || supportsOpenAiParameter(metadata, "reasoning_effort") === false;
+}
 function modelSupportsReasoningEffort(model, metadata = null) {
-    const parameterSupport = supportsOpenAiParameter(metadata, "reasoning_effort");
-    if (metadata?.capabilities?.reasoning === true || parameterSupport === true) {
+    if (metadataSupportsReasoningEffort(metadata)) {
         return true;
     }
-    if (metadata?.capabilities?.reasoning === false || parameterSupport === false) {
+    if (metadataRejectsReasoningEffort(metadata)) {
         return false;
     }
     const modelId = typeof model === "string" ? model.toLowerCase() : "";
-    return /(^|[-_/])(o1|o3|o4|gpt-5|r1|qwq|qwen3|reasoning)([-_/]|$)/i.test(modelId);
+    return /(^|[-_/])(o1|o3|o4|gpt-5|r1|qwq|qwen3|reasoning|codex)([-_/]|$)/i.test(modelId);
 }
 function modelSupportsGeminiThinking(model) {
     const modelId = typeof model === "string" ? model.toLowerCase() : "";
     return modelId.includes("gemini-2.5") || modelId.includes("thinking");
 }
-function thinkingBudgetForEffort(reasoningMode) {
-    switch (reasoningMode) {
-        case "low":
-            return 1024;
-        case "medium":
-            return 4096;
-        case "high":
-            return 8192;
-        default:
-            return 0;
+function highGeminiThinkingBudget(model) {
+    const modelId = typeof model === "string" ? model.toLowerCase() : "";
+    if (modelId.includes("gemini-2.5-pro")) {
+        return 32768;
     }
+    if (modelId.includes("gemini-2.5-flash")) {
+        return 24576;
+    }
+    return 8192;
 }
 function buildGeminiGenerationConfig(config) {
-    const reasoningMode = normalizeReasoningMode(config.reasoningMode);
     const generationConfig = {
-        temperature: normalizeTemperature(config.temperature, AI_PROVIDERS.GEMINI),
+        temperature: ANALYSIS_TEMPERATURE,
     };
-    if (reasoningMode !== "off" && modelSupportsGeminiThinking(config.model)) {
+    if (modelSupportsGeminiThinking(config.model)) {
         generationConfig.thinkingConfig = {
-            thinkingBudget: thinkingBudgetForEffort(reasoningMode),
+            thinkingBudget: highGeminiThinkingBudget(config.model),
         };
     }
     return generationConfig;
@@ -3156,24 +3542,25 @@ function buildGeminiGenerationConfig(config) {
 function buildOpenAiCompatibleBody(config) {
     const provider = resolveProviderSettings(config);
     const providerUrl = parseUrl(provider.baseUrl);
-    const reasoningMode = normalizeReasoningMode(config.reasoningMode);
     const modelMetadata = getConfiguredModelMetadata(config);
-    const metadataAllowsReasoning = modelSupportsReasoningEffort(config.model, modelMetadata);
-    const supportsReasoning = reasoningMode !== "off" &&
-        !isAnthropicBase(providerUrl) &&
-        (metadataAllowsReasoning || isOllamaBase(providerUrl));
+    const explicitReasoningSupport = metadataSupportsReasoningEffort(modelMetadata);
+    const explicitReasoningRejection = metadataRejectsReasoningEffort(modelMetadata);
+    const supportsReasoning = !explicitReasoningRejection &&
+        (explicitReasoningSupport ||
+            (!isAnthropicBase(providerUrl) &&
+                (modelSupportsReasoningEffort(config.model, modelMetadata) || isOllamaBase(providerUrl))));
     const body = {
         model: config.model,
         stream: true,
         messages: [],
     };
-    if (modelSupportsTemperature(modelMetadata) && !(supportsReasoning && metadataAllowsReasoning)) {
-        body.temperature = normalizeTemperature(config.temperature, AI_PROVIDERS.OPENAI_COMPATIBLE);
+    if (modelSupportsTemperature(modelMetadata) && !supportsReasoning) {
+        body.temperature = ANALYSIS_TEMPERATURE;
     }
     if (supportsReasoning) {
-        body.reasoning_effort = reasoningMode;
+        body.reasoning_effort = HIGH_REASONING_EFFORT;
         if (isOllamaBase(providerUrl)) {
-            body.reasoning = { effort: reasoningMode };
+            body.reasoning = { effort: HIGH_REASONING_EFFORT };
         }
     }
     return body;
@@ -3411,13 +3798,24 @@ function modelCatalogEntryFromValue(value) {
     const contextLength = toFiniteNumber(record.context_length) ||
         toFiniteNumber(record.context_window) ||
         toFiniteNumber(record.max_context_tokens) ||
+        toFiniteNumber(record.max_input_tokens) ||
+        toFiniteNumber(record.maxInputTokens) ||
+        toFiniteNumber(record.inputTokenLimit) ||
+        toFiniteNumber(record.input_token_limit) ||
         toFiniteNumber(getRecord(record.limits)?.context_window);
     const maxCompletionTokens = toFiniteNumber(record.max_completion_tokens) ||
         toFiniteNumber(record.max_output_tokens) ||
+        toFiniteNumber(record.maxOutputTokens) ||
+        toFiniteNumber(record.outputTokenLimit) ||
+        toFiniteNumber(record.output_token_limit) ||
         toFiniteNumber(getRecord(record.limits)?.max_output);
     return {
         id: rawId.trim(),
-        displayName: typeof record.display_name === "string" ? record.display_name : undefined,
+        displayName: typeof record.display_name === "string"
+            ? record.display_name
+            : typeof record.displayName === "string"
+                ? record.displayName
+                : undefined,
         ownedBy: typeof record.owned_by === "string" ? record.owned_by : undefined,
         description: typeof record.description === "string" ? record.description : undefined,
         contextLength,
@@ -3528,8 +3926,6 @@ const appState = {
         wtrApiEndChapter: "",
         useOfficialWtrGlossary: true,
         loggingEnabled: false,
-        temperature: _providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .PROVIDER_DEFAULTS */ .hV[_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .DEFAULT_PROVIDER_TYPE */ .V1].defaultTemperature,
-        reasoningMode: "off",
         activeTab: "finder",
         activeFilter: "all",
         deepAnalysisDepth: 1,
@@ -3632,9 +4028,8 @@ async function loadConfig() {
     if (typeof savedConfig.providerUseManualPaths !== "boolean") {
         savedConfig.providerUseManualPaths = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_0__/* .isManualPathConfig */ .QQ)(savedConfig);
     }
-    if (typeof savedConfig.reasoningMode !== "string") {
-        savedConfig.reasoningMode = "off";
-    }
+    delete savedConfig.reasoningMode;
+    delete savedConfig.temperature;
     if (savedConfig.chapterSource !== "wtr-api") {
         savedConfig.chapterSource = "page";
     }
@@ -3655,9 +4050,6 @@ async function loadConfig() {
     }
     if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
         savedConfig.useOfficialWtrGlossary = true;
-    }
-    if (typeof savedConfig.temperature !== "number") {
-        savedConfig.temperature = providerDefaults.defaultTemperature;
     }
     // Load preferences from saved config if they exist
     if (savedConfig.preferences) {
@@ -3780,7 +4172,6 @@ function saveSessionResults() {
             timestamp: Date.now(),
             config: {
                 model: appState.config.model,
-                temperature: appState.config.temperature,
             },
         };
         sessionStorage.setItem(SESSION_RESULTS_KEY, JSON.stringify(sessionData));
@@ -4056,6 +4447,122 @@ function getNextAvailableKey() {
 
 
 const loggedNonActionableSuggestions = new Set();
+function getVariationApplyTarget(variation) {
+    const explicitTarget = typeof variation?.replacement_target === "string"
+        ? variation.replacement_target.trim()
+        : typeof variation?.target_phrase === "string"
+            ? variation.target_phrase.trim()
+            : "";
+    return explicitTarget || (typeof variation?.phrase === "string" ? variation.phrase.trim() : "");
+}
+function buildFlexibleCandidatePattern(candidate) {
+    return (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeRegExp */ .Nt)(candidate.trim()).replace(/[\s\-_'"“”‘’]+/g, "[\\s\\-_'\"“”‘’]+");
+}
+function findCandidateInContext(candidate, context) {
+    const cleanCandidate = typeof candidate === "string" ? candidate.trim() : "";
+    const cleanContext = typeof context === "string" ? context.trim() : "";
+    if (!cleanCandidate || !cleanContext) {
+        return "";
+    }
+    if (cleanContext.includes(cleanCandidate)) {
+        return cleanCandidate;
+    }
+    const lowerContext = cleanContext.toLowerCase();
+    const lowerCandidate = cleanCandidate.toLowerCase();
+    const directIndex = lowerContext.indexOf(lowerCandidate);
+    if (directIndex !== -1) {
+        return cleanContext.slice(directIndex, directIndex + cleanCandidate.length);
+    }
+    try {
+        const match = cleanContext.match(new RegExp(buildFlexibleCandidatePattern(cleanCandidate), "i"));
+        return match?.[0]?.trim() || "";
+    }
+    catch {
+        return "";
+    }
+}
+function getSuggestionValues(suggestions) {
+    const values = [];
+    (Array.isArray(suggestions) ? suggestions : []).forEach((suggestion) => {
+        const value = typeof suggestion?.suggestion === "string" ? suggestion.suggestion.trim() : "";
+        if (value) {
+            values.push(value);
+        }
+    });
+    return values;
+}
+function resolveVariationTextFromContext(variation, suggestionValues) {
+    const context = typeof variation?.context_snippet === "string" ? variation.context_snippet : "";
+    const phrase = typeof variation?.phrase === "string" ? variation.phrase.trim() : "";
+    const target = getVariationApplyTarget(variation);
+    const directCandidates = [phrase, target].filter(Boolean);
+    for (const candidate of directCandidates) {
+        const match = findCandidateInContext(candidate, context);
+        if (match) {
+            return match;
+        }
+    }
+    for (const candidate of suggestionValues) {
+        const match = findCandidateInContext(candidate, context);
+        if (match) {
+            return match;
+        }
+    }
+    return target || phrase;
+}
+function normalizeVariationForDisplay(variation, suggestionValues) {
+    const resolvedText = resolveVariationTextFromContext(variation, suggestionValues);
+    return {
+        ...variation,
+        phrase: resolvedText,
+        replacement_target: resolvedText,
+    };
+}
+function hasExplicitApplyTarget(variation) {
+    return Boolean((typeof variation?.replacement_target === "string" && variation.replacement_target.trim()) ||
+        (typeof variation?.target_phrase === "string" && variation.target_phrase.trim()));
+}
+function countTermParts(value) {
+    return String(value || "")
+        .split(/[\s\-_/]+/)
+        .map((part) => part.trim())
+        .filter(Boolean).length;
+}
+function isRiskyReplacementGranularity(variation, suggestion) {
+    const target = getVariationApplyTarget(variation);
+    const cleanSuggestion = String(suggestion || "").trim();
+    if (!target || !cleanSuggestion || hasExplicitApplyTarget(variation)) {
+        return false;
+    }
+    if (target.toLowerCase() === cleanSuggestion.toLowerCase()) {
+        return false;
+    }
+    return countTermParts(cleanSuggestion) === 1 && countTermParts(target) > 1;
+}
+function getSafeApplyTargets(variations, suggestion) {
+    const seen = new Set();
+    const unsafeTargets = [];
+    const safeTargets = [];
+    (Array.isArray(variations) ? variations : []).forEach((variation) => {
+        const target = getVariationApplyTarget(variation);
+        if (!target) {
+            return;
+        }
+        if (isRiskyReplacementGranularity(variation, suggestion)) {
+            unsafeTargets.push(target);
+            return;
+        }
+        const key = target.toLowerCase();
+        if (key === String(suggestion || "").trim().toLowerCase()) {
+            return;
+        }
+        if (!seen.has(key)) {
+            seen.add(key);
+            safeTargets.push(target);
+        }
+    });
+    return { safeTargets, unsafeTargets };
+}
 function getStatusBadge(group) {
     if (group.status === "Verified") {
         return '<span class="wtr-if-verified-badge">Verified</span>';
@@ -4064,6 +4571,56 @@ function getStatusBadge(group) {
         return '<span class="wtr-if-review-badge" title="Latest verification returned no items, so this finding was preserved for review.">Needs Review</span>';
     }
     return "";
+}
+function getConfidenceScore(confidence) {
+    const rawScore = confidence?.score;
+    if (typeof rawScore === "number" && Number.isFinite(rawScore)) {
+        return rawScore;
+    }
+    if (typeof rawScore === "string" && rawScore.trim()) {
+        const parsed = Number(rawScore);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+function getConfidenceLabel(score) {
+    if (score >= 9) {
+        return "very strong";
+    }
+    if (score >= 7) {
+        return "solid";
+    }
+    if (score >= 5) {
+        return "worth reviewing";
+    }
+    return "low";
+}
+function renderDecisionGuide(group) {
+    const steps = Array.isArray(group?.reasoning_steps)
+        ? group.reasoning_steps.filter((step) => typeof step === "string" && step.trim())
+        : [];
+    const score = getConfidenceScore(group?.confidence);
+    const factors = typeof group?.confidence?.factors === "string" ? group.confidence.factors.trim() : "";
+    if (!steps.length && score === null && !factors) {
+        return "";
+    }
+    const confidenceHtml = score !== null
+        ? `<p class="wtr-if-confidence"><strong>Confidence:</strong> ${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(String(score))}/10 <span>${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(getConfidenceLabel(score))}</span></p>`
+        : "";
+    const stepsHtml = steps.length
+        ? `<ol class="wtr-if-decision-steps">${steps.map((step) => `<li>${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(step)}</li>`).join("")}</ol>`
+        : "";
+    const factorsHtml = factors
+        ? `<p class="wtr-if-confidence-factors"><strong>Why:</strong> ${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(factors)}</p>`
+        : "";
+    return `
+                <details class="wtr-if-details-section wtr-if-decision-guide">
+                    <summary>Decision Guide</summary>
+                    ${confidenceHtml}
+                    ${stepsHtml}
+                    ${factorsHtml}
+                </details>
+            `;
 }
 function displayResults(results) {
     // Ensure we render only into the dedicated results container inside Finder tab.
@@ -4106,8 +4663,8 @@ function displayResults(results) {
     displayedResults.forEach((group) => {
         const groupEl = document.createElement("div");
         groupEl.className = "wtr-if-result-group";
-        const uniqueVariations = [...new Set(group.variations.map((v) => v.phrase))];
-        const variationsJson = JSON.stringify(uniqueVariations);
+        const suggestionValues = getSuggestionValues(group.suggestions);
+        const groupVariations = (Array.isArray(group.variations) ? group.variations : []).map((variation) => normalizeVariationForDisplay(variation, suggestionValues));
         const suggestionsHtml = (group.suggestions || [])
             .map((sugg, suggIndex) => {
             // ENHANCED VALIDATION & FALLBACK LOGIC
@@ -4146,13 +4703,21 @@ function displayResults(results) {
                     });
                 }
             }
+            const { safeTargets, unsafeTargets } = getSafeApplyTargets(groupVariations, finalSuggestionValue);
+            const safeVariationsJson = JSON.stringify(safeTargets);
+            const hasSafeTargets = safeTargets.length > 0;
             const replacementText = isActionable
                 ? `<code>${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}</code>`
                 : "<em>(Informational, no replacement)</em>";
-            const buttonState = isActionable ? "" : "disabled";
-            const applyTitle = isActionable
-                ? `Apply '${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}'`
-                : "No direct replacement";
+            const buttonState = isActionable && hasSafeTargets ? "" : "disabled";
+            const applyTitle = !isActionable
+                ? "No direct replacement"
+                : hasSafeTargets
+                    ? `Apply '${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}'`
+                    : "Apply disabled because variation phrases are broader than the replacement target";
+            const granularityWarning = unsafeTargets.length
+                ? `<p class="wtr-if-replacement-info"><em>Apply disabled for ${unsafeTargets.length} broad variation${unsafeTargets.length === 1 ? "" : "s"}; rerun analysis or copy manually so only the exact target term is replaced.</em></p>`
+                : "";
             const recommendedBadge = sugg.is_recommended
                 ? '<span class="wtr-if-recommended-badge">Recommended</span>'
                 : "";
@@ -4161,11 +4726,12 @@ function displayResults(results) {
                  <div class="wtr-if-suggestion-header">
                      <span class="wtr-if-correct">${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(sugg.display_text || rawSuggestion || "No suggestion available")} ${recommendedBadge}</span>
                      <div class="wtr-if-suggestion-actions">
-                         <button class="wtr-if-apply-btn" data-action="apply-selected" data-suggestion="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}" title="${applyTitle} to selected variations" ${buttonState}>Apply Selected</button>
-                         <button class="wtr-if-apply-btn" data-action="apply-all" data-suggestion="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}" data-variations='${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(variationsJson)}' title="${applyTitle} to all variations" ${buttonState}>Apply All</button>
+                         <button class="wtr-if-apply-btn" data-action="apply-selected" data-suggestion="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}" data-safe-variations='${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(safeVariationsJson)}' title="${applyTitle} to selected variations" ${buttonState}>Apply Selected</button>
+                         <button class="wtr-if-apply-btn" data-action="apply-all" data-suggestion="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(finalSuggestionValue)}" data-variations='${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(safeVariationsJson)}' title="${applyTitle} to all variations" ${buttonState}>Apply All</button>
                      </div>
                  </div>
                  <p class="wtr-if-replacement-info"><strong>Replacement:</strong> ${replacementText}</p>
+                 ${granularityWarning}
                  <p class="wtr-if-reasoning">${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(sugg.reasoning)}</p>
              </div>
              `;
@@ -4180,21 +4746,26 @@ function displayResults(results) {
                     </h3>
                     <p class="wtr-if-explanation">${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(group.explanation)}</p>
                 </div>
+                ${renderDecisionGuide(group)}
                 <div class="wtr-if-details-section">
                     <h4>Variations Found</h4>
                     <div class="wtr-if-variations">
-                        ${(group.variations || [])
-            .map((item) => `
+                        ${groupVariations
+            .map((item) => {
+            const applyTarget = getVariationApplyTarget(item);
+            const displayPhrase = applyTarget || item.phrase;
+            return `
                         <div class="wtr-if-variation-item">
                             <div class="wtr-if-variation-header">
-                                <input type="checkbox" class="wtr-if-variation-checkbox" value="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(item.phrase)}" title="Select this variation">
-                                <button class="wtr-if-copy-variation-btn" data-text="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(item.phrase)}" title="Copy variation text">📋</button>
-                                <span class="wtr-if-incorrect">"${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(item.phrase)}"</span>
+                                <input type="checkbox" class="wtr-if-variation-checkbox" value="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(applyTarget)}" title="Select this variation">
+                                <button class="wtr-if-copy-variation-btn" data-text="${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(displayPhrase)}" title="Copy variation text">📋</button>
+                                <span class="wtr-if-incorrect">"${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(displayPhrase)}"</span>
                                 <span class="wtr-if-chapter">Chapter ${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(item.chapter)}</span>
                             </div>
                             <p class="wtr-if-context"><strong>Context:</strong> <em>"...${(0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .escapeHtml */ .ZD)(item.context_snippet)}..."</em></p>
                         </div>
-                        `)
+                        `;
+        })
             .join("")}
                     </div>
                 </div>
@@ -4314,7 +4885,7 @@ async function collectChapterDataForAnalysis(liveTerms) {
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = null;
     const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .getWtrPageContext */ .Yj)();
     if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary && pageContext) {
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", "Loading WTR official glossary...");
+        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", "Loading WTR glossary context...");
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
     }
     if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource === "wtr-api" && pageContext) {
@@ -4479,8 +5050,6 @@ async function handleSaveConfig() {
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiEndChapter = document.getElementById("wtr-if-wtr-api-end").value.trim();
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary = document.getElementById("wtr-if-use-official-wtr-glossary").checked;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = document.getElementById("wtr-if-logging-enabled").checked;
-    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature = parseFloat(document.getElementById("wtr-if-temperature").value);
-    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode = document.getElementById("wtr-if-reasoning-mode").value;
     const statusEl = document.getElementById("wtr-if-status");
     statusEl.textContent = "Saving...";
     const success = await (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
@@ -4737,7 +5306,17 @@ function handleApplyClick(event) {
             checkedBoxes.forEach((box) => variationsToApply.push(box.value));
         }
     }
-    const uniqueVariations = [...new Set(variationsToApply)];
+    let uniqueVariations = [...new Set(variationsToApply)];
+    if (button.dataset.safeVariations) {
+        try {
+            const safeVariations = new Set(JSON.parse(button.dataset.safeVariations || "[]"));
+            uniqueVariations = uniqueVariations.filter((variation) => safeVariations.has(variation));
+        }
+        catch (e) {
+            (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to parse safe variations for apply-selected/copy-selected.", e);
+            uniqueVariations = [];
+        }
+    }
     if (uniqueVariations.length === 0) {
         const originalText = button.textContent;
         button.textContent = "None Selected!";
@@ -5009,10 +5588,6 @@ function importConfiguration() {
                 (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
                 (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
                 document.getElementById("wtr-if-auto-restore").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults;
-                document.getElementById("wtr-if-temperature").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature;
-                document.getElementById("wtr-if-temp-value").textContent = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature;
-                document.getElementById("wtr-if-reasoning-mode").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode || "off";
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateAIControlHints */ .jg)();
                 const statusEl = document.getElementById("wtr-if-status");
                 statusEl.textContent = "Configuration imported successfully";
                 setTimeout(() => (statusEl.textContent = ""), 3000);
@@ -5097,10 +5672,6 @@ function addEventListeners() {
         updateApplyCopyButtonsMode();
     });
     document.getElementById("wtr-if-status-indicator").addEventListener("click", handleStatusClick);
-    panel.querySelector("#wtr-if-temperature").addEventListener("input", (e) => {
-        document.getElementById("wtr-if-temp-value").textContent = e.target.value;
-    });
-    panel.querySelector("#wtr-if-reasoning-mode").addEventListener("change", _panel__WEBPACK_IMPORTED_MODULE_4__/* .updateAIControlHints */ .jg);
     panel.querySelector("#wtr-if-chapter-source").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource = e.target.value;
         (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
@@ -5144,17 +5715,11 @@ function addEventListeners() {
         document.getElementById("wtr-if-provider-chat-path").value = defaults.chatCompletionsPath;
         document.getElementById("wtr-if-provider-models-path").value = defaults.modelsPath;
         document.getElementById("wtr-if-provider-use-manual-paths").checked = false;
-        const defaultTemperature = (0,_providerConfig__WEBPACK_IMPORTED_MODULE_1__/* .getProviderDefaultTemperature */ .tl)(providerType);
-        document.getElementById("wtr-if-temperature").value = String(defaultTemperature);
-        document.getElementById("wtr-if-temp-value").textContent = String(defaultTemperature);
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType = providerType;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl = defaults.baseUrl;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath = defaults.chatCompletionsPath;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = defaults.modelsPath;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerUseManualPaths = false;
-        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature = defaultTemperature;
-        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode = "off";
-        document.getElementById("wtr-if-reasoning-mode").value = "off";
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = "";
         (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)();
         (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)();
@@ -5257,7 +5822,6 @@ __webpack_require__.d(__webpack_exports__, {
   Nh: () => (/* binding */ syncProviderConfigUI),
   ah: () => (/* binding */ toggleApiKeyVisibility),
   Pj: () => (/* binding */ togglePanel),
-  jg: () => (/* binding */ updateAIControlHints),
   ku: () => (/* binding */ updateChapterSourceUI),
   o_: () => (/* binding */ updateDebugLoggingUI),
   LI: () => (/* binding */ updateStatusIndicator),
@@ -5280,14 +5844,14 @@ var userscriptApi = __webpack_require__(799);
 // src/version.ts
 // Shared runtime version information for the userscript UI
 const VERSION_INFO = {
-    SEMANTIC: "5.5.2",
-    DISPLAY: "v5.5.2",
+    SEMANTIC: "5.6.0",
+    DISPLAY: "v5.6.0",
     BUILD_ENV: "production",
-    BUILD_DATE: "2026-05-01",
-    GREASYFORK: "5.5.2",
-    NPM: "5.5.2",
-    BADGE: "5.5.2",
-    CHANGELOG: "5.5.2",
+    BUILD_DATE: "2026-05-02",
+    GREASYFORK: "5.6.0",
+    NPM: "5.6.0",
+    BADGE: "5.6.0",
+    CHANGELOG: "5.6.0",
 };
 const VERSION = VERSION_INFO.SEMANTIC;
 if (typeof window !== "undefined") {
@@ -5366,7 +5930,7 @@ function createUI() {
                                     <option value="page">Loaded page chapters</option>
                                     <option value="wtr-api">WTR Lab reader API</option>
                                 </select>
-                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves official glossary placeholders before AI analysis.</small>
+                                <small class="wtr-if-hint">Reader API mode fetches chapters directly from WTR Lab and resolves glossary placeholders before AI analysis.</small>
                             </div>
                             <div id="wtr-if-wtr-api-range-controls" class="wtr-if-api-range-controls">
                                 <div class="wtr-if-form-group">
@@ -5521,21 +6085,6 @@ function createUI() {
                                     <button id="wtr-if-refresh-models-btn" class="wtr-if-btn wtr-if-btn-secondary">Refresh List</button>
                                 </div>
                             </div>
-                            <div class="wtr-if-form-group">
-                                <label for="wtr-if-temperature">AI Temperature (<span id="wtr-if-temp-value">0.5</span>)</label>
-                                <input type="range" id="wtr-if-temperature" min="0" max="2" step="0.1" value="0.5">
-                                <small id="wtr-if-temperature-hint" class="wtr-if-hint">Lower is more predictable, higher is more creative.</small>
-                            </div>
-                            <div class="wtr-if-form-group">
-                                <label for="wtr-if-reasoning-mode">Reasoning / Thinking</label>
-                                <select id="wtr-if-reasoning-mode">
-                                    <option value="off">Off</option>
-                                    <option value="low">Low effort</option>
-                                    <option value="medium">Medium effort</option>
-                                    <option value="high">High effort</option>
-                                </select>
-                                <small id="wtr-if-reasoning-hint" class="wtr-if-hint">Used only for models/providers that advertise reasoning or thinking controls.</small>
-                            </div>
                         </div>
                     </div>
 
@@ -5560,9 +6109,9 @@ function createUI() {
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-official-wtr-glossary">
-                                    Use WTR Lab Official Glossary Context
+                                    Use WTR Lab Glossary Context (Advisory)
                                 </label>
-                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary to suppress official alias false positives and improve AI suggestions.</small>
+                                <small class="wtr-if-hint">Fetches WTR Lab's novel glossary as advisory context for AI suggestions. Chapter text and story context should still win.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <label class="checkbox-label">
@@ -5743,7 +6292,6 @@ function syncProviderConfigUI() {
             openAiFields.open = Boolean(state/* appState */.XJ.config.providerUseManualPaths);
         }
     }
-    updateAIControlHints();
 }
 function updateChapterSourceUI() {
     const sourceEl = document.getElementById("wtr-if-chapter-source");
@@ -5757,22 +6305,6 @@ function updateChapterSourceUI() {
     document.querySelectorAll(".wtr-if-range-grid[data-range-mode]").forEach((group) => {
         group.style.display = source === "wtr-api" && group.dataset.rangeMode === rangeMode ? "grid" : "none";
     });
-}
-function updateAIControlHints() {
-    const providerType = document.getElementById("wtr-if-provider-type")?.value || state/* appState */.XJ.config.providerType;
-    const temperatureHint = document.getElementById("wtr-if-temperature-hint");
-    const reasoningHint = document.getElementById("wtr-if-reasoning-hint");
-    const isGemini = providerType === providerConfig/* AI_PROVIDERS */.Q2.GEMINI;
-    if (temperatureHint) {
-        temperatureHint.textContent = isGemini
-            ? "Gemini usually works best near 1.0. Thinking models may ignore custom sampling settings."
-            : "Lower is more predictable, higher is more creative. Reasoning models may ignore or reject custom temperature.";
-    }
-    if (reasoningHint) {
-        reasoningHint.textContent = isGemini
-            ? "Gemini thinking is sent only for likely thinking-capable Gemini models."
-            : "Reasoning effort is sent only for known reasoning models or Ollama-compatible local models.";
-    }
 }
 async function populateModelSelector() {
     const selectEl = document.getElementById("wtr-if-model");
@@ -6013,11 +6545,6 @@ async function togglePanel(show = null) {
         document.getElementById("wtr-if-logging-enabled").checked = state/* appState */.XJ.config.loggingEnabled;
         updateDebugLoggingUI();
         document.getElementById("wtr-if-auto-restore").checked = state/* appState */.XJ.preferences.autoRestoreResults;
-        const tempSlider = document.getElementById("wtr-if-temperature");
-        const tempValue = document.getElementById("wtr-if-temp-value");
-        tempSlider.value = state/* appState */.XJ.config.temperature ?? (0,providerConfig/* getProviderDefaultTemperature */.tl)(state/* appState */.XJ.config.providerType);
-        tempValue.textContent = tempSlider.value;
-        document.getElementById("wtr-if-reasoning-mode").value = state/* appState */.XJ.config.reasoningMode || "off";
         // Restore tab
         panel.querySelectorAll(".wtr-if-tab-btn").forEach((b) => b.classList.remove("active"));
         panel.querySelectorAll(".wtr-if-tab-content").forEach((c) => c.classList.remove("active"));
@@ -6638,11 +7165,11 @@ function getDebugLogReport() {
         `- Provider: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType || "unknown"}`,
         `- Base URL: ${providerBaseUrl}`,
         `- Model: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model || "not selected"}`,
-        `- Temperature: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.temperature ?? "default"}`,
-        `- Reasoning mode: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.reasoningMode || "off"}`,
+        "- Temperature: automatic default (1 when supported)",
+        "- Reasoning mode: automatic high when supported",
         `- Deep analysis depth: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth || 1}`,
         `- Chapter source: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource || "page"}`,
-        `- WTR official glossary context: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary ? "enabled" : "disabled"}`,
+        `- WTR advisory glossary context: ${_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary ? "enabled" : "disabled"}`,
         `- API key count: ${Array.isArray(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys) ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.filter(Boolean).length : 0}`,
         "",
         "## Runtime",
@@ -7463,17 +7990,14 @@ function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
 /* harmony export */   vm: () => (/* binding */ fetchWtrChapter)
 /* harmony export */ });
 /* unused harmony exports resolveWtrGlossaryPlaceholders, isOfficialAliasOnlyFinding */
-/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(158);
-/* harmony import */ var _userscriptApi__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(799);
+/* harmony import */ var _promptBudget__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(392);
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(158);
+/* harmony import */ var _userscriptApi__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(799);
+
 
 
 const WTR_API_GLOSSARY_CACHE_KEY = "wtr_inconsistency_finder_wtr_glossary_cache";
 const GLOSSARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const MAX_ALIAS_GROUPS_FOR_PROMPT = 20;
-const MAX_CANONICAL_TERMS_FOR_PROMPT = 40;
-const MAX_REPLACEMENTS_FOR_PROMPT = 25;
-const MAX_CORRECTIONS_FOR_PROMPT = 15;
-const MAX_CORRECTION_REASON_CHARS = 160;
 function parseNonNegativeInteger(value, fallback) {
     const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
     return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
@@ -7484,7 +8008,7 @@ function parseOptionalInteger(value) {
 }
 function wtrApiRequest(config) {
     return new Promise((resolve, reject) => {
-        (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmXmlhttpRequest */ .hb)({
+        (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmXmlhttpRequest */ .hb)({
             method: config.method,
             url: config.url,
             headers: {
@@ -7724,7 +8248,7 @@ function buildOfficialGlossaryContext(rawId, response) {
     };
 }
 async function getGlossaryCache() {
-    const cache = await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmGetValue */ .Ar)(WTR_API_GLOSSARY_CACHE_KEY, {});
+    const cache = await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmGetValue */ .Ar)(WTR_API_GLOSSARY_CACHE_KEY, {});
     return cache && typeof cache === "object" ? cache : {};
 }
 async function fetchOfficialWtrGlossaryContext(rawId) {
@@ -7733,7 +8257,7 @@ async function fetchOfficialWtrGlossaryContext(rawId) {
     const cached = cache[cacheKey];
     const now = Date.now();
     if (cached?.timestamp && cached?.context && now - cached.timestamp < GLOSSARY_CACHE_TTL_MS) {
-        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Using cached WTR official glossary for raw_id ${rawId}.`, cached.context.summary);
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Using cached WTR glossary context for raw_id ${rawId}.`, cached.context.summary);
         return cached.context;
     }
     try {
@@ -7746,16 +8270,16 @@ async function fetchOfficialWtrGlossaryContext(rawId) {
             timestamp: now,
             context,
         };
-        await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_1__/* .gmSetValue */ .Qp)(WTR_API_GLOSSARY_CACHE_KEY, cache);
-        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Fetched WTR official glossary for raw_id ${rawId}.`, context.summary);
+        await (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_2__/* .gmSetValue */ .Qp)(WTR_API_GLOSSARY_CACHE_KEY, cache);
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Fetched WTR glossary context for raw_id ${rawId}.`, context.summary);
         return context;
     }
     catch (error) {
         if (cached?.context) {
-            (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Failed to refresh WTR official glossary for raw_id ${rawId}; using stale cache.`, error);
+            (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Failed to refresh WTR glossary context for raw_id ${rawId}; using stale cache.`, error);
             return cached.context;
         }
-        (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)(`Failed to fetch WTR official glossary for raw_id ${rawId}.`, error);
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)(`Failed to fetch WTR glossary context for raw_id ${rawId}.`, error);
         return null;
     }
 }
@@ -7833,9 +8357,9 @@ function formatAliasGroupForPrompt(group) {
 function formatCanonicalTermForPrompt(group) {
     return [group.canonical, group.source, group.count];
 }
-function formatCorrectionForPrompt(correction) {
-    const reason = correction.reason.length > MAX_CORRECTION_REASON_CHARS
-        ? `${correction.reason.slice(0, MAX_CORRECTION_REASON_CHARS)}…`
+function formatCorrectionForPrompt(correction, reasonCharLimit) {
+    const reason = correction.reason.length > reasonCharLimit
+        ? `${correction.reason.slice(0, reasonCharLimit)}…`
         : correction.reason;
     return [correction.source, correction.corrected, correction.type || "", reason];
 }
@@ -7847,7 +8371,7 @@ function correctionIsRelevant(correction, sourceText, chapterIndex) {
         phraseAppearsInText(correction.source, sourceText) ||
         phraseAppearsInText(correction.corrected, sourceText));
 }
-function formatOfficialGlossaryPromptContext(context, sourceText = "", chapterData = []) {
+function formatOfficialGlossaryPromptContext(context, sourceText = "", chapterData = [], promptCaps = (0,_promptBudget__WEBPACK_IMPORTED_MODULE_0__/* .buildPromptContextCaps */ .X)()) {
     if (!context) {
         return "";
     }
@@ -7863,21 +8387,23 @@ function formatOfficialGlossaryPromptContext(context, sourceText = "", chapterDa
         return "";
     }
     const included = {
-        aliases: Math.min(relevantAliasGroups.length, MAX_ALIAS_GROUPS_FOR_PROMPT),
-        terms: Math.min(relevantCanonicalTerms.length, MAX_CANONICAL_TERMS_FOR_PROMPT),
-        replacements: Math.min(relevantReplacements.length, MAX_REPLACEMENTS_FOR_PROMPT),
-        corrections: Math.min(relevantCorrections.length, MAX_CORRECTIONS_FOR_PROMPT),
+        aliases: Math.min(relevantAliasGroups.length, promptCaps.aliasGroups),
+        terms: Math.min(relevantCanonicalTerms.length, promptCaps.canonicalTerms),
+        replacements: Math.min(relevantReplacements.length, promptCaps.replacements),
+        corrections: Math.min(relevantCorrections.length, promptCaps.corrections),
     };
     const payload = {
         total: context.summary,
         included,
-        aliases: relevantAliasGroups.slice(0, MAX_ALIAS_GROUPS_FOR_PROMPT).map(formatAliasGroupForPrompt),
-        terms: relevantCanonicalTerms.slice(0, MAX_CANONICAL_TERMS_FOR_PROMPT).map(formatCanonicalTermForPrompt),
-        replacements: relevantReplacements.slice(0, MAX_REPLACEMENTS_FOR_PROMPT).map(formatAliasGroupForPrompt),
-        corrections: relevantCorrections.slice(0, MAX_CORRECTIONS_FOR_PROMPT).map(formatCorrectionForPrompt),
+        aliases: relevantAliasGroups.slice(0, promptCaps.aliasGroups).map(formatAliasGroupForPrompt),
+        terms: relevantCanonicalTerms.slice(0, promptCaps.canonicalTerms).map(formatCanonicalTermForPrompt),
+        replacements: relevantReplacements.slice(0, promptCaps.replacements).map(formatAliasGroupForPrompt),
+        corrections: relevantCorrections
+            .slice(0, promptCaps.corrections)
+            .map((correction) => formatCorrectionForPrompt(correction, promptCaps.correctionReasonChars)),
     };
     const serialized = JSON.stringify(payload);
-    (0,_utils__WEBPACK_IMPORTED_MODULE_0__/* .log */ .Rm)("Prepared WTR official glossary prompt context.", {
+    (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Prepared WTR advisory glossary prompt context.", {
         included,
         relevantBeforeCaps: {
             aliases: relevantAliasGroups.length,
@@ -7888,6 +8414,7 @@ function formatOfficialGlossaryPromptContext(context, sourceText = "", chapterDa
         contextLength: serialized.length,
         sourceTextLength: sourceText.length,
         chapterGlossaryTermCount: chapterIndex.sourceTerms.size,
+        promptCaps,
     });
     return serialized;
 }

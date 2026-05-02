@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         WTR Term Inconsistency Finder v5.5.2
+// @name         WTR Term Inconsistency Finder v5.6.0
 // @namespace    https://github.com/MasuRii/wtr-term-inconsistency-finder
-// @version      5.5.2
+// @version      5.6.0
 // @description  Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
 // @author       MasuRii
 // @license      MIT

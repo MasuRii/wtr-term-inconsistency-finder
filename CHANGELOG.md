@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ---
+## [5.6.0] - 2026-05-02
+
+### Added
+- Evidence chain reasoning where AI findings now include explicit reasoning steps and confidence scores, with low-confidence actionable results automatically downgraded to Needs Review.
+- Collapsible Decision Guide section in each result showing confidence score, reasoning steps, and confidence factors so users can expand it when they want detail without cluttering the default view.
+- Entity tracking guidance in the analysis prompt so the AI anchors findings to first-mention context, descriptor chains, speaker/narration roles, temporal/chapter positions, and compound-term usage.
+- Overlap and granularity policy so the AI consolidates duplicate root/compound findings instead of reporting overlapping items for the same evidence.
+- Anti-hallucination prompt rules that require every variation target to appear verbatim in its context snippet and forbid identical variation phrases for different source texts.
+- Deep-analysis iteration-aware focus instructions that tell the AI to re-verify borderline cases, look for root-cause patterns, and be more conservative on the final pass.
+- Richer few-shot examples in the prompt covering a full positive finding, a borderline non-issue, a glossary conflict, a component target, an overlap duplicate, and a formatting non-issue.
+- Dynamic prompt scaling (`promptBudget.ts`) that adjusts glossary and verification context caps based on the selected model context length metadata.
+- Gemini native API metadata parsing for `inputTokenLimit`, `outputTokenLimit`, `maxInputTokens`, `maxOutputTokens`, and `displayName` so Gemini models populate `contextLength` and `maxCompletionTokens` correctly.
+- Precise replacement targeting where each AI variation now includes a `replacement_target` field identifying the exact substring to replace, preventing full evidence phrases from being replaced when only a component term should change.
+- Frequency and recency recommendation guidance so the AI counts variant occurrences across all chapters, prefers variants spread across more chapters, and applies clear tie-breaking rules.
+- User-guidance prompt style rules so explanations and suggestion reasoning read like a helpful translation editor advising a human, not a database report.
+- Post-processing repair that resolves variation targets from context snippets and removes findings without at least two distinct variation targets.
+
+### Changed
+- Removed user-facing temperature slider and reasoning/thinking mode selector from the configuration UI. Temperature is now automatically set to 1 when the provider supports it, and high reasoning effort is sent only when the model or provider accepts it.
+- Removed persisted temperature and reasoning mode from saved configuration and session data.
+- Demoted WTR glossary from "official" to advisory context throughout the prompt, UI labels, debug reports, and log messages. The AI now prioritizes story context, chapter evidence, and world-building consistency over glossary wording, and uses "Reference option" instead of "Glossary option" in suggestion labels.
+- Relaxed suggestion count from exactly three to one-to-three unique suggestions, eliminating filler/duplicate options that existed only to reach the previous requirement.
+- Blocked invented editorial alternatives unless the wording appears in the analyzed text, the advisory glossary context, or is strictly required for grammatical replacement.
+- Removed the Target indicator from variation display; variations now show the exact targetable replacement text matched from context snippets instead of the AI's recommended term.
+- Variations are resolved from context snippets so Apply, Apply All, copy, and checkbox targets match the actual chapter text rather than the AI's proposed replacement.
+- No-op apply targets are filtered out so Apply All / Apply Selected skip variations that already match the suggestion.
+- Apply Selected and Apply All buttons now use `replacement_target` when available and disable automatically when a single-word replacement would be applied to a broader multi-word evidence phrase without an explicit target.
+- Updated debug report output to reflect automatic temperature and reasoning behavior instead of showing user-configured values.
+
+---
 ## [5.5.2] - 2026-05-01
 
 ### Added
