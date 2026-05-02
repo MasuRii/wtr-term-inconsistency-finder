@@ -1,13 +1,10 @@
+import type { PromptContextCaps } from "./promptBudget"
+import { buildPromptContextCaps } from "./promptBudget"
 import { log } from "./utils"
 import { gmGetValue, gmSetValue, gmXmlhttpRequest } from "./userscriptApi"
 
 const WTR_API_GLOSSARY_CACHE_KEY = "wtr_inconsistency_finder_wtr_glossary_cache"
 const GLOSSARY_CACHE_TTL_MS = 6 * 60 * 60 * 1000
-const MAX_ALIAS_GROUPS_FOR_PROMPT = 20
-const MAX_CANONICAL_TERMS_FOR_PROMPT = 40
-const MAX_REPLACEMENTS_FOR_PROMPT = 25
-const MAX_CORRECTIONS_FOR_PROMPT = 15
-const MAX_CORRECTION_REASON_CHARS = 160
 
 export interface WtrPageContext {
 	rawId: number
@@ -372,7 +369,7 @@ export async function fetchOfficialWtrGlossaryContext(rawId: number): Promise<Of
 	const now = Date.now()
 
 	if (cached?.timestamp && cached?.context && now - cached.timestamp < GLOSSARY_CACHE_TTL_MS) {
-		log(`Using cached WTR official glossary for raw_id ${rawId}.`, cached.context.summary)
+		log(`Using cached WTR glossary context for raw_id ${rawId}.`, cached.context.summary)
 		return cached.context
 	}
 
@@ -387,14 +384,14 @@ export async function fetchOfficialWtrGlossaryContext(rawId: number): Promise<Of
 			context,
 		}
 		await gmSetValue(WTR_API_GLOSSARY_CACHE_KEY, cache)
-		log(`Fetched WTR official glossary for raw_id ${rawId}.`, context.summary)
+		log(`Fetched WTR glossary context for raw_id ${rawId}.`, context.summary)
 		return context
 	} catch (error) {
 		if (cached?.context) {
-			log(`Failed to refresh WTR official glossary for raw_id ${rawId}; using stale cache.`, error)
+			log(`Failed to refresh WTR glossary context for raw_id ${rawId}; using stale cache.`, error)
 			return cached.context
 		}
-		log(`Failed to fetch WTR official glossary for raw_id ${rawId}.`, error)
+		log(`Failed to fetch WTR glossary context for raw_id ${rawId}.`, error)
 		return null
 	}
 }
@@ -496,9 +493,9 @@ function formatCanonicalTermForPrompt(group: OfficialAliasGroup): unknown[] {
 	return [group.canonical, group.source, group.count]
 }
 
-function formatCorrectionForPrompt(correction: OfficialCorrection): unknown[] {
-	const reason = correction.reason.length > MAX_CORRECTION_REASON_CHARS
-		? `${correction.reason.slice(0, MAX_CORRECTION_REASON_CHARS)}…`
+function formatCorrectionForPrompt(correction: OfficialCorrection, reasonCharLimit: number): unknown[] {
+	const reason = correction.reason.length > reasonCharLimit
+		? `${correction.reason.slice(0, reasonCharLimit)}…`
 		: correction.reason
 	return [correction.source, correction.corrected, correction.type || "", reason]
 }
@@ -522,6 +519,7 @@ export function formatOfficialGlossaryPromptContext(
 	context: OfficialGlossaryContext | null,
 	sourceText = "",
 	chapterData: Array<Partial<WtrChapterData>> = [],
+	promptCaps: PromptContextCaps = buildPromptContextCaps(),
 ): string {
 	if (!context) {
 		return ""
@@ -545,22 +543,24 @@ export function formatOfficialGlossaryPromptContext(
 	}
 
 	const included = {
-		aliases: Math.min(relevantAliasGroups.length, MAX_ALIAS_GROUPS_FOR_PROMPT),
-		terms: Math.min(relevantCanonicalTerms.length, MAX_CANONICAL_TERMS_FOR_PROMPT),
-		replacements: Math.min(relevantReplacements.length, MAX_REPLACEMENTS_FOR_PROMPT),
-		corrections: Math.min(relevantCorrections.length, MAX_CORRECTIONS_FOR_PROMPT),
+		aliases: Math.min(relevantAliasGroups.length, promptCaps.aliasGroups),
+		terms: Math.min(relevantCanonicalTerms.length, promptCaps.canonicalTerms),
+		replacements: Math.min(relevantReplacements.length, promptCaps.replacements),
+		corrections: Math.min(relevantCorrections.length, promptCaps.corrections),
 	}
 	const payload = {
 		total: context.summary,
 		included,
-		aliases: relevantAliasGroups.slice(0, MAX_ALIAS_GROUPS_FOR_PROMPT).map(formatAliasGroupForPrompt),
-		terms: relevantCanonicalTerms.slice(0, MAX_CANONICAL_TERMS_FOR_PROMPT).map(formatCanonicalTermForPrompt),
-		replacements: relevantReplacements.slice(0, MAX_REPLACEMENTS_FOR_PROMPT).map(formatAliasGroupForPrompt),
-		corrections: relevantCorrections.slice(0, MAX_CORRECTIONS_FOR_PROMPT).map(formatCorrectionForPrompt),
+		aliases: relevantAliasGroups.slice(0, promptCaps.aliasGroups).map(formatAliasGroupForPrompt),
+		terms: relevantCanonicalTerms.slice(0, promptCaps.canonicalTerms).map(formatCanonicalTermForPrompt),
+		replacements: relevantReplacements.slice(0, promptCaps.replacements).map(formatAliasGroupForPrompt),
+		corrections: relevantCorrections
+			.slice(0, promptCaps.corrections)
+			.map((correction) => formatCorrectionForPrompt(correction, promptCaps.correctionReasonChars)),
 	}
 
 	const serialized = JSON.stringify(payload)
-	log("Prepared WTR official glossary prompt context.", {
+	log("Prepared WTR advisory glossary prompt context.", {
 		included,
 		relevantBeforeCaps: {
 			aliases: relevantAliasGroups.length,
@@ -571,6 +571,7 @@ export function formatOfficialGlossaryPromptContext(
 		contextLength: serialized.length,
 		sourceTextLength: sourceText.length,
 		chapterGlossaryTermCount: chapterIndex.sourceTerms.size,
+		promptCaps,
 	})
 	return serialized
 }

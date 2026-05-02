@@ -10,7 +10,14 @@ import { appState, saveSessionResults, getNextAvailableKey, updateKeyState } fro
 import { displayResults, updateStatusIndicator } from "./ui"
 
 // Import from utils module
-import { areSemanticallySimilar, extractJsonFromString, log, mergeAnalysisResults, truncateForLog } from "./utils"
+import {
+	areSemanticallySimilar,
+	escapeRegExp,
+	extractJsonFromString,
+	log,
+	mergeAnalysisResults,
+	truncateForLog,
+} from "./utils"
 import { gmXmlhttpRequest } from "./userscriptApi"
 
 // Import from retryLogic module
@@ -33,6 +40,7 @@ import {
 
 // Import from apiErrorHandler module
 import { handleApiError, classifyApiError, handleRateLimitError } from "./apiErrorHandler"
+import { buildPromptContextCaps } from "./promptBudget"
 import { formatOfficialGlossaryPromptContext, getOfficialAliasOnlyMatch } from "./wtrLabApi"
 
 /**
@@ -134,8 +142,24 @@ function summarizeParsedResponse(parsedResponse) {
 	}
 }
 
-function getOfficialGlossaryPromptContext(chapterText, chapterData) {
-	return formatOfficialGlossaryPromptContext(appState.runtime.officialGlossaryContext || null, chapterText, chapterData)
+function getCurrentModelMetadata() {
+	const modelId = typeof appState.config.model === "string" ? appState.config.model : ""
+	const metadata = appState.runtime.providerModelMetadata || {}
+	return metadata[modelId] || metadata[modelId.replace(/^models\//, "")] || null
+}
+
+function getCurrentPromptContextCaps() {
+	const contextLength = getCurrentModelMetadata()?.contextLength
+	return buildPromptContextCaps(contextLength)
+}
+
+function getOfficialGlossaryPromptContext(chapterText, chapterData, promptCaps) {
+	return formatOfficialGlossaryPromptContext(
+		appState.runtime.officialGlossaryContext || null,
+		chapterText,
+		chapterData,
+		promptCaps,
+	)
 }
 
 function filterOfficialAliasOnlyFindings(results, operationName) {
@@ -150,9 +174,9 @@ function filterOfficialAliasOnlyFindings(results, operationName) {
 			suppressedMatches.push({
 				concept: result?.concept || "Unknown concept",
 				phrases: match.phrases,
-				officialCanonical: match.group.canonical,
-				officialSource: match.group.source,
-				officialAliases: match.group.aliases,
+				glossarySuggestedPrimary: match.group.canonical,
+				glossarySource: match.group.source,
+				glossaryAliases: match.group.aliases,
 			})
 			return false
 		}
@@ -161,7 +185,7 @@ function filterOfficialAliasOnlyFindings(results, operationName) {
 
 	if (suppressedMatches.length > 0) {
 		log(
-			`${operationName}: Suppressed ${suppressedMatches.length} official WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`,
+			`${operationName}: Suppressed ${suppressedMatches.length} WTR glossary alias-only finding${suppressedMatches.length === 1 ? "" : "s"}.`,
 			suppressedMatches,
 		)
 	}
@@ -182,6 +206,7 @@ function summarizeResultsForDebug(results) {
 				priority: result.priority || "INFO",
 				status: result.status || (result.isNew ? "New" : "Unverified"),
 				variationCount: Array.isArray(result.variations) ? result.variations.length : 0,
+				confidenceScore: getConfidenceScore(result),
 				recommendedSuggestion,
 			}
 		})
@@ -204,6 +229,139 @@ function getCleanSuggestionText(value) {
 	return typeof value === "string" ? value.trim() : ""
 }
 
+function buildFlexibleCandidatePattern(candidate) {
+	return escapeRegExp(candidate.trim()).replace(/[\s\-_'"“”‘’]+/g, "[\\s\\-_'\"“”‘’]+")
+}
+
+function findCandidateInContext(candidate, context) {
+	const cleanCandidate = getCleanSuggestionText(candidate)
+	const cleanContext = getCleanSuggestionText(context)
+	if (!cleanCandidate || !cleanContext) {
+		return ""
+	}
+	if (cleanContext.includes(cleanCandidate)) {
+		return cleanCandidate
+	}
+
+	const lowerContext = cleanContext.toLowerCase()
+	const lowerCandidate = cleanCandidate.toLowerCase()
+	const directIndex = lowerContext.indexOf(lowerCandidate)
+	if (directIndex !== -1) {
+		return cleanContext.slice(directIndex, directIndex + cleanCandidate.length)
+	}
+
+	try {
+		const match = cleanContext.match(new RegExp(buildFlexibleCandidatePattern(cleanCandidate), "i"))
+		return match?.[0]?.trim() || ""
+	} catch {
+		return ""
+	}
+}
+
+function getVariationApplyTarget(variation) {
+	return (
+		getCleanSuggestionText(variation?.replacement_target) ||
+		getCleanSuggestionText(variation?.target_phrase) ||
+		getCleanSuggestionText(variation?.phrase)
+	)
+}
+
+function normalizeVariationTargets(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const repairLog = []
+	const normalizedResults = results.map((result) => {
+		if (!Array.isArray(result?.variations) || result.variations.length === 0) {
+			return result
+		}
+
+		const suggestionValues = (Array.isArray(result.suggestions) ? result.suggestions : [])
+			.map((suggestion) => getCleanSuggestionText(suggestion?.suggestion))
+			.filter(Boolean)
+
+		const variations = result.variations.map((variation) => {
+			const context = getCleanSuggestionText(variation?.context_snippet)
+			const phrase = getCleanSuggestionText(variation?.phrase)
+			const target = getVariationApplyTarget(variation)
+			const candidates = [phrase, target, ...suggestionValues].filter(Boolean)
+			let resolved = ""
+
+			for (const candidate of candidates) {
+				resolved = findCandidateInContext(candidate, context)
+				if (resolved) {
+					break
+				}
+			}
+
+			if (!resolved) {
+				resolved = target || phrase
+			}
+
+			if (resolved && (resolved !== phrase || resolved !== target)) {
+				repairLog.push({
+					concept: result.concept,
+					chapter: variation?.chapter,
+					fromPhrase: phrase,
+					fromTarget: target,
+					toTarget: resolved,
+				})
+			}
+
+			return {
+				...variation,
+				phrase: resolved,
+				replacement_target: resolved,
+			}
+		})
+
+		return {
+			...result,
+			variations,
+		}
+	})
+
+	if (repairLog.length > 0) {
+		log(`${operationName}: Repaired variation targets from context snippets.`, repairLog)
+	}
+
+	return normalizedResults
+}
+
+function filterNonVariantFindings(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const removed = []
+	const filtered = results.filter((result) => {
+		if (!isActionableFinding(result) || !Array.isArray(result?.variations)) {
+			return true
+		}
+		const uniquePhrases = new Set(
+			result.variations
+				.map((variation) => getCleanSuggestionText(variation?.replacement_target || variation?.phrase).toLowerCase())
+				.filter(Boolean),
+		)
+		if (uniquePhrases.size >= 2) {
+			return true
+		}
+		removed.push({
+			concept: result.concept,
+			variationCount: result.variations.length,
+			uniqueVariationCount: uniquePhrases.size,
+		})
+		return false
+	})
+
+	if (removed.length > 0) {
+		log(`${operationName}: Removed findings without at least two distinct variation targets.`, removed)
+	}
+
+	return filtered
+}
+
 function createFallbackSuggestion(_result, suggestion, label, reasoning) {
 	const cleanSuggestion = getCleanSuggestionText(suggestion)
 	return {
@@ -211,6 +369,20 @@ function createFallbackSuggestion(_result, suggestion, label, reasoning) {
 		suggestion: cleanSuggestion,
 		reasoning,
 	}
+}
+
+function getUniqueSuggestions(suggestions) {
+	const seen = new Set()
+	return suggestions.filter((suggestion) => {
+		const suggestionText = getCleanSuggestionText(suggestion?.suggestion)
+		const displayText = getCleanSuggestionText(suggestion?.display_text)
+		const key = (suggestionText || displayText).toLowerCase()
+		if (!key || seen.has(key)) {
+			return false
+		}
+		seen.add(key)
+		return true
+	})
 }
 
 function getSuggestionCandidates(result) {
@@ -264,40 +436,35 @@ function normalizeActionableSuggestions(results, operationName) {
 			const hasDisplayText = getCleanSuggestionText(suggestion?.display_text)
 			return hasSuggestion || hasDisplayText
 		})
-		const candidates = getSuggestionCandidates({ ...result, suggestions: validSuggestions })
-		const nextSuggestions = validSuggestions.slice(0, 3).map((suggestion) => ({
+		const uniqueSuggestions = getUniqueSuggestions(validSuggestions)
+		const candidates = getSuggestionCandidates({ ...result, suggestions: uniqueSuggestions })
+		const nextSuggestions = uniqueSuggestions.slice(0, 3).map((suggestion) => ({
 			...suggestion,
 			is_recommended: false,
 		}))
 
-		const fallbackRoles = [
-			{
-				label: "Dominant usage",
-				reasoning:
-					"Fallback dominant-usage option added because the AI returned fewer than three actionable suggestions. Review variation frequency before applying.",
-			},
-			{
-				label: "Glossary-informed option",
-				reasoning:
-					"Fallback glossary/editing option added because the AI returned fewer than three actionable suggestions. Treat as advisory unless supported by analyzed text.",
-			},
-			{
-				label: "Editorial option",
-				reasoning:
-					"Fallback editorial option added to preserve the required three-suggestion structure. Validate manually before applying.",
-			},
-		]
-
-		let candidateIndex = 0
-		while (nextSuggestions.length < 3) {
-			const candidate = candidates[candidateIndex] || candidates[0] || getCleanSuggestionText(result.concept)
-			const role = fallbackRoles[nextSuggestions.length]
-			nextSuggestions.push(createFallbackSuggestion(result, candidate, role.label, role.reasoning))
-			candidateIndex++
+		if (nextSuggestions.length === 0) {
+			const candidate = candidates[0] || getCleanSuggestionText(result.concept)
+			nextSuggestions.push(
+				createFallbackSuggestion(
+					result,
+					candidate,
+					"Dominant usage",
+					"Fallback option added because the AI returned no actionable suggestions. Review variation frequency before applying.",
+				),
+			)
 		}
 
-		const originalRecommendedIndex = validSuggestions.findIndex((suggestion) => suggestion?.is_recommended === true)
-		const recommendedIndex = originalRecommendedIndex >= 0 && originalRecommendedIndex < 3 ? originalRecommendedIndex : 0
+		const originalRecommended = validSuggestions.find((suggestion) => suggestion?.is_recommended === true)
+		const originalRecommendedKey = getCleanSuggestionText(originalRecommended?.suggestion || originalRecommended?.display_text)
+		const originalRecommendedIndex = originalRecommendedKey
+			? nextSuggestions.findIndex(
+					(suggestion) =>
+						getCleanSuggestionText(suggestion?.suggestion || suggestion?.display_text).toLowerCase() ===
+						originalRecommendedKey.toLowerCase(),
+				)
+			: -1
+		const recommendedIndex = originalRecommendedIndex >= 0 ? originalRecommendedIndex : 0
 		nextSuggestions.forEach((suggestion, index) => {
 			if (index === recommendedIndex) {
 				suggestion.is_recommended = true
@@ -307,12 +474,14 @@ function normalizeActionableSuggestions(results, operationName) {
 		})
 
 		if (
-			originalSuggestions.length !== 3 ||
+			originalSuggestions.length !== nextSuggestions.length ||
+			uniqueSuggestions.length !== validSuggestions.length ||
 			originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true).length !== 1
 		) {
 			normalizationLog.push({
 				concept: result.concept,
 				originalSuggestionCount: originalSuggestions.length,
+				uniqueSuggestionCount: uniqueSuggestions.length,
 				normalizedSuggestionCount: nextSuggestions.length,
 				originalRecommendedCount: originalSuggestions.filter((suggestion) => suggestion?.is_recommended === true)
 					.length,
@@ -327,7 +496,7 @@ function normalizeActionableSuggestions(results, operationName) {
 
 	if (normalizationLog.length > 0) {
 		log(
-			`${operationName}: Normalized actionable suggestions to exactly 3 entries with exactly one recommendation.`,
+			`${operationName}: Normalized actionable suggestions to 1-3 unique entries with exactly one recommendation.`,
 			normalizationLog,
 		)
 	}
@@ -444,6 +613,54 @@ function markLowEvidenceResultsForReview(results, operationName) {
 		log(
 			`${operationName}: Marked ${lowEvidenceConcepts.length} low-evidence finding${lowEvidenceConcepts.length === 1 ? "" : "s"} as Needs Review due to insufficient variations.`,
 			lowEvidenceConcepts,
+		)
+	}
+
+	return reviewedResults
+}
+
+function getConfidenceScore(result) {
+	const rawScore = result?.confidence?.score
+	const score = typeof rawScore === "number" ? rawScore : Number.parseFloat(String(rawScore || ""))
+	return Number.isFinite(score) ? score : null
+}
+
+function markLowConfidenceResultsForReview(results, operationName) {
+	if (!Array.isArray(results) || results.length === 0) {
+		return results
+	}
+
+	const lowConfidenceConcepts = []
+	const reviewedResults = results.map((result) => {
+		if (!isActionableFinding(result) || result.status === "Needs Review") {
+			return result
+		}
+
+		const score = getConfidenceScore(result)
+		if (score === null || score >= 6) {
+			return result
+		}
+
+		lowConfidenceConcepts.push({
+			concept: result.concept,
+			priority: result.priority || "INFO",
+			confidenceScore: score,
+			previousStatus: result.status || (result.isNew ? "New" : "Unverified"),
+		})
+
+		return {
+			...result,
+			status: "Needs Review",
+			latestVerificationStatus: "low_confidence_score",
+			verificationNote:
+				"This actionable finding has a confidence score below 6, so it needs manual review before applying.",
+		}
+	})
+
+	if (lowConfidenceConcepts.length > 0) {
+		log(
+			`${operationName}: Marked ${lowConfidenceConcepts.length} low-confidence finding${lowConfidenceConcepts.length === 1 ? "" : "s"} as Needs Review.`,
+			lowConfidenceConcepts,
 		)
 	}
 
@@ -671,7 +888,14 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 		characterCount: combinedText.length,
 	})
 
-	const prompt = buildPrompt(combinedText, existingResults, getOfficialGlossaryPromptContext(combinedText, chapterData))
+	const promptCaps = getCurrentPromptContextCaps()
+	const prompt = buildPrompt(
+		combinedText,
+		existingResults,
+		getOfficialGlossaryPromptContext(combinedText, chapterData, promptCaps),
+		"",
+		promptCaps,
+	)
 	const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 	const streamingRequestState = createStreamingRequestState(appState.config)
 
@@ -813,6 +1037,14 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				appState.runtime.cumulativeResults = filteredInitialResults
 			}
 
+			appState.runtime.cumulativeResults = normalizeVariationTargets(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
+			appState.runtime.cumulativeResults = filterNonVariantFindings(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
 			appState.runtime.cumulativeResults = normalizeActionableSuggestions(
 				appState.runtime.cumulativeResults,
 				operationName,
@@ -822,6 +1054,10 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				operationName,
 			)
 			appState.runtime.cumulativeResults = markLowEvidenceResultsForReview(
+				appState.runtime.cumulativeResults,
+				operationName,
+			)
+			appState.runtime.cumulativeResults = markLowConfidenceResultsForReview(
 				appState.runtime.cumulativeResults,
 				operationName,
 			)
@@ -957,10 +1193,14 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 			characterCount: combinedText.length,
 		})
 
+		const promptCaps = getCurrentPromptContextCaps()
 		const prompt = buildDeepAnalysisPrompt(
 			combinedText,
 			existingResults,
-			getOfficialGlossaryPromptContext(combinedText, chapterData),
+			getOfficialGlossaryPromptContext(combinedText, chapterData, promptCaps),
+			currentDepth,
+			targetDepth,
+			promptCaps,
 		)
 		const requestConfig = buildProviderRequestWithRuntimeMetadata(currentKey, prompt)
 		const streamingRequestState = createStreamingRequestState(appState.config)
@@ -1127,6 +1367,14 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					)
 				}
 
+				appState.runtime.cumulativeResults = normalizeVariationTargets(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
+				appState.runtime.cumulativeResults = filterNonVariantFindings(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
 				appState.runtime.cumulativeResults = normalizeActionableSuggestions(
 					appState.runtime.cumulativeResults,
 					operationName,
@@ -1136,6 +1384,10 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 					operationName,
 				)
 				appState.runtime.cumulativeResults = markLowEvidenceResultsForReview(
+					appState.runtime.cumulativeResults,
+					operationName,
+				)
+				appState.runtime.cumulativeResults = markLowConfidenceResultsForReview(
 					appState.runtime.cumulativeResults,
 					operationName,
 				)
