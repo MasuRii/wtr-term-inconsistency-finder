@@ -982,17 +982,142 @@ function adjustIndicatorPosition() {
 	collisionState.lastNigWidgetState = states.nig
 }
 
+function findBottomNav(): { container: Element; layout: "legacy" | "modern" } | null {
+	// Legacy UI: Bootstrap-based bottom reader nav
+	const legacyNav = document.querySelector("nav.bottom-reader-nav") || document.querySelector(".bottom-reader-nav")
+	if (legacyNav) {
+		return { container: legacyNav, layout: "legacy" }
+	}
+
+	// Modern UI: Shadcn/Tailwind tab bar at the bottom
+	// Try the known class pattern first
+	const modernNav = document.querySelector("div.flex.w-full.border-t.border-border\\/60")
+	if (modernNav) {
+		return { container: modernNav, layout: "modern" }
+	}
+
+	// Fallback: detect by finding the "Read" tab button and climbing up
+	const readButton = Array.from(document.querySelectorAll("button")).find((btn) => {
+		return (btn.textContent || "").trim() === "Read"
+	})
+	if (readButton) {
+		const container = readButton.closest("div.flex")
+		if (container) {
+			return { container, layout: "modern" }
+		}
+	}
+
+	return null
+}
+
+/**
+ * Determine whether the Settings tab is currently active in the modern UI.
+ *
+ * Checks two signals:
+ * 1. The bottom nav "Settings" button has the active visual state (bg-accent/30).
+ * 2. The tab content area contains a Settings-only element (auto-unlock switch).
+ */
+function isSettingsTabActive(): boolean {
+	// Signal 1: Settings bottom-nav button is visually active
+	const settingsBtn = Array.from(document.querySelectorAll("button")).find((btn) => {
+		const text = (btn.textContent || "").trim()
+		return text === "Settings" && btn.classList.contains("bg-accent")
+	})
+
+	// Signal 2: A Settings-only control is present in the current tab content
+	const hasSettingsContent = Boolean(document.getElementById("auto-unlock-config"))
+
+	return Boolean(settingsBtn) || hasSettingsContent
+}
+
+/**
+ * Inject an "Analyze Inconsistencies" button into the Settings tab panel
+ * of the modern bottom navigation bar.
+ *
+ * Only runs when the Settings tab is currently active.
+ */
+function injectSettingsPanelButton() {
+	// Only inject into the Settings tab
+	if (!isSettingsTabActive()) {
+		return
+	}
+
+	// Avoid duplicate injection
+	if (document.getElementById("wtr-if-settings-panel-btn")) {
+		return
+	}
+
+	// The Settings panel content lives inside a div[data-slot="tabs-content"]
+	const settingsPanelContent = document.querySelector('div[data-slot="tabs-content"] > .flex.flex-col.gap-3.p-2') as HTMLElement | null
+	if (!settingsPanelContent) {
+		return
+	}
+
+	log("Settings panel detected. Injecting Inconsistency Finder section.")
+
+	const section = document.createElement("div")
+	section.id = "wtr-if-settings-panel-section"
+
+	// Label styled like the other Settings panel section labels
+	const label = document.createElement("span")
+	label.className = "block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1"
+	label.textContent = "Inconsistency Finder"
+
+	// Button styled like the site's native buttons in the Settings panel
+	const button = document.createElement("button")
+	button.id = "wtr-if-settings-panel-btn"
+	button.type = "button"
+	button.className =
+		"group/button inline-flex cursor-pointer items-center justify-center bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 border border-border bg-card hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 rounded-md w-full"
+	button.innerHTML =
+		'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg><span>Analyze Inconsistencies</span>'
+	button.addEventListener("click", () => togglePanel(true))
+
+	section.appendChild(label)
+	section.appendChild(button)
+
+	settingsPanelContent.appendChild(section)
+}
+
+function updateSettingsPanelInjection() {
+	// Detect when the Settings panel is opened by watching for the tabs-content container.
+	// The panel is managed by React/shadcn and swaps content per tab, so we gate on the
+	// Settings tab being active to avoid injecting into Read/Display/Speech/More tabs.
+	const settingsPanelContent = document.querySelector('div[data-slot="tabs-content"] > .flex.flex-col.gap-3.p-2')
+	if (settingsPanelContent && !document.getElementById("wtr-if-settings-panel-btn")) {
+		injectSettingsPanelButton()
+	}
+}
+
 export function injectControlButton() {
 	const mainObserver = new MutationObserver((mutations, mainObs) => {
-		const navBar = document.querySelector("nav.bottom-reader-nav")
-		if (navBar) {
-			log("Bottom navigation bar found. Attaching persistent observer.")
-			mainObs.disconnect()
+		const navInfo = findBottomNav()
+		if (!navInfo) {
+			// Even if bottom nav isn't found yet, try to detect the Settings panel
+			updateSettingsPanelInjection()
+			return
+		}
+
+		log(`Bottom navigation bar found (${navInfo.layout}). Attaching persistent observer.`)
+		mainObs.disconnect()
+
+		// Also attempt to inject into the Settings panel whenever the Settings tab is active
+		const settingsPanelObserver = new MutationObserver(() => {
+			updateSettingsPanelInjection()
+		})
+		settingsPanelObserver.observe(document.body, {
+			childList: true,
+			subtree: true,
+		})
+		updateSettingsPanelInjection()
+
+		if (navInfo.layout === "legacy") {
+			const navBar = navInfo.container
 
 			const navObserver = new MutationObserver(() => {
 				const targetContainer = navBar.querySelector('div[role="group"].btn-group')
 				if (targetContainer && !document.getElementById("wtr-if-analyze-btn")) {
-					log("Button container found. Injecting button.")
+					log("Legacy button container found. Injecting button.")
 					const analyzeButton = document.createElement("button")
 					analyzeButton.id = "wtr-if-analyze-btn"
 					analyzeButton.className = "wtr btn btn-outline-dark btn-sm"
@@ -1022,6 +1147,37 @@ export function injectControlButton() {
 				analyzeButton.addEventListener("click", () => togglePanel(true))
 				initialTarget.appendChild(analyzeButton)
 			}
+		} else {
+			// Modern UI (Shadcn/Tailwind)
+			const navBar = navInfo.container
+
+			function injectModernButton() {
+				if (document.getElementById("wtr-if-analyze-btn")) {
+					return
+				}
+
+				log("Modern button container found. Injecting button.")
+				const analyzeButton = document.createElement("button")
+				analyzeButton.id = "wtr-if-analyze-btn"
+				analyzeButton.className =
+					"relative flex-1 flex flex-col items-center justify-center pt-1.5 pb-2 gap-0.5 transition-colors border-l border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/30"
+				analyzeButton.type = "button"
+				analyzeButton.title = "Analyze Inconsistencies"
+				analyzeButton.innerHTML =
+					'<span class="[&>svg]:w-4 [&>svg]:h-4"><svg class="icon inline-flex shrink-0 size-6" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg></span><span class="text-[10px] font-medium leading-none">Incon</span>'
+				analyzeButton.addEventListener("click", () => togglePanel(true))
+				navBar.appendChild(analyzeButton)
+			}
+
+			const navObserver = new MutationObserver(() => {
+				injectModernButton()
+			})
+
+			navObserver.observe(navBar, {
+				childList: true,
+				subtree: false,
+			})
+			injectModernButton()
 		}
 	})
 	mainObserver.observe(document.body, {
@@ -1091,10 +1247,8 @@ export function setupConflictObserver() {
 		})
 	}
 
-	const bottomNav =
-		document.querySelector("nav.bottom-reader-nav") ||
-		document.querySelector(".bottom-reader-nav") ||
-		document.querySelector(".fixed-bottom")
+	const navInfo = findBottomNav()
+	const bottomNav = navInfo?.container || document.querySelector(".fixed-bottom")
 	if (bottomNav) {
 		observer.observe(bottomNav, {
 			attributes: true,

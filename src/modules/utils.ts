@@ -950,11 +950,12 @@ export function isWTRLabTermReplacerLoaded() {
 		}
 
 		const globalMarker = window.WTR_LAB_TERM_REPLACER
-		const marker = document.querySelector(
+		const legacyMarker = document.querySelector(
 			".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm",
 		)
+		const modernMarker = document.querySelector(".replacer-settings-btn")
 
-		const detected = Boolean(globalMarker?.ready || marker)
+		const detected = Boolean(globalMarker?.ready || legacyMarker || modernMarker)
 
 		_wtrReplacerDetectionCache = {
 			lastResult: detected,

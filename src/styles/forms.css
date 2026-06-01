@@ -1,20 +1,21 @@
-/* Form styling for configuration */
+/* WTR Term Inconsistency Finder — Forms & Inputs (Modern) */
+
 .wtr-if-form-group {
-	margin-bottom: 16px;
+	margin-bottom: 0.875rem;
 }
 
 .wtr-if-form-group input,
 .wtr-if-form-group select {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
 	box-sizing: border-box;
-	color: var(--bs-body-color, #212529);
-	font-size: 14px;
-	padding: 10px 12px;
-	transition:
-		border-color 0.15s ease-in-out,
-		box-shadow 0.15s ease-in-out;
+	color: var(--foreground, var(--bs-body-color, #212529));
+	font-size: 0.875rem;
+	line-height: 1.5;
+	min-height: 2.25rem;
+	padding: 0.4rem 0.65rem;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	width: 100%;
 }
 
@@ -29,8 +30,8 @@
 .wtr-if-tab-btn:focus-visible,
 .wtr-if-close-btn:focus-visible,
 .wtr-if-btn:focus-visible {
-	border-color: var(--bs-primary, #fd7e14);
-	box-shadow: 0 0 0 0.2rem rgb(253 126 20 / 25%);
+	border-color: var(--primary, var(--bs-primary, #2563eb));
+	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 25%, transparent);
 	outline: none;
 }
 
@@ -40,93 +41,95 @@
 }
 
 .wtr-if-form-group label {
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	display: block;
-	font-size: 14px;
+	font-size: 0.875rem;
 	font-weight: 650;
-	margin-bottom: 8px;
+	margin-bottom: 0.35rem;
 }
 
 .wtr-if-form-group label.checkbox-label {
 	align-items: center;
 	display: flex;
 	font-weight: normal;
-	gap: 10px;
+	gap: 0.5rem;
 	margin-bottom: 0;
 }
 
 .wtr-if-form-group label.checkbox-label input {
+	accent-color: var(--primary, var(--bs-primary, #2563eb));
+	cursor: pointer;
 	margin: 0;
 	width: auto;
 }
 
 .wtr-if-hint {
-	color: var(--bs-secondary-color, #6c757d);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
 	display: block;
-	font-size: 12px;
+	font-size: 0.78rem;
 	font-weight: normal;
 	line-height: 1.45;
-	margin-top: 6px;
+	margin-top: 0.35rem;
 }
 
 .wtr-if-form-row {
 	align-items: center;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
-	margin-bottom: 8px;
+	gap: 0.75rem;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-form-label {
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	font-weight: 650;
 	min-width: 120px;
 	white-space: nowrap;
 }
 
 .wtr-if-form-select {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
-	color: var(--bs-body-color, #212529);
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	flex: 1;
 	max-width: 100%;
 	min-width: 200px;
-	padding: 8px 12px;
+	padding: 0.5rem 0.65rem;
 }
 
 .wtr-if-model-controls {
 	align-items: center;
 	display: flex;
-	gap: 12px;
-	margin-top: 8px;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
 }
 
 .wtr-if-debug-log-actions {
-	background: rgb(0 0 0 / 3%);
-	border: 1px dashed var(--bs-border-color, #dee2e6);
-	border-radius: 10px;
-	margin-top: 10px;
-	padding: 10px;
+	background: color-mix(in srgb, var(--foreground, #111827) 3%, transparent);
+	border: 1px dashed var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-top: 0.625rem;
+	padding: 0.625rem;
 }
 
 .wtr-if-debug-log-copy {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .wtr-if-debug-log-copy .wtr-if-btn {
-	font-size: 12px;
-	padding: 7px 10px;
+	font-size: 0.78rem;
+	padding: 0.45rem 0.65rem;
 }
 
 .wtr-if-api-key-header {
 	align-items: center;
 	display: flex;
-	gap: 10px;
+	gap: 0.625rem;
 	justify-content: space-between;
-	margin-bottom: 8px;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-api-key-header label {
@@ -134,34 +137,35 @@
 }
 
 .wtr-if-key-visibility-btn {
-	background: var(--bs-body-bg, #fff);
-	border: 1px solid var(--bs-border-color, #dee2e6);
+	background: var(--background, var(--bs-body-bg, #fff));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
 	border-radius: 999px;
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	cursor: pointer;
-	font-size: 12px;
+	font-size: 0.75rem;
 	font-weight: 650;
-	padding: 5px 10px;
+	padding: 0.3rem 0.65rem;
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 	white-space: nowrap;
 }
 
 .wtr-if-key-visibility-btn:focus-visible {
-	border-color: var(--bs-primary, #fd7e14);
-	box-shadow: 0 0 0 0.2rem rgb(253 126 20 / 25%);
+	border-color: var(--primary, var(--bs-primary, #2563eb));
+	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 25%, transparent);
 	outline: none;
 }
 
 .wtr-if-key-visibility-btn[aria-pressed="true"] {
-	background: rgb(253 126 20 / 12%);
-	border-color: rgb(253 126 20 / 45%);
-	color: var(--bs-primary, #fd7e14);
+	background: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 12%, transparent);
+	border-color: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 45%, transparent);
+	color: var(--primary, var(--bs-primary, #2563eb));
 }
 
 .wtr-if-key-row {
 	align-items: center;
 	display: flex;
-	gap: 8px;
-	margin-bottom: 8px;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-model-controls button {
@@ -170,31 +174,34 @@
 }
 
 .wtr-if-api-keys-container-wrapper {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
-	margin-bottom: 8px;
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 0.5rem;
 	max-height: 200px;
 	overflow-y: auto;
-	padding: 12px;
+	padding: 0.75rem;
 }
 
 .wtr-if-remove-key-btn {
-	background: var(--bs-danger, #dc3545);
+	align-items: center;
+	background: var(--destructive, var(--bs-danger, #dc3545));
 	border: none;
 	border-radius: 50%;
-	color: white;
+	color: #fff;
 	cursor: pointer;
+	display: inline-flex;
 	flex-shrink: 0;
-	font-size: 16px;
-	height: 24px;
+	font-size: 1rem;
+	height: 1.5rem;
+	justify-content: center;
 	line-height: 1;
-	transition: background-color 0.15s ease-in-out;
-	width: 24px;
+	transition: background-color 0.15s ease;
+	width: 1.5rem;
 }
 
 .wtr-if-remove-key-btn:hover {
-	background: #c82333;
+	background: color-mix(in srgb, var(--destructive, var(--bs-danger, #dc3545)) 88%, black);
 }
 
 .wtr-if-deep-analysis-controls,
@@ -205,7 +212,7 @@
 
 .wtr-if-range-grid {
 	display: grid;
-	gap: 12px;
+	gap: 0.75rem;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 

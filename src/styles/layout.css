@@ -1,26 +1,27 @@
-/* Section layout */
+/* WTR Term Inconsistency Finder — Section Layout (Modern) */
+
 .wtr-if-section {
-	background-color: var(--bs-body-bg, #fff);
-	border: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 72%, transparent);
-	border-radius: 12px;
+	background-color: var(--card, var(--bs-body-bg, #fff));
+	border: 1px solid color-mix(in srgb, var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12))) 72%, transparent);
+	border-radius: var(--radius-lg, 0.75rem);
 	box-shadow: none;
-	margin-bottom: 16px;
+	margin-bottom: 1rem;
 	overflow: hidden;
 }
 
 .wtr-if-section-header {
 	background: transparent;
-	border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 64%, transparent);
-	padding: 14px 18px 8px;
+	border-bottom: 1px solid color-mix(in srgb, var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12))) 64%, transparent);
+	padding: 0.875rem 1rem 0.5rem;
 }
 
 .wtr-if-section-header h3 {
 	align-items: center;
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	display: flex;
-	font-size: 16px;
+	font-size: 0.95rem;
 	font-weight: 650;
-	gap: 8px;
+	gap: 0.5rem;
 	margin: 0;
 }
 
@@ -29,20 +30,20 @@
 }
 
 .wtr-if-section-content {
-	padding: 16px 18px 18px;
+	padding: 0.875rem 1rem 1rem;
 }
 
 .wtr-if-finder-controls {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: 0.75rem;
 }
 
 .wtr-if-advanced-details {
-	border: 1px dashed var(--bs-border-color, #dee2e6);
-	border-radius: 10px;
-	margin-bottom: 16px;
-	padding: 10px 12px;
+	border: 1px dashed var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 1rem;
+	padding: 0.625rem 0.75rem;
 }
 
 .wtr-if-advanced-details summary {
@@ -51,20 +52,32 @@
 }
 
 .wtr-if-advanced-details .wtr-if-form-group {
-	margin-top: 12px;
+	margin-top: 0.75rem;
 }
 
-/* Narrow viewports: tablets and large phones in portrait.
-	   Modal stays centered with margin, not full-screen. */
+.wtr-if-import-export {
+	border-top: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	margin-top: 0.875rem;
+	padding-top: 0.875rem;
+}
+
+.wtr-if-import-export h4 {
+	font-size: 0.875rem;
+	font-weight: 700;
+	margin-bottom: 0.625rem;
+	margin-top: 0;
+}
+
+/* Narrow viewports */
 @media (width <= 768px) {
 	#wtr-if-panel {
-		border-radius: 10px;
+		border-radius: var(--radius-md, 0.5rem);
 		max-height: calc(100dvh - 24px);
 		width: min(96vw, 860px);
 	}
 
 	.wtr-if-content {
-		padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+		padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 	}
 
 	.wtr-if-finder-controls,
@@ -95,17 +108,17 @@
 	.wtr-if-section {
 		border-left: none;
 		border-right: none;
-		border-radius: 8px;
-		margin-bottom: 12px;
+		border-radius: var(--radius-md, 0.5rem);
+		margin-bottom: 0.75rem;
 	}
 
 	.wtr-if-section-header h3 {
 		align-items: flex-start;
-		font-size: 15px;
+		font-size: 0.9rem;
 	}
 
 	.wtr-if-section-content {
-		padding: 14px;
+		padding: 0.75rem;
 	}
 
 	.wtr-if-api-keys-container-wrapper {
@@ -113,8 +126,7 @@
 	}
 }
 
-/* Tiny viewports: very narrow phones or ultra-short screens.
-	   Full-screen to maximize every pixel of usable space. */
+/* Tiny viewports */
 @media (width <= 480px), (width <= 768px) and (height <= 480px) {
 	#wtr-if-panel {
 		border-radius: 0;
@@ -126,17 +138,4 @@
 	.wtr-if-section {
 		border-radius: 0;
 	}
-}
-
-.wtr-if-import-export {
-	border-top: 1px solid var(--bs-border-color, #dee2e6);
-	margin-top: 15px;
-	padding-top: 15px;
-}
-
-.wtr-if-import-export h4 {
-	font-size: 14px;
-	font-weight: bold;
-	margin-bottom: 10px;
-	margin-top: 0;
 }
