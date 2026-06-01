@@ -1,6 +1,6 @@
 # WTR Lab Term Inconsistency Finder
 
-[![Version](https://img.shields.io/badge/version-5.6.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.7.0-blue)](https://github.com/MasuRii/wtr-term-inconsistency-finder/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Greasy Fork](https://img.shields.io/badge/Install-Greasy%20Fork-green.svg)](https://greasyfork.org/en/scripts/554989-wtr-lab-term-inconsistency-finder)
@@ -28,6 +28,9 @@ A userscript for finding translation term inconsistencies in WTR Lab chapters. I
 - Optional WTR Lab advisory glossary context with compact relevance filtering. The AI prioritizes story context, chapter evidence, and world-building consistency over glossary wording.
 - Debug logging mode with copy-ready, redacted Markdown reports for easier issue reporting.
 - Responsive modal UI for desktop and mobile.
+- **Modern WTR Lab UI support**: automatically detects and works with both the legacy Bootstrap bottom navigation and the modern Shadcn/Tailwind tab bar.
+- **Dark mode support**: UI automatically adapts when the site switches to dark theme.
+- **Settings tab integration**: "Analyze Inconsistencies" button appears in the Settings tab panel as well as in the bottom navigation bar.
 
 ## Installation
 
@@ -41,6 +44,8 @@ For OpenAI-compatible providers, enter the base URL only. Examples: `https://api
 ## Usage
 
 1. Open the Finder panel on a WTR Lab chapter.
+   - On the modern UI: click the **Analyze Inconsistencies** button in the bottom navigation bar (beside Settings) or open the **Settings** tab and click **Analyze Inconsistencies** there.
+   - On the legacy UI: click the **Analyze Inconsistencies** button in the bottom reader nav.
 2. Configure provider, API keys, and model. Reasoning and temperature are handled automatically.
 3. Use Show Keys only when you need to inspect or edit saved API key values.
 4. Choose the chapter source in the Finder tab:

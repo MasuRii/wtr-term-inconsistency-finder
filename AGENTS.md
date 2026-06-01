@@ -2,7 +2,7 @@
 
 ## Project Structure
 - `src/index.ts` is the userscript entry point; it loads saved configuration, creates the UI, injects the WTR Lab control, and registers the Tampermonkey menu command.
-- `src/modules/` contains runtime behavior: analysis, prompt budget and management, provider configuration/API handling, retry/error helpers, state, utilities, WTR Lab reader API and official glossary handling, and UI modules under `src/modules/ui/`.
+- `src/modules/` contains runtime behavior: analysis, prompt budget and management, provider configuration/API handling, retry/error helpers, state, utilities, WTR Lab reader API and official glossary handling, and UI modules under `src/modules/ui/` (panel, display, events, and dual-UI nav detection).
 - `src/styles/` contains CSS imported by `src/styles/main.css` and bundled through webpack style/css loaders.
 - `config/versions.ts` and `src/version.ts` hold version data used by build and release scripts.
 - `scripts/update-versions.ts` updates versioned files and generates `src/banner.ts` and `src/header.ts`.
@@ -28,6 +28,9 @@
 - Follow existing module boundaries: prompt cap scaling belongs in `src/modules/promptBudget.ts`, AI prompt generation belongs in `src/modules/promptManager.ts`, provider URL/model logic belongs in `src/modules/providerConfig.ts`, persisted settings in `src/modules/state.ts`, analysis flow in `src/modules/analysisEngine.ts`, WTR Lab reader API and official glossary logic belongs in `src/modules/wtrLabApi.ts`, and DOM event/UI work under `src/modules/ui/`.
 - Keep CSS changes in the relevant file under `src/styles/` and ensure `src/styles/main.css` imports any new stylesheet.
 - Preserve provider-aware request behavior: temperature and reasoning parameters are now resolved automatically from model metadata and provider capabilities rather than from user configuration.
+- For UI injection work, keep `findBottomNav()` in `src/modules/ui/panel.ts` as the canonical nav-detection helper. It detects legacy (`nav.bottom-reader-nav`) and modern (`div.flex.w-full.border-t.border-border/60`) UIs. Use the same helper in `setupConflictObserver()`.
+- Settings panel injection (`injectSettingsPanelButton`) is gated by `isSettingsTabActive()`: the Settings bottom-nav button must have the `bg-accent` active class, or the tab content must contain `#auto-unlock-config`. This prevents the button from leaking into Read/Display/Speech/More tabs.
+- Term Replacer detection (`isWTRLabTermReplacerLoaded`) checks both a legacy Bootstrap compound selector and a modern `.replacer-settings-btn` class. Do not remove either check.
 
 ## Testing & Verification
 - Use `npm run typecheck` as the primary lightweight validation command.
