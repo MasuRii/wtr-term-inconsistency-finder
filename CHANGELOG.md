@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ---
+## [5.7.0] - 2026-06-02
+
+### Added
+- Modern Shadcn/Tailwind-styled UI that visually matches the new WTR Lab site design across the entire panel, forms, results, and status indicator.
+- Automatic dark mode detection via `html.dark`, `body.dark`, and `[data-theme="dark"]` selector support.
+- Adaptive color mixing throughout the UI using `color-mix()` for hover, active, focus, and disabled states that adapt to the site's CSS custom properties.
+- `findBottomNav()` helper with robust dual-UI detection: finds the legacy Bootstrap `nav.bottom-reader-nav` and the modern Shadcn/Tailwind tab bar (`div.flex.w-full.border-t.border-border/60`), with a fallback to the "Read" button text for maximum resilience.
+- Modern button injection path for the new bottom navigation: injects a `flex-col` tab-bar-style button using the same Tailwind class patterns as the site's native buttons.
+- Settings tab button injection: adds an "Analyze Inconsistencies" section with a native-styled button inside the Settings tab panel, gated by `isSettingsTabActive()` to prevent injection into Read/Display/Speech/More tabs.
+- Modern Term Replacer detection via `.replacer-settings-btn` class so the live-terms bridge works on both old and new site UIs.
+
+### Changed
+- Completely rewrote all 6 CSS stylesheets (`panel`, `buttons`, `forms`, `layout`, `results`, `utilities`) to use semantic design tokens (`--primary`, `--border`, `--muted`, `--radius-lg`, etc.) instead of hardcoded Bootstrap values.
+- Updated focus-visible rings to use `color-mix()` for subtle adaptive glow instead of fixed rgba values.
+- Reworked the status indicator into a dark modern toast with `rounded-lg`, refined border, and shadow consistent with the site's design language.
+- Converted all badge styles (verified, review, recommended, priority) to pill shapes (`rounded-full`) with modern color tokens.
+- Refactored `injectControlButton()` to branch cleanly between legacy `btn-group` injection and modern flex-tab-bar injection.
+- Updated `setupConflictObserver()` to use the shared `findBottomNav()` helper so collision avoidance works on both UI generations.
+
+### Fixed
+- Fixed broken analyze button injection on the new WTR Lab UI due to the bottom navigation no longer using `nav.bottom-reader-nav` or `div[role="group"].btn-group`.
+- Fixed Term Replacer integration detection failing on the new UI where the settings button class changed from the legacy Bootstrap compound selector to `.replacer-settings-btn`.
+
+---
 ## [5.6.0] - 2026-05-02
 
 ### Added

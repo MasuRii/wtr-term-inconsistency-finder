@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.6.0-dev.1777739767397
+// @version 5.7.0-dev.1780348460646
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -41,69 +41,136 @@
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
-	border: none;
-	border-radius: 4px;
-	color: white;
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Buttons & Actions (Modern) */
+
+.wtr-if-btn {
+	align-items: center;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md, 0.5rem);
+	color: #ffffff;
 	cursor: pointer;
-	font-weight: bold;
-	padding: 10px 15px;
+	display: inline-flex;
+	font-size: 0.875rem;
+	font-weight: 600;
+	gap: 0.35rem;
+	justify-content: center;
+	line-height: 1.25;
+	min-height: 2.25rem;
+	padding: 0.5rem 1rem;
+	transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.wtr-if-btn:active:not(:disabled) {
+	transform: translateY(1px);
 }
 
 .wtr-if-btn:disabled {
 	cursor: not-allowed;
-	opacity: 0.6;
+	opacity: 0.55;
+}
+
+.wtr-if-btn:focus-visible {
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 30%, transparent);
+	outline: none;
 }
 
 .wtr-if-btn-primary {
-	background-color: var(--bs-primary, #fd7e14);
+	background-color: var(--primary, var(--bs-primary, #2563eb));
+	border-color: var(--primary, var(--bs-primary, #2563eb));
+}
+
+.wtr-if-btn-primary:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 88%, black);
+	border-color: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 88%, black);
 }
 
 .wtr-if-btn-secondary {
-	background-color: var(--bs-secondary, #6c757d);
+	background-color: var(--secondary, var(--bs-secondary, #6b7280));
+	border-color: var(--secondary, var(--bs-secondary, #6b7280));
+}
+
+.wtr-if-btn-secondary:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--secondary, var(--bs-secondary, #6b7280)) 88%, black);
+	border-color: color-mix(in srgb, var(--secondary, var(--bs-secondary, #6b7280)) 88%, black);
 }
 
 .wtr-if-btn-large {
 	flex: 1;
-	font-size: 16px;
-	min-width: 180px;
-	padding: 12px 20px;
+	font-size: 1rem;
+	min-width: 160px;
+	padding: 0.625rem 1.25rem;
 }
 
 .wtr-if-action-buttons {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 10px;
+	gap: 0.625rem;
 }
 
 .wtr-if-apply-btn {
-	background-color: var(--bs-success, #198754);
-	border: none;
-	border-radius: 4px;
-	color: white;
+	align-items: center;
+	background-color: var(--success, var(--bs-success, #16a34a));
+	border: 1px solid var(--success, var(--bs-success, #16a34a));
+	border-radius: var(--radius-md, 0.5rem);
+	color: #ffffff;
 	cursor: pointer;
-	font-size: 12px;
-	padding: 4px 10px;
+	display: inline-flex;
+	font-size: 0.78rem;
+	font-weight: 600;
+	gap: 0.25rem;
+	min-height: 1.75rem;
+	padding: 0.3rem 0.65rem;
+	transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 	white-space: nowrap;
 }
 
+.wtr-if-apply-btn:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--success, var(--bs-success, #16a34a)) 88%, black);
+	border-color: color-mix(in srgb, var(--success, var(--bs-success, #16a34a)) 88%, black);
+}
+
+.wtr-if-apply-btn:disabled {
+	background-color: var(--muted, var(--bs-secondary-bg, #d1d5db));
+	border-color: var(--muted, var(--bs-secondary-bg, #d1d5db));
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
+	cursor: not-allowed;
+}
+
 .wtr-if-apply-btn.sent {
-	background-color: var(--bs-secondary, #6c757d);
+	background-color: var(--secondary, var(--bs-secondary, #6b7280));
+	border-color: var(--secondary, var(--bs-secondary, #6b7280));
 }
 
 .wtr-if-copy-variation-btn {
+	align-items: center;
 	background: none;
 	border: none;
+	border-radius: var(--radius-sm, 0.375rem);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
 	cursor: pointer;
-	font-size: 16px;
+	display: inline-flex;
+	font-size: 1rem;
+	justify-content: center;
 	line-height: 1;
-	opacity: 0.7;
-	padding: 2px 4px;
-	transition: opacity 0.2s;
+	min-height: 1.5rem;
+	opacity: 0.65;
+	padding: 0.15rem 0.3rem;
+	transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 
 .wtr-if-copy-variation-btn:hover {
+	background-color: var(--muted, var(--bs-secondary-bg, #e5e7eb));
 	opacity: 1;
+}
+
+html.dark .wtr-if-apply-btn:disabled,
+body.dark .wtr-if-apply-btn:disabled,
+[data-theme="dark"] .wtr-if-apply-btn:disabled {
+	background-color: var(--muted, #374151);
+	border-color: var(--muted, #374151);
+	color: var(--muted-foreground, #9ca3af);
 }
 `, ""]);
 // Exports
@@ -127,23 +194,24 @@ ___CSS_LOADER_EXPORT___.push([module.id, `.wtr-if-btn {
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Forms & Inputs (Modern) */
+
 .wtr-if-form-group {
-	margin-bottom: 16px;
+	margin-bottom: 0.875rem;
 }
 
 .wtr-if-form-group input,
 .wtr-if-form-group select {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
 	box-sizing: border-box;
-	color: var(--bs-body-color, #212529);
-	font-size: 14px;
-	padding: 10px 12px;
-	transition:
-		border-color 0.15s ease-in-out,
-		box-shadow 0.15s ease-in-out;
+	color: var(--foreground, var(--bs-body-color, #212529));
+	font-size: 0.875rem;
+	line-height: 1.5;
+	min-height: 2.25rem;
+	padding: 0.4rem 0.65rem;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	width: 100%;
 }
 
@@ -158,8 +226,8 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 .wtr-if-tab-btn:focus-visible,
 .wtr-if-close-btn:focus-visible,
 .wtr-if-btn:focus-visible {
-	border-color: var(--bs-primary, #fd7e14);
-	box-shadow: 0 0 0 0.2rem rgb(253 126 20 / 25%);
+	border-color: var(--primary, var(--bs-primary, #2563eb));
+	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 25%, transparent);
 	outline: none;
 }
 
@@ -169,93 +237,95 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 }
 
 .wtr-if-form-group label {
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	display: block;
-	font-size: 14px;
+	font-size: 0.875rem;
 	font-weight: 650;
-	margin-bottom: 8px;
+	margin-bottom: 0.35rem;
 }
 
 .wtr-if-form-group label.checkbox-label {
 	align-items: center;
 	display: flex;
 	font-weight: normal;
-	gap: 10px;
+	gap: 0.5rem;
 	margin-bottom: 0;
 }
 
 .wtr-if-form-group label.checkbox-label input {
+	accent-color: var(--primary, var(--bs-primary, #2563eb));
+	cursor: pointer;
 	margin: 0;
 	width: auto;
 }
 
 .wtr-if-hint {
-	color: var(--bs-secondary-color, #6c757d);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
 	display: block;
-	font-size: 12px;
+	font-size: 0.78rem;
 	font-weight: normal;
 	line-height: 1.45;
-	margin-top: 6px;
+	margin-top: 0.35rem;
 }
 
 .wtr-if-form-row {
 	align-items: center;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
-	margin-bottom: 8px;
+	gap: 0.75rem;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-form-label {
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	font-weight: 650;
 	min-width: 120px;
 	white-space: nowrap;
 }
 
 .wtr-if-form-select {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
-	color: var(--bs-body-color, #212529);
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	flex: 1;
 	max-width: 100%;
 	min-width: 200px;
-	padding: 8px 12px;
+	padding: 0.5rem 0.65rem;
 }
 
 .wtr-if-model-controls {
 	align-items: center;
 	display: flex;
-	gap: 12px;
-	margin-top: 8px;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
 }
 
 .wtr-if-debug-log-actions {
-	background: rgb(0 0 0 / 3%);
-	border: 1px dashed var(--bs-border-color, #dee2e6);
-	border-radius: 10px;
-	margin-top: 10px;
-	padding: 10px;
+	background: color-mix(in srgb, var(--foreground, #111827) 3%, transparent);
+	border: 1px dashed var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-top: 0.625rem;
+	padding: 0.625rem;
 }
 
 .wtr-if-debug-log-copy {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .wtr-if-debug-log-copy .wtr-if-btn {
-	font-size: 12px;
-	padding: 7px 10px;
+	font-size: 0.78rem;
+	padding: 0.45rem 0.65rem;
 }
 
 .wtr-if-api-key-header {
 	align-items: center;
 	display: flex;
-	gap: 10px;
+	gap: 0.625rem;
 	justify-content: space-between;
-	margin-bottom: 8px;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-api-key-header label {
@@ -263,34 +333,35 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 }
 
 .wtr-if-key-visibility-btn {
-	background: var(--bs-body-bg, #fff);
-	border: 1px solid var(--bs-border-color, #dee2e6);
+	background: var(--background, var(--bs-body-bg, #fff));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
 	border-radius: 999px;
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	cursor: pointer;
-	font-size: 12px;
+	font-size: 0.75rem;
 	font-weight: 650;
-	padding: 5px 10px;
+	padding: 0.3rem 0.65rem;
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 	white-space: nowrap;
 }
 
 .wtr-if-key-visibility-btn:focus-visible {
-	border-color: var(--bs-primary, #fd7e14);
-	box-shadow: 0 0 0 0.2rem rgb(253 126 20 / 25%);
+	border-color: var(--primary, var(--bs-primary, #2563eb));
+	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 25%, transparent);
 	outline: none;
 }
 
 .wtr-if-key-visibility-btn[aria-pressed="true"] {
-	background: rgb(253 126 20 / 12%);
-	border-color: rgb(253 126 20 / 45%);
-	color: var(--bs-primary, #fd7e14);
+	background: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 12%, transparent);
+	border-color: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 45%, transparent);
+	color: var(--primary, var(--bs-primary, #2563eb));
 }
 
 .wtr-if-key-row {
 	align-items: center;
 	display: flex;
-	gap: 8px;
-	margin-bottom: 8px;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-model-controls button {
@@ -299,31 +370,34 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 }
 
 .wtr-if-api-keys-container-wrapper {
-	background-color: var(--bs-secondary-bg, #f6f7f8);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 8px;
-	margin-bottom: 8px;
+	background-color: var(--background, var(--bs-secondary-bg, #f6f7f8));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 0.5rem;
 	max-height: 200px;
 	overflow-y: auto;
-	padding: 12px;
+	padding: 0.75rem;
 }
 
 .wtr-if-remove-key-btn {
-	background: var(--bs-danger, #dc3545);
+	align-items: center;
+	background: var(--destructive, var(--bs-danger, #dc3545));
 	border: none;
 	border-radius: 50%;
-	color: white;
+	color: #fff;
 	cursor: pointer;
+	display: inline-flex;
 	flex-shrink: 0;
-	font-size: 16px;
-	height: 24px;
+	font-size: 1rem;
+	height: 1.5rem;
+	justify-content: center;
 	line-height: 1;
-	transition: background-color 0.15s ease-in-out;
-	width: 24px;
+	transition: background-color 0.15s ease;
+	width: 1.5rem;
 }
 
 .wtr-if-remove-key-btn:hover {
-	background: #c82333;
+	background: color-mix(in srgb, var(--destructive, var(--bs-danger, #dc3545)) 88%, black);
 }
 
 .wtr-if-deep-analysis-controls,
@@ -334,7 +408,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 
 .wtr-if-range-grid {
 	display: grid;
-	gap: 12px;
+	gap: 0.75rem;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -365,29 +439,30 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Form styling for configuration */
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Section Layout (Modern) */
+
 .wtr-if-section {
-	background-color: var(--bs-body-bg, #fff);
-	border: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 72%, transparent);
-	border-radius: 12px;
+	background-color: var(--card, var(--bs-body-bg, #fff));
+	border: 1px solid color-mix(in srgb, var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12))) 72%, transparent);
+	border-radius: var(--radius-lg, 0.75rem);
 	box-shadow: none;
-	margin-bottom: 16px;
+	margin-bottom: 1rem;
 	overflow: hidden;
 }
 
 .wtr-if-section-header {
 	background: transparent;
-	border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color, #dee2e6) 64%, transparent);
-	padding: 14px 18px 8px;
+	border-bottom: 1px solid color-mix(in srgb, var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12))) 64%, transparent);
+	padding: 0.875rem 1rem 0.5rem;
 }
 
 .wtr-if-section-header h3 {
 	align-items: center;
-	color: var(--bs-body-color, #212529);
+	color: var(--foreground, var(--bs-body-color, #212529));
 	display: flex;
-	font-size: 16px;
+	font-size: 0.95rem;
 	font-weight: 650;
-	gap: 8px;
+	gap: 0.5rem;
 	margin: 0;
 }
 
@@ -396,20 +471,20 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 }
 
 .wtr-if-section-content {
-	padding: 16px 18px 18px;
+	padding: 0.875rem 1rem 1rem;
 }
 
 .wtr-if-finder-controls {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: 0.75rem;
 }
 
 .wtr-if-advanced-details {
-	border: 1px dashed var(--bs-border-color, #dee2e6);
-	border-radius: 10px;
-	margin-bottom: 16px;
-	padding: 10px 12px;
+	border: 1px dashed var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.14)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 1rem;
+	padding: 0.625rem 0.75rem;
 }
 
 .wtr-if-advanced-details summary {
@@ -418,20 +493,32 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 }
 
 .wtr-if-advanced-details .wtr-if-form-group {
-	margin-top: 12px;
+	margin-top: 0.75rem;
 }
 
-/* Narrow viewports: tablets and large phones in portrait.
-	   Modal stays centered with margin, not full-screen. */
+.wtr-if-import-export {
+	border-top: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	margin-top: 0.875rem;
+	padding-top: 0.875rem;
+}
+
+.wtr-if-import-export h4 {
+	font-size: 0.875rem;
+	font-weight: 700;
+	margin-bottom: 0.625rem;
+	margin-top: 0;
+}
+
+/* Narrow viewports */
 @media (width <= 768px) {
 	#wtr-if-panel {
-		border-radius: 10px;
+		border-radius: var(--radius-md, 0.5rem);
 		max-height: calc(100dvh - 24px);
 		width: min(96vw, 860px);
 	}
 
 	.wtr-if-content {
-		padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+		padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 	}
 
 	.wtr-if-finder-controls,
@@ -462,17 +549,17 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 	.wtr-if-section {
 		border-left: none;
 		border-right: none;
-		border-radius: 8px;
-		margin-bottom: 12px;
+		border-radius: var(--radius-md, 0.5rem);
+		margin-bottom: 0.75rem;
 	}
 
 	.wtr-if-section-header h3 {
 		align-items: flex-start;
-		font-size: 15px;
+		font-size: 0.9rem;
 	}
 
 	.wtr-if-section-content {
-		padding: 14px;
+		padding: 0.75rem;
 	}
 
 	.wtr-if-api-keys-container-wrapper {
@@ -480,8 +567,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 	}
 }
 
-/* Tiny viewports: very narrow phones or ultra-short screens.
-	   Full-screen to maximize every pixel of usable space. */
+/* Tiny viewports */
 @media (width <= 480px), (width <= 768px) and (height <= 480px) {
 	#wtr-if-panel {
 		border-radius: 0;
@@ -493,19 +579,6 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Section layout */
 	.wtr-if-section {
 		border-radius: 0;
 	}
-}
-
-.wtr-if-import-export {
-	border-top: 1px solid var(--bs-border-color, #dee2e6);
-	margin-top: 15px;
-	padding-top: 15px;
-}
-
-.wtr-if-import-export h4 {
-	font-size: 14px;
-	font-weight: bold;
-	margin-bottom: 10px;
-	margin-top: 0;
 }
 `, ""]);
 // Exports
@@ -584,25 +657,22 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder - Mod
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
-	0% {
-		transform: rotate(0deg);
-	}
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Panel & Core Layout (Modern Shadcn/Tailwind Aesthetic) */
 
-	100% {
-		transform: rotate(360deg);
-	}
+@keyframes wtr-if-spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
 }
 
 #wtr-if-panel {
-	background-color: var(--wtr-bg, #f8f9fa);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 14px;
-	box-shadow: 0 18px 48px rgb(0 0 0 / 28%);
-	color: var(--bs-body-color, #212529);
+	background-color: var(--background, var(--bs-body-bg, #ffffff));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	border-radius: var(--radius-lg, 0.75rem);
+	box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+	color: var(--foreground, var(--bs-body-color, #111827));
 	display: none;
 	flex-direction: column;
-	font-family: var(--bs-body-font-family, sans-serif);
+	font-family: var(--font-sans, var(--bs-body-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif));
 	left: 50%;
 	max-height: min(88vh, 900px);
 	max-height: min(88dvh, 900px);
@@ -614,78 +684,94 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 	z-index: 1040;
 }
 
+#wtr-if-panel * { box-sizing: border-box; }
+
 .wtr-if-header {
 	align-items: center;
-	background-color: var(--bs-body-bg, #fff);
-	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+	background-color: var(--muted, var(--bs-tertiary-bg, #f3f4f6));
+	border-bottom: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	border-radius: var(--radius-lg, 0.75rem) var(--radius-lg, 0.75rem) 0 0;
 	display: flex;
 	justify-content: space-between;
-	padding: 14px 18px;
+	padding: 0.75rem 1rem;
 }
 
 .wtr-if-title-group {
 	align-items: center;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .wtr-if-header h2 {
-	font-size: 18px;
+	font-size: 1.15rem;
+	font-weight: 700;
 	margin: 0;
 }
 
 .wtr-if-version-badge {
-	background: rgb(253 126 20 / 10%);
-	border: 1px solid rgb(253 126 20 / 30%);
+	background: color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 10%, transparent);
+	border: 1px solid color-mix(in srgb, var(--primary, var(--bs-primary, #2563eb)) 30%, transparent);
 	border-radius: 999px;
-	color: var(--bs-primary, #fd7e14);
-	font-size: 11px;
+	color: var(--primary, var(--bs-primary, #2563eb));
+	font-size: 0.7rem;
 	font-weight: 700;
 	letter-spacing: 0.04em;
 	line-height: 1;
-	padding: 4px 8px;
+	padding: 0.25rem 0.5rem;
 	white-space: nowrap;
 }
 
 .wtr-if-close-btn {
 	background: none;
 	border: none;
-	color: var(--bs-body-color, #212529);
+	border-radius: var(--radius-md, 0.5rem);
+	color: inherit;
 	cursor: pointer;
-	font-size: 24px;
+	font-size: 1.5rem;
 	line-height: 1;
-	padding: 0 4px;
+	padding: 0.15rem 0.35rem;
+	transition: background-color 0.15s ease;
+}
+
+.wtr-if-close-btn:hover {
+	background-color: var(--muted, var(--bs-secondary-bg, #e5e7eb));
 }
 
 .wtr-if-tabs {
-	background-color: var(--bs-body-bg, #fff);
-	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+	background-color: var(--muted, var(--bs-tertiary-bg, #f3f4f6));
+	border-bottom: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
 	display: flex;
-	gap: 4px;
-	padding: 0 12px;
+	gap: 0.25rem;
+	padding: 0 0.5rem;
 }
 
 .wtr-if-tab-btn {
 	background: none;
 	border: none;
 	border-bottom: 3px solid transparent;
-	color: var(--bs-secondary-color, #6c757d);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
 	cursor: pointer;
-	font-size: 14px;
-	padding: 10px 15px;
+	font-size: 0.9rem;
+	margin-bottom: -1px;
+	padding: 0.65rem 0.9rem;
+	transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .wtr-if-tab-btn.active {
-	border-bottom-color: var(--bs-primary, #fd7e14);
-	color: var(--bs-body-color, #212529);
-	font-weight: bold;
+	border-bottom-color: var(--primary, var(--bs-primary, #2563eb));
+	color: var(--primary, var(--bs-primary, #2563eb));
+	font-weight: 700;
+}
+
+.wtr-if-tab-btn:hover:not(.active) {
+	color: var(--foreground, var(--bs-body-color, #111827));
 }
 
 .wtr-if-content {
 	flex-grow: 1;
 	overflow-y: auto;
-	padding: 18px;
+	padding: 1rem;
 }
 
 .wtr-if-tab-content {
@@ -694,6 +780,45 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 
 .wtr-if-tab-content.active {
 	display: block;
+}
+
+/* --- Dark mode support (auto-detection via site theme) --- */
+html.dark #wtr-if-panel,
+body.dark #wtr-if-panel,
+[data-theme="dark"] #wtr-if-panel {
+	background-color: var(--background, #1f2129);
+	color: var(--foreground, #f8fafc);
+	border-color: var(--border, rgba(248, 250, 252, 0.14));
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+html.dark .wtr-if-header,
+html.dark .wtr-if-tabs,
+body.dark .wtr-if-header,
+body.dark .wtr-if-tabs,
+[data-theme="dark"] .wtr-if-header,
+[data-theme="dark"] .wtr-if-tabs {
+	background-color: var(--muted, #181a22);
+	border-color: var(--border, rgba(248, 250, 252, 0.12));
+}
+
+html.dark .wtr-if-tab-btn,
+body.dark .wtr-if-tab-btn,
+[data-theme="dark"] .wtr-if-tab-btn {
+	color: var(--muted-foreground, #a7b0c0);
+}
+
+html.dark .wtr-if-tab-btn.active,
+body.dark .wtr-if-tab-btn.active,
+[data-theme="dark"] .wtr-if-tab-btn.active {
+	color: var(--primary, #8ab4ff);
+	border-bottom-color: var(--primary, #8ab4ff);
+}
+
+html.dark .wtr-if-close-btn:hover,
+body.dark .wtr-if-close-btn:hover,
+[data-theme="dark"] .wtr-if-close-btn:hover {
+	background-color: var(--muted, rgba(248, 250, 252, 0.08));
 }
 `, ""]);
 // Exports
@@ -717,22 +842,23 @@ ___CSS_LOADER_EXPORT___.push([module.id, `@keyframes wtr-if-spin {
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Results Display (Modern) */
+
 #wtr-if-results {
-	margin-top: 10px;
+	margin-top: 0.625rem;
 }
 
 .wtr-if-result-group {
-	background-color: var(--bs-body-bg, #fff);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 6px;
-	margin-bottom: 16px;
+	background-color: var(--card, var(--bs-body-bg, #fff));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 1rem;
 }
 
 .wtr-if-group-header {
-	background-color: var(--bs-tertiary-bg, #f8f9fa);
-	border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-	padding: 12px;
+	background-color: var(--muted, var(--bs-tertiary-bg, #f8f9fa));
+	border-bottom: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	padding: 0.75rem;
 	position: relative;
 }
 
@@ -740,13 +866,13 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 	align-items: center;
 	display: flex;
 	flex-wrap: wrap;
-	font-size: 16px;
-	gap: 8px;
-	margin: 0 0 8px;
+	font-size: 0.95rem;
+	gap: 0.5rem;
+	margin: 0 0 0.5rem;
 }
 
 .wtr-if-explanation {
-	font-size: 14px;
+	font-size: 0.875rem;
 	font-style: italic;
 	margin: 0;
 	opacity: 0.9;
@@ -754,22 +880,22 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 
 .wtr-if-group-actions {
 	position: absolute;
-	right: 12px;
-	top: 12px;
+	right: 0.75rem;
+	top: 0.75rem;
 }
 
 .wtr-if-details-section {
-	padding: 12px;
+	padding: 0.75rem;
 }
 
 .wtr-if-details-section h4,
 .wtr-if-decision-guide summary {
-	border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
-	font-size: 14px;
-	font-weight: bold;
-	margin-bottom: 8px;
+	border-bottom: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.1)));
+	font-size: 0.875rem;
+	font-weight: 700;
+	margin-bottom: 0.5rem;
 	margin-top: 0;
-	padding-bottom: 4px;
+	padding-bottom: 0.35rem;
 }
 
 .wtr-if-decision-guide summary {
@@ -778,131 +904,129 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 }
 
 .wtr-if-decision-guide[open] summary {
-	margin-bottom: 8px;
+	margin-bottom: 0.5rem;
 }
 
 .wtr-if-decision-guide {
-	background-color: var(--bs-body-bg, #fff);
-	border-bottom: 1px solid var(--bs-border-color-translucent, #dee2e6);
+	background-color: var(--card, var(--bs-body-bg, #fff));
+	border-bottom: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.1)));
 }
 
 .wtr-if-confidence,
 .wtr-if-confidence-factors {
-	font-size: 13px;
-	margin: 0 0 6px;
+	font-size: 0.82rem;
+	margin: 0 0 0.375rem;
 }
 
 .wtr-if-confidence span {
-	color: var(--bs-secondary-color, #6c757d);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
 	font-style: italic;
 }
 
 .wtr-if-decision-steps {
-	font-size: 13px;
-	margin: 0 0 6px 18px;
+	font-size: 0.82rem;
+	margin: 0 0 0.375rem 1.1rem;
 	padding: 0;
 }
 
 .wtr-if-decision-steps li + li {
-	margin-top: 4px;
+	margin-top: 0.25rem;
 }
 
 .wtr-if-variations,
 .wtr-if-suggestions {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .wtr-if-variation-item {
-	border: 1px solid var(--bs-border-color-translucent, #dee2e6);
-	border-radius: 4px;
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.1)));
+	border-radius: var(--radius-sm, 0.375rem);
+	overflow: hidden;
 }
 
 .wtr-if-variation-header {
 	align-items: center;
-	background-color: var(--bs-secondary-bg, #e9ecef);
+	background-color: var(--muted, var(--bs-secondary-bg, #e9ecef));
 	display: flex;
-	gap: 8px;
+	gap: 0.5rem;
 	justify-content: space-between;
-	padding: 6px 8px;
+	padding: 0.4rem 0.5rem;
 }
 
 .wtr-if-incorrect {
-	color: var(--bs-danger-text-emphasis, #58151c);
-	font-weight: bold;
+	color: var(--destructive, var(--bs-danger-text-emphasis, #58151c));
+	font-weight: 700;
 }
 
 .wtr-if-variation-header .wtr-if-incorrect {
 	flex-grow: 1;
-	color: var(--bs-danger-text-emphasis, #58151c);
-	font-weight: bold;
 }
 
 .wtr-if-variation-checkbox {
+	accent-color: var(--primary, var(--bs-primary, #2563eb));
+	cursor: pointer;
 	flex-shrink: 0;
 	margin: 0;
 }
 
 .wtr-if-context {
-	font-size: 13px;
+	font-size: 0.82rem;
 	margin: 0;
-	padding: 6px 8px;
+	padding: 0.4rem 0.5rem;
 }
 
 .wtr-if-suggestion-item {
-	border: 1px solid var(--bs-border-color-translucent, #dee2e6);
-	border-radius: 4px;
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.1)));
+	border-radius: var(--radius-sm, 0.375rem);
 	overflow: hidden;
 }
 
 .wtr-if-suggestion-header {
 	align-items: center;
-	background-color: var(--bs-success-bg-subtle, #d1e7dd);
+	background-color: var(--success-muted, var(--bs-success-bg-subtle, #d1e7dd));
 	display: flex;
 	justify-content: space-between;
-	padding: 8px;
+	padding: 0.5rem 0.625rem;
 }
 
 .wtr-if-correct {
-	color: var(--bs-success-text-emphasis, #0a3622);
-	font-weight: bold;
+	color: var(--success, var(--bs-success-text-emphasis, #0a3622));
+	font-weight: 700;
 }
 
 .wtr-if-suggestion-header .wtr-if-correct {
 	flex-grow: 1;
-	color: var(--bs-success-text-emphasis, #0a3622);
-	font-weight: bold;
 }
 
 .wtr-if-suggestion-actions {
 	display: flex;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .wtr-if-replacement-info {
-	background-color: var(--bs-tertiary-bg, #f8f9fa);
-	border-top: 1px solid var(--bs-border-color-translucent, #dee2e6);
-	font-size: 13px;
+	background-color: var(--muted, var(--bs-tertiary-bg, #f8f9fa));
+	border-top: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.1)));
+	font-size: 0.82rem;
 	margin: 0;
-	padding: 6px 8px;
+	padding: 0.4rem 0.625rem;
 }
 
 .wtr-if-replacement-info code {
-	background-color: var(--bs-body-bg, #fff);
-	border: 1px solid var(--bs-border-color, #dee2e6);
-	border-radius: 4px;
-	font-family: var(--bs-font-monospace, monospace);
-	padding: 2px 5px;
+	background-color: var(--card, var(--bs-body-bg, #fff));
+	border: 1px solid var(--border, var(--bs-border-color, rgba(17, 24, 39, 0.12)));
+	border-radius: var(--radius-sm, 0.375rem);
+	font-family: var(--font-mono, var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace));
+	font-size: 0.82rem;
+	padding: 0.1rem 0.3rem;
 }
 
 .wtr-if-reasoning {
-	font-size: 13px;
+	font-size: 0.82rem;
 	margin: 0;
-	padding: 6px 8px;
+	padding: 0.4rem 0.625rem;
 }
-
-/* Base color classes for text highlighting */
 `, ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
@@ -925,155 +1049,158 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Results Display Styles */
 
 var ___CSS_LOADER_EXPORT___ = _node_modules_css_loader_dist_runtime_api_js__WEBPACK_IMPORTED_MODULE_1___default()((_node_modules_css_loader_dist_runtime_noSourceMaps_js__WEBPACK_IMPORTED_MODULE_0___default()));
 // Module
-___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
+___CSS_LOADER_EXPORT___.push([module.id, `/* WTR Term Inconsistency Finder — Utilities, Status & Indicators (Modern) */
+
 .wtr-if-status {
-	font-size: 14px;
-	margin-top: 10px;
+	font-size: 0.875rem;
+	margin-top: 0.625rem;
 	text-align: center;
 }
 
 .wtr-if-session-restore {
-	background-color: var(--bs-info-bg-subtle, #cff4fc);
-	border: 1px solid var(--bs-info-border-subtle, #9eeaf9);
-	border-radius: 4px;
-	margin-bottom: 16px;
-	padding: 10px;
+	background-color: var(--info-muted, var(--bs-info-bg-subtle, #cff4fc));
+	border: 1px solid var(--info-border, var(--bs-info-border-subtle, #9eeaf9));
+	border-radius: var(--radius-md, 0.5rem);
+	margin-bottom: 1rem;
+	padding: 0.625rem 0.75rem;
 }
 
 .wtr-if-session-restore button {
-	margin-right: 8px;
+	margin-right: 0.5rem;
 }
 
 .wtr-if-priority {
-	border-radius: 12px;
-	color: white;
-	font-size: 12px;
-	font-weight: bold;
-	padding: 3px 8px;
+	border-radius: 999px;
+	color: #fff;
+	font-size: 0.7rem;
+	font-weight: 700;
+	padding: 0.2rem 0.55rem;
+	white-space: nowrap;
 }
 
 .wtr-if-priority-critical {
-	background-color: var(--bs-danger, #dc3545);
+	background-color: var(--destructive, var(--bs-danger, #dc3545));
 }
 
 .wtr-if-priority-high {
-	background-color: var(--bs-warning, #ffc107);
-	color: #000;
+	background-color: var(--warning, var(--bs-warning, #f59e0b));
+	color: #111827;
 }
 
 .wtr-if-priority-medium {
-	background-color: var(--bs-info, #0dcaf0);
+	background-color: var(--info, var(--bs-info, #0ea5e9));
 }
 
 .wtr-if-priority-low {
-	background-color: var(--bs-secondary, #6c757d);
+	background-color: var(--secondary, var(--bs-secondary, #6b7280));
 }
 
 .wtr-if-priority-stylistic,
 .wtr-if-priority-info {
-	background-color: var(--bs-light, #f8f9fa);
-	border: 1px solid #ccc;
-	color: #000;
+	background-color: var(--muted, var(--bs-light, #f3f4f6));
+	border: 1px solid var(--border, #d1d5db);
+	color: var(--foreground, #111827);
 }
 
 .wtr-if-concept {
-	color: var(--bs-link-color, #0d6efd);
-	font-weight: bold;
+	color: var(--primary, var(--bs-link-color, #2563eb));
+	font-weight: 700;
 }
 
 .wtr-if-chapter {
-	background-color: var(--bs-tertiary-bg, #f8f9fa);
-	border-radius: 4px;
-	color: var(--bs-secondary-color, #6c757d);
-	font-size: 12px;
-	font-weight: bold;
-	padding: 3px 6px;
+	background-color: var(--muted, var(--bs-tertiary-bg, #f3f4f6));
+	border-radius: var(--radius-sm, 0.375rem);
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
+	flex-shrink: 0;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 0.15rem 0.4rem;
 }
 
 .wtr-if-error {
-	background-color: var(--bs-danger-bg-subtle, #f8d7da);
-	border: 1px solid var(--bs-danger, #dc3545);
-	border-radius: 4px;
-	color: var(--bs-danger-text-emphasis, #58151c);
-	margin-bottom: 10px;
-	padding: 10px;
+	background-color: var(--destructive-muted, var(--bs-danger-bg-subtle, #f8d7da));
+	border: 1px solid var(--destructive, var(--bs-danger, #dc3545));
+	border-radius: var(--radius-md, 0.5rem);
+	color: var(--destructive, var(--bs-danger-text-emphasis, #58151c));
+	margin-bottom: 0.625rem;
+	padding: 0.625rem 0.75rem;
 }
 
 .wtr-if-no-results {
-	padding: 10px;
+	color: var(--muted-foreground, var(--bs-secondary-color, #6b7280));
+	padding: 0.625rem;
 	text-align: center;
 }
 
 .wtr-if-verified-badge {
-	background-color: var(--bs-success, #198754);
-	border-radius: 12px;
-	color: white;
-	font-size: 11px;
-	font-weight: bold;
-	margin-left: 8px;
-	padding: 3px 8px;
+	background-color: var(--success, var(--bs-success, #16a34a));
+	border-radius: 999px;
+	color: #fff;
+	font-size: 0.68rem;
+	font-weight: 700;
+	margin-left: 0.5rem;
+	padding: 0.2rem 0.5rem;
 }
 
 .wtr-if-review-badge {
-	background-color: var(--bs-warning, #ffc107);
-	border-radius: 12px;
-	color: #212529;
-	font-size: 11px;
-	font-weight: bold;
-	margin-left: 8px;
-	padding: 3px 8px;
+	background-color: var(--warning, var(--bs-warning, #f59e0b));
+	border-radius: 999px;
+	color: #111827;
+	font-size: 0.68rem;
+	font-weight: 700;
+	margin-left: 0.5rem;
+	padding: 0.2rem 0.5rem;
 }
 
 .wtr-if-recommended-badge {
-	background-color: var(--bs-info, #0dcaf0);
-	border-radius: 12px;
-	color: white;
-	font-size: 11px;
-	font-weight: bold;
-	margin-left: 8px;
-	padding: 3px 8px;
+	background-color: var(--info, var(--bs-info, #0ea5e9));
+	border-radius: 999px;
+	color: #fff;
+	font-size: 0.68rem;
+	font-weight: 700;
+	margin-left: 0.35rem;
+	padding: 0.2rem 0.5rem;
 	vertical-align: middle;
 }
 
-/* Status Indicator */
+/* Status Indicator — Modern Toast */
 #wtr-if-status-indicator {
 	align-items: center;
-	background-color: #2c2c2e;
-	border-radius: 8px;
+	background-color: var(--card, #1f2937);
+	border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+	border-radius: var(--radius-lg, 0.75rem);
 	bottom: var(--nig-space-xl, 20px);
-	box-shadow: 0 4px 8px rgb(0 0 0 / 30%);
-	color: #f0f0f0;
+	box-shadow: 0 10px 25px rgba(15, 23, 42, 0.3);
+	color: var(--card-foreground, #f0f0f0);
 	display: none;
-	font-family: sans-serif;
-	font-size: 14px;
-	gap: 10px;
-	left: 20px;
-	padding: 10px 15px;
+	font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+	font-size: 0.875rem;
+	gap: 0.625rem;
+	left: 1.25rem;
+	padding: 0.625rem 1rem;
 	position: fixed;
-	transition:
-		background-color 0.3s ease,
-		bottom 0.3s ease;
+	transition: background-color 0.3s ease, bottom 0.3s ease;
 	z-index: 10000;
 }
 
 .wtr-if-status-icon {
 	align-items: center;
 	display: flex;
-	height: 20px;
+	height: 1.25rem;
 	justify-content: center;
-	width: 20px;
+	width: 1.25rem;
 }
 
 #wtr-if-status-indicator.running .wtr-if-status-icon {
 	animation: wtr-if-spin 1s linear infinite;
-	border: 3px solid #555;
+	border: 2.5px solid #4b5563;
 	border-radius: 50%;
-	border-top-color: #4285f4;
+	border-top-color: var(--primary, #3b82f6);
 	box-sizing: border-box;
 }
 
 #wtr-if-status-indicator.complete {
-	background-color: #4caf50;
+	background-color: var(--success, #16a34a);
 	cursor: pointer;
 }
 
@@ -1082,7 +1209,7 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/* Utility and Status Styles */
 }
 
 #wtr-if-status-indicator.error {
-	background-color: #f44336;
+	background-color: var(--destructive, #dc2626);
 	cursor: pointer;
 }
 
@@ -5844,14 +5971,14 @@ var userscriptApi = __webpack_require__(799);
 // src/version.ts
 // Shared runtime version information for the userscript UI
 const VERSION_INFO = {
-    SEMANTIC: "5.6.0",
-    DISPLAY: "v5.6.0",
+    SEMANTIC: "5.7.0",
+    DISPLAY: "v5.7.0",
     BUILD_ENV: "production",
-    BUILD_DATE: "2026-05-02",
-    GREASYFORK: "5.6.0",
-    NPM: "5.6.0",
-    BADGE: "5.6.0",
-    CHANGELOG: "5.6.0",
+    BUILD_DATE: "2026-06-01",
+    GREASYFORK: "5.7.0",
+    NPM: "5.7.0",
+    BADGE: "5.7.0",
+    CHANGELOG: "5.7.0",
 };
 const VERSION = VERSION_INFO.SEMANTIC;
 if (typeof window !== "undefined") {
@@ -6752,16 +6879,121 @@ function adjustIndicatorPosition() {
     applyPosition(indicator, position, zIndex);
     collisionState.lastNigWidgetState = states.nig;
 }
+function findBottomNav() {
+    // Legacy UI: Bootstrap-based bottom reader nav
+    const legacyNav = document.querySelector("nav.bottom-reader-nav") || document.querySelector(".bottom-reader-nav");
+    if (legacyNav) {
+        return { container: legacyNav, layout: "legacy" };
+    }
+    // Modern UI: Shadcn/Tailwind tab bar at the bottom
+    // Try the known class pattern first
+    const modernNav = document.querySelector("div.flex.w-full.border-t.border-border\\/60");
+    if (modernNav) {
+        return { container: modernNav, layout: "modern" };
+    }
+    // Fallback: detect by finding the "Read" tab button and climbing up
+    const readButton = Array.from(document.querySelectorAll("button")).find((btn) => {
+        return (btn.textContent || "").trim() === "Read";
+    });
+    if (readButton) {
+        const container = readButton.closest("div.flex");
+        if (container) {
+            return { container, layout: "modern" };
+        }
+    }
+    return null;
+}
+/**
+ * Determine whether the Settings tab is currently active in the modern UI.
+ *
+ * Checks two signals:
+ * 1. The bottom nav "Settings" button has the active visual state (bg-accent/30).
+ * 2. The tab content area contains a Settings-only element (auto-unlock switch).
+ */
+function isSettingsTabActive() {
+    // Signal 1: Settings bottom-nav button is visually active
+    const settingsBtn = Array.from(document.querySelectorAll("button")).find((btn) => {
+        const text = (btn.textContent || "").trim();
+        return text === "Settings" && btn.classList.contains("bg-accent");
+    });
+    // Signal 2: A Settings-only control is present in the current tab content
+    const hasSettingsContent = Boolean(document.getElementById("auto-unlock-config"));
+    return Boolean(settingsBtn) || hasSettingsContent;
+}
+/**
+ * Inject an "Analyze Inconsistencies" button into the Settings tab panel
+ * of the modern bottom navigation bar.
+ *
+ * Only runs when the Settings tab is currently active.
+ */
+function injectSettingsPanelButton() {
+    // Only inject into the Settings tab
+    if (!isSettingsTabActive()) {
+        return;
+    }
+    // Avoid duplicate injection
+    if (document.getElementById("wtr-if-settings-panel-btn")) {
+        return;
+    }
+    // The Settings panel content lives inside a div[data-slot="tabs-content"]
+    const settingsPanelContent = document.querySelector('div[data-slot="tabs-content"] > .flex.flex-col.gap-3.p-2');
+    if (!settingsPanelContent) {
+        return;
+    }
+    (0,utils/* log */.Rm)("Settings panel detected. Injecting Inconsistency Finder section.");
+    const section = document.createElement("div");
+    section.id = "wtr-if-settings-panel-section";
+    // Label styled like the other Settings panel section labels
+    const label = document.createElement("span");
+    label.className = "block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1";
+    label.textContent = "Inconsistency Finder";
+    // Button styled like the site's native buttons in the Settings panel
+    const button = document.createElement("button");
+    button.id = "wtr-if-settings-panel-btn";
+    button.type = "button";
+    button.className =
+        "group/button inline-flex cursor-pointer items-center justify-center bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 border border-border bg-card hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 rounded-md w-full";
+    button.innerHTML =
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg><span>Analyze Inconsistencies</span>';
+    button.addEventListener("click", () => togglePanel(true));
+    section.appendChild(label);
+    section.appendChild(button);
+    settingsPanelContent.appendChild(section);
+}
+function updateSettingsPanelInjection() {
+    // Detect when the Settings panel is opened by watching for the tabs-content container.
+    // The panel is managed by React/shadcn and swaps content per tab, so we gate on the
+    // Settings tab being active to avoid injecting into Read/Display/Speech/More tabs.
+    const settingsPanelContent = document.querySelector('div[data-slot="tabs-content"] > .flex.flex-col.gap-3.p-2');
+    if (settingsPanelContent && !document.getElementById("wtr-if-settings-panel-btn")) {
+        injectSettingsPanelButton();
+    }
+}
 function injectControlButton() {
     const mainObserver = new MutationObserver((mutations, mainObs) => {
-        const navBar = document.querySelector("nav.bottom-reader-nav");
-        if (navBar) {
-            (0,utils/* log */.Rm)("Bottom navigation bar found. Attaching persistent observer.");
-            mainObs.disconnect();
+        const navInfo = findBottomNav();
+        if (!navInfo) {
+            // Even if bottom nav isn't found yet, try to detect the Settings panel
+            updateSettingsPanelInjection();
+            return;
+        }
+        (0,utils/* log */.Rm)(`Bottom navigation bar found (${navInfo.layout}). Attaching persistent observer.`);
+        mainObs.disconnect();
+        // Also attempt to inject into the Settings panel whenever the Settings tab is active
+        const settingsPanelObserver = new MutationObserver(() => {
+            updateSettingsPanelInjection();
+        });
+        settingsPanelObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+        updateSettingsPanelInjection();
+        if (navInfo.layout === "legacy") {
+            const navBar = navInfo.container;
             const navObserver = new MutationObserver(() => {
                 const targetContainer = navBar.querySelector('div[role="group"].btn-group');
                 if (targetContainer && !document.getElementById("wtr-if-analyze-btn")) {
-                    (0,utils/* log */.Rm)("Button container found. Injecting button.");
+                    (0,utils/* log */.Rm)("Legacy button container found. Injecting button.");
                     const analyzeButton = document.createElement("button");
                     analyzeButton.id = "wtr-if-analyze-btn";
                     analyzeButton.className = "wtr btn btn-outline-dark btn-sm";
@@ -6790,6 +7022,34 @@ function injectControlButton() {
                 analyzeButton.addEventListener("click", () => togglePanel(true));
                 initialTarget.appendChild(analyzeButton);
             }
+        }
+        else {
+            // Modern UI (Shadcn/Tailwind)
+            const navBar = navInfo.container;
+            function injectModernButton() {
+                if (document.getElementById("wtr-if-analyze-btn")) {
+                    return;
+                }
+                (0,utils/* log */.Rm)("Modern button container found. Injecting button.");
+                const analyzeButton = document.createElement("button");
+                analyzeButton.id = "wtr-if-analyze-btn";
+                analyzeButton.className =
+                    "relative flex-1 flex flex-col items-center justify-center pt-1.5 pb-2 gap-0.5 transition-colors border-l border-border/40 text-muted-foreground hover:text-foreground hover:bg-muted/30";
+                analyzeButton.type = "button";
+                analyzeButton.title = "Analyze Inconsistencies";
+                analyzeButton.innerHTML =
+                    '<span class="[&>svg]:w-4 [&>svg]:h-4"><svg class="icon inline-flex shrink-0 size-6" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4Z"/><path d="M12 2v20"/><path d="M12 12h8"/><path d="M12 12H4"/><path d="M12 6h6"/><path d="M12 6H6"/><path d="M12 18h6"/><path d="M12 18H6"/></svg></span><span class="text-[10px] font-medium leading-none">Incon</span>';
+                analyzeButton.addEventListener("click", () => togglePanel(true));
+                navBar.appendChild(analyzeButton);
+            }
+            const navObserver = new MutationObserver(() => {
+                injectModernButton();
+            });
+            navObserver.observe(navBar, {
+                childList: true,
+                subtree: false,
+            });
+            injectModernButton();
         }
     });
     mainObserver.observe(document.body, {
@@ -6849,9 +7109,8 @@ function setupConflictObserver() {
             attributeFilter: ["style", "class", "display"],
         });
     }
-    const bottomNav = document.querySelector("nav.bottom-reader-nav") ||
-        document.querySelector(".bottom-reader-nav") ||
-        document.querySelector(".fixed-bottom");
+    const navInfo = findBottomNav();
+    const bottomNav = navInfo?.container || document.querySelector(".fixed-bottom");
     if (bottomNav) {
         observer.observe(bottomNav, {
             attributes: true,
@@ -7893,8 +8152,9 @@ function isWTRLabTermReplacerLoaded() {
             return _wtrReplacerDetectionCache.lastResult;
         }
         const globalMarker = window.WTR_LAB_TERM_REPLACER;
-        const marker = document.querySelector(".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm");
-        const detected = Boolean(globalMarker?.ready || marker);
+        const legacyMarker = document.querySelector(".replacer-settings-btn.term-edit-btn.menu-button.small.btn.btn-outline-dark.btn-sm");
+        const modernMarker = document.querySelector(".replacer-settings-btn");
+        const detected = Boolean(globalMarker?.ready || legacyMarker || modernMarker);
         _wtrReplacerDetectionCache = {
             lastResult: detected,
             lastCheck: now,
