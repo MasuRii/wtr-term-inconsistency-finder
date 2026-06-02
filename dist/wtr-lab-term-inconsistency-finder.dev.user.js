@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name WTR Lab Term Inconsistency Finder [DEV]
 // @description Finds term inconsistencies in WTR Lab chapters using Gemini and OpenAI-compatible AI providers. Supports multiple API keys with smart rotation, dynamic model fetching, and background processing.
-// @version 5.7.0-dev.1780348460646
+// @version 5.7.0-dev.1780384757512
 // @author MasuRii
 // @supportURL https://github.com/MasuRii/wtr-term-inconsistency-finder/issues
 // @match https://wtr-lab.com/en/novel/*/*/*
@@ -1696,7 +1696,6 @@ function createRetryHandler(errorHandler) {
 
 
 
-
 /**
  * Centralized API error handling function
  * @param {string} errorMessage - The error message to handle
@@ -1712,6 +1711,7 @@ function handleApiError(errorMessage) {
     }
     (0,ui/* updateStatusIndicator */.LI)("error", "Error!");
     (0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults);
+    (0,ui/* updateApplyCopyButtonsMode */.j1)();
 }
 /**
  * Classify API error by type and status code
@@ -3053,6 +3053,7 @@ function findInconsistencies(chapterData, existingResults = [], retryCount = 0, 
                 continueBtn.disabled = false;
             }
             (0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults);
+            (0,ui/* updateApplyCopyButtonsMode */.j1)();
         },
         onerror: function (error) {
             console.error("Inconsistency Finder: Network error:", error);
@@ -3080,6 +3081,7 @@ function findInconsistenciesDeepAnalysis(chapterData, existingResults = [], targ
         (0,ui/* updateStatusIndicator */.LI)("complete", statusMessage);
         document.getElementById("wtr-if-continue-btn").disabled = false;
         (0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults);
+        (0,ui/* updateApplyCopyButtonsMode */.j1)();
         return;
     }
     state/* appState */.XJ.runtime.isAnalysisRunning = true;
@@ -3306,6 +3308,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
                         continueBtn.disabled = false;
                     }
                     (0,ui/* displayResults */.Hv)(state/* appState */.XJ.runtime.cumulativeResults);
+                    (0,ui/* updateApplyCopyButtonsMode */.j1)();
                 }
             },
             onerror: function (error) {
@@ -4045,6 +4048,8 @@ const appState = {
         model: "",
         useJson: false,
         useLiveTermReplacerSync: true,
+        useWebsiteTermReplacerSync: true,
+        applyTarget: "both", // "both" | "userscript" | "website"
         chapterSource: "page",
         wtrApiRangeMode: "nearby",
         wtrApiPreviousChapters: 2,
@@ -4066,6 +4071,9 @@ const appState = {
         failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
         providerModelMetadata: {},
         officialGlossaryContext: null,
+        websiteTermGlossaryContext: null,
+        websiteReplacerAvailable: false,
+        websiteTermSourceIndex: new Map(),
         currentIteration: 1,
         totalIterations: 1,
         persistedKeyStates: {},
@@ -4177,6 +4185,12 @@ async function loadConfig() {
     }
     if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
         savedConfig.useOfficialWtrGlossary = true;
+    }
+    if (typeof savedConfig.useWebsiteTermReplacerSync !== "boolean") {
+        savedConfig.useWebsiteTermReplacerSync = true;
+    }
+    if (!["both", "userscript", "website"].includes(savedConfig.applyTarget)) {
+        savedConfig.applyTarget = "both";
     }
     // Load preferences from saved config if they exist
     if (savedConfig.preferences) {
@@ -4961,10 +4975,11 @@ function displayResults(results) {
 /* harmony import */ var _state__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(654);
 /* harmony import */ var _providerConfig__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(980);
 /* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(158);
-/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(598);
-/* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(675);
-/* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(200);
-/* harmony import */ var _wtrLabApi__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(41);
+/* harmony import */ var _websiteTermApi__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(726);
+/* harmony import */ var _geminiApi__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(598);
+/* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(675);
+/* harmony import */ var _display__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(200);
+/* harmony import */ var _wtrLabApi__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(41);
 // src/modules/ui/events.ts
 
 
@@ -4973,6 +4988,254 @@ function displayResults(results) {
 
 
 
+
+function normalizeTermLookupKey(value) {
+    if (typeof value !== "string") {
+        return "";
+    }
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
+        .replace(/^[\s'"`]+|[\s'"`]+$/g, "")
+        .replace(/\s+/g, " ");
+}
+function containsCjk(value) {
+    return /[\u3400-\u9fff]/.test(value);
+}
+function getSourceLookupIndex() {
+    if (!(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermSourceIndex instanceof Map)) {
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermSourceIndex = new Map();
+    }
+    return _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermSourceIndex;
+}
+function addSourceLookup(phrase, source) {
+    const phraseKey = normalizeTermLookupKey(phrase);
+    const sourceValue = typeof source === "string" ? source.trim() : "";
+    if (phraseKey && sourceValue) {
+        getSourceLookupIndex().set(phraseKey, sourceValue);
+    }
+}
+function rememberChapterGlossarySources(chapterData) {
+    for (const chapter of Array.isArray(chapterData) ? chapterData : []) {
+        if (!Array.isArray(chapter?.glossaryTerms)) {
+            continue;
+        }
+        for (const term of chapter.glossaryTerms) {
+            addSourceLookup(term?.term, term?.source);
+            addSourceLookup(term?.source, term?.source);
+        }
+    }
+}
+function addResolvedSource(sources, source) {
+    const sourceValue = typeof source === "string" ? source.trim() : "";
+    const sourceKey = normalizeTermLookupKey(sourceValue);
+    if (sourceKey && sourceValue) {
+        sources.set(sourceKey, sourceValue);
+    }
+}
+function groupCandidateMatchesVariations(group, variationKeys) {
+    if (!group || typeof group !== "object") {
+        return false;
+    }
+    const candidates = [];
+    if (typeof group.canonical === "string") {
+        candidates.push(group.canonical);
+    }
+    if (Array.isArray(group.aliases)) {
+        for (const alias of group.aliases) {
+            if (typeof alias === "string") {
+                candidates.push(alias);
+            }
+        }
+    }
+    return candidates.some((candidate) => variationKeys.has(normalizeTermLookupKey(candidate)));
+}
+function addSourcesFromGroups(groups, variationKeys, sources) {
+    for (const group of Array.isArray(groups) ? groups : []) {
+        if (groupCandidateMatchesVariations(group, variationKeys)) {
+            addResolvedSource(sources, group.source);
+        }
+    }
+}
+function addSourcesFromCorrections(corrections, variationKeys, sources) {
+    for (const correction of Array.isArray(corrections) ? corrections : []) {
+        if (variationKeys.has(normalizeTermLookupKey(correction?.corrected))) {
+            addResolvedSource(sources, correction?.source);
+        }
+    }
+}
+function getWebsiteTermGlossaryContext() {
+    return _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext || _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext || null;
+}
+function termsNeedWebsiteGlossaryMapping(terms) {
+    return (Array.isArray(terms) ? terms : []).some((term) => {
+        return ((typeof term?.sourceHash === "string" && term.sourceHash.trim() !== "") ||
+            (typeof term?.original === "string" && containsCjk(term.original)));
+    });
+}
+async function ensureWebsiteTermGlossaryContext(pageContext, terms) {
+    if (!pageContext || !termsNeedWebsiteGlossaryMapping(terms) || getWebsiteTermGlossaryContext()) {
+        return;
+    }
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+}
+async function getOfficialGlossaryContextForApply(pageContext) {
+    const existingContext = getWebsiteTermGlossaryContext();
+    if (existingContext) {
+        return existingContext;
+    }
+    if (!pageContext) {
+        return null;
+    }
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+    return _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext;
+}
+/**
+ * Resolve original Chinese source text for English finding variations.
+ * The website API requires the Chinese `from/source_hash` value, so this uses
+ * chapter glossary metadata first and falls back to the official glossary API.
+ */
+async function resolveChineseSourcesForVariations(variations, pageContext) {
+    const variationKeys = new Set(variations.map(normalizeTermLookupKey).filter(Boolean));
+    const sources = new Map();
+    if (variationKeys.size === 0) {
+        return [];
+    }
+    for (const variation of variations) {
+        if (typeof variation === "string" && containsCjk(variation)) {
+            addResolvedSource(sources, variation);
+        }
+    }
+    const sourceIndex = getSourceLookupIndex();
+    for (const variationKey of variationKeys) {
+        addResolvedSource(sources, sourceIndex.get(variationKey));
+    }
+    const glossary = await getOfficialGlossaryContextForApply(pageContext);
+    if (glossary) {
+        addSourcesFromGroups(glossary.canonicalTerms, variationKeys, sources);
+        addSourcesFromGroups(glossary.aliasGroups, variationKeys, sources);
+        addSourcesFromGroups(glossary.replacements, variationKeys, sources);
+        addSourcesFromCorrections(glossary.corrections, variationKeys, sources);
+    }
+    return Array.from(sources.values());
+}
+function getOfficialAliasesForSource(source) {
+    const glossary = getWebsiteTermGlossaryContext();
+    const sourceKey = normalizeTermLookupKey(source);
+    if (!glossary || !sourceKey) {
+        return [];
+    }
+    const aliases = new Set();
+    const collectFromGroups = (groups) => {
+        for (const group of Array.isArray(groups) ? groups : []) {
+            if (normalizeTermLookupKey(group?.source) !== sourceKey) {
+                continue;
+            }
+            if (typeof group.canonical === "string") {
+                aliases.add(group.canonical.trim());
+            }
+            if (Array.isArray(group.aliases)) {
+                for (const alias of group.aliases) {
+                    if (typeof alias === "string" && alias.trim()) {
+                        aliases.add(alias.trim());
+                    }
+                }
+            }
+        }
+    };
+    collectFromGroups(glossary.canonicalTerms);
+    collectFromGroups(glossary.aliasGroups);
+    collectFromGroups(glossary.replacements);
+    for (const correction of Array.isArray(glossary.corrections) ? glossary.corrections : []) {
+        if (normalizeTermLookupKey(correction?.source) === sourceKey && typeof correction?.corrected === "string") {
+            aliases.add(correction.corrected.trim());
+        }
+    }
+    return Array.from(aliases).filter(Boolean);
+}
+function getChapterAliasesForSource(source, chapterData) {
+    const sourceKey = normalizeTermLookupKey(source);
+    const aliases = new Set();
+    if (!sourceKey) {
+        return [];
+    }
+    for (const chapter of Array.isArray(chapterData) ? chapterData : []) {
+        if (!Array.isArray(chapter?.glossaryTerms)) {
+            continue;
+        }
+        for (const term of chapter.glossaryTerms) {
+            if (normalizeTermLookupKey(term?.source) === sourceKey && typeof term?.term === "string") {
+                aliases.add(term.term.trim());
+            }
+        }
+    }
+    return Array.from(aliases).filter(Boolean);
+}
+function expandWebsiteTermsForAnalysis(terms, chapterData) {
+    if (!Array.isArray(terms) || terms.length === 0) {
+        return terms;
+    }
+    rememberChapterGlossarySources(chapterData);
+    const expandedTerms = [...terms];
+    const seen = new Set(expandedTerms.map((term) => `${term.caseSensitive ? "cs" : "ci"}|${normalizeTermLookupKey(term.original)}|${term.replacement}`));
+    let addedCount = 0;
+    for (const term of terms) {
+        const source = typeof term.sourceHash === "string" && term.sourceHash.trim()
+            ? term.sourceHash.trim()
+            : typeof term.original === "string" && containsCjk(term.original)
+                ? term.original.trim()
+                : "";
+        if (!source) {
+            continue;
+        }
+        const aliases = [...getChapterAliasesForSource(source, chapterData), ...getOfficialAliasesForSource(source)];
+        for (const alias of aliases) {
+            const aliasKey = normalizeTermLookupKey(alias);
+            if (!aliasKey || aliasKey === normalizeTermLookupKey(term.original)) {
+                continue;
+            }
+            const key = `${term.caseSensitive ? "cs" : "ci"}|${aliasKey}|${term.replacement}`;
+            if (seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            expandedTerms.push({
+                ...term,
+                original: alias,
+                caseSensitive: false,
+            });
+            addedCount++;
+        }
+    }
+    if (addedCount > 0) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Expanded website term replacements with ${addedCount} glossary alias${addedCount === 1 ? "" : "es"}.`);
+    }
+    return expandedTerms;
+}
+function getConfiguredApplyTarget() {
+    return ["both", "userscript", "website"].includes(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.applyTarget)
+        ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.applyTarget
+        : "both";
+}
+function getApplyTargetAvailability() {
+    const target = getConfiguredApplyTarget();
+    const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .getWtrPageContext */ .Yj)();
+    const isUserscriptAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)();
+    const isWebsiteAvailable = Boolean(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteReplacerAvailable);
+    const wantsUserscript = target === "both" || target === "userscript";
+    const wantsWebsite = target === "both" || target === "website";
+    return {
+        target,
+        pageContext,
+        isUserscriptAvailable,
+        isWebsiteAvailable,
+        isWebsitePageAvailable: Boolean(pageContext),
+        canApplyUserscript: wantsUserscript && isUserscriptAvailable,
+        canApplyWebsite: wantsWebsite && Boolean(pageContext) && isWebsiteAvailable,
+    };
+}
 function summarizeChapterCollection(chapterData) {
     return (Array.isArray(chapterData) ? chapterData : []).map((chapter) => ({
         chapter: chapter.chapter,
@@ -5010,13 +5273,16 @@ function logUnresolvedPlaceholderAudit(stage, chapterData) {
 }
 async function collectChapterDataForAnalysis(liveTerms) {
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = null;
-    const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .getWtrPageContext */ .Yj)();
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = null;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermSourceIndex = new Map();
+    const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .getWtrPageContext */ .Yj)();
     if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary && pageContext) {
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", "Loading WTR glossary context...");
-        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateStatusIndicator */ .LI)("running", "Loading WTR glossary context...");
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+        _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext;
     }
     if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource === "wtr-api" && pageContext) {
-        const chapterRange = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .buildWtrApiChapterRange */ .OO)(pageContext, _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config);
+        const chapterRange = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .buildWtrApiChapterRange */ .OO)(pageContext, _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config);
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR reader API chapter request prepared.", {
             rawId: pageContext.rawId,
             serieSlug: pageContext.serieSlug,
@@ -5027,12 +5293,14 @@ async function collectChapterDataForAnalysis(liveTerms) {
         const fetchedChapters = [];
         for (let index = 0; index < chapterRange.length; index++) {
             const chapterNo = chapterRange[index];
-            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("running", `Fetching WTR chapter ${chapterNo} (${index + 1}/${chapterRange.length})...`);
-            fetchedChapters.push(await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchWtrChapter */ .vm)(pageContext, chapterNo));
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateStatusIndicator */ .LI)("running", `Fetching WTR chapter ${chapterNo} (${index + 1}/${chapterRange.length})...`);
+            fetchedChapters.push(await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .fetchWtrChapter */ .vm)(pageContext, chapterNo));
         }
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Collected ${fetchedChapters.length} chapter${fetchedChapters.length === 1 ? "" : "s"} from WTR Lab reader API.`, summarizeChapterCollection(fetchedChapters));
         logUnresolvedPlaceholderAudit("WTR API fetch", fetchedChapters);
-        const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(fetchedChapters, liveTerms);
+        await ensureWebsiteTermGlossaryContext(pageContext, liveTerms);
+        const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, fetchedChapters);
+        const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(fetchedChapters, termsForAnalysis);
         logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters);
         return processedChapters;
     }
@@ -5042,7 +5310,9 @@ async function collectChapterDataForAnalysis(liveTerms) {
     const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
     (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Collected loaded page chapters for analysis.", summarizeChapterCollection(chapterData));
     logUnresolvedPlaceholderAudit("Loaded page crawl", chapterData);
-    const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms);
+    await ensureWebsiteTermGlossaryContext(pageContext, liveTerms);
+    const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, chapterData);
+    const processedChapters = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, termsForAnalysis);
     logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters);
     return processedChapters;
 }
@@ -5055,7 +5325,7 @@ async function startAnalysis(isContinuation = false) {
         if (!_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys || _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.apiKeys.length === 0 || !_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model) {
             alert("Please add at least one API key and select a model in the Configuration tab first.");
             document.querySelector('.wtr-if-tab-btn[data-tab="config"]').click();
-            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true);
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .togglePanel */ .Pj)(true);
             return;
         }
         const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1);
@@ -5105,6 +5375,45 @@ async function startAnalysis(isContinuation = false) {
                 }
             }
         }
+        // Also fetch terms from the website's built-in term replacer
+        if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useWebsiteTermReplacerSync) {
+            const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .getWtrPageContext */ .Yj)();
+            if (pageContext) {
+                const websiteConfig = await (0,_websiteTermApi__WEBPACK_IMPORTED_MODULE_3__/* .fetchWebsiteTermConfig */ .gL)();
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteReplacerAvailable = Boolean(websiteConfig?.success);
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
+                updateApplyCopyButtonsMode();
+                if (websiteConfig?.config?.terms) {
+                    let websiteTerms = (0,_websiteTermApi__WEBPACK_IMPORTED_MODULE_3__/* .normalizeWebsiteTerms */ .uA)(websiteConfig.config.terms);
+                    // Filter to terms relevant for the current novel when possible
+                    if (websiteTerms.length > 0) {
+                        const beforeFilter = websiteTerms.length;
+                        websiteTerms = websiteTerms.filter((term) => {
+                            if (!term.filter || term.filter.length === 0)
+                                return true;
+                            return term.filter.includes(pageContext.rawId);
+                        });
+                        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Loaded ${websiteTerms.length}/${beforeFilter} website built-in term replacer terms for raw_id ${pageContext.rawId}.`);
+                    }
+                    // Merge with external userscript terms, deduplicating by original+replacement
+                    const termMap = new Map();
+                    for (const term of liveTerms) {
+                        const key = `${term.caseSensitive ? "cs:" : "ci:"}${term.original}→${term.replacement}`;
+                        termMap.set(key, term);
+                    }
+                    for (const term of websiteTerms) {
+                        const key = `${term.caseSensitive ? "cs:" : "ci:"}${term.original}→${term.replacement}`;
+                        if (!termMap.has(key)) {
+                            termMap.set(key, term);
+                        }
+                    }
+                    liveTerms = Array.from(termMap.values());
+                }
+                else {
+                    (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Website built-in term replacer config was unavailable; continuing without website terms.");
+                }
+            }
+        }
         let processedData;
         try {
             processedData = await collectChapterDataForAnalysis(liveTerms);
@@ -5124,13 +5433,15 @@ async function startAnalysis(isContinuation = false) {
                 }, 4500);
             }
             const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
-            processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, liveTerms);
+            await ensureWebsiteTermGlossaryContext((0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .getWtrPageContext */ .Yj)(), liveTerms);
+            const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, chapterData);
+            processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, termsForAnalysis);
         }
         if (!processedData.length) {
             throw new Error("No chapter text was available for analysis.");
         }
-        (0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(processedData, isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [], deepAnalysisDepth);
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false);
+        (0,_geminiApi__WEBPACK_IMPORTED_MODULE_4__/* .findInconsistenciesDeepAnalysis */ .Nz)(processedData, isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [], deepAnalysisDepth);
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .togglePanel */ .Pj)(false);
     }
     catch (error) {
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to start analysis.", error);
@@ -5168,6 +5479,9 @@ async function handleSaveConfig() {
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerUseManualPaths = providerSettings.useManualPaths;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = document.getElementById("wtr-if-model").value;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useWebsiteTermReplacerSync = document.getElementById("wtr-if-use-website-term-replacer-sync").checked;
+    const applyTarget = document.getElementById("wtr-if-apply-target").value;
+    _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.applyTarget = ["both", "userscript", "website"].includes(applyTarget) ? applyTarget : "both";
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson = document.getElementById("wtr-if-use-json").checked;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource = document.getElementById("wtr-if-chapter-source").value;
     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode = document.getElementById("wtr-if-wtr-api-range-mode").value;
@@ -5223,15 +5537,20 @@ function handleFileImportAndAnalyze(event) {
             }
             // --- End Validation ---
             _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = null;
-            const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .getWtrPageContext */ .Yj)();
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = null;
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermSourceIndex = new Map();
+            const pageContext = (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .getWtrPageContext */ .Yj)();
             if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary && pageContext) {
-                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_6__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext = await (0,_wtrLabApi__WEBPACK_IMPORTED_MODULE_7__/* .fetchOfficialWtrGlossaryContext */ .sp)(pageContext.rawId);
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.websiteTermGlossaryContext = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.officialGlossaryContext;
             }
             const chapterData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .crawlChapterData */ .bn)();
-            const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, terms || []);
+            await ensureWebsiteTermGlossaryContext(pageContext, terms || []);
+            const termsForAnalysis = expandWebsiteTermsForAnalysis(terms || [], chapterData);
+            const processedData = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .applyTermReplacements */ .sz)(chapterData, termsForAnalysis);
             const deepAnalysisDepth = Math.max(1, parseInt(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth) || 1);
-            (0,_geminiApi__WEBPACK_IMPORTED_MODULE_3__/* .findInconsistenciesDeepAnalysis */ .Nz)(processedData, isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [], deepAnalysisDepth);
-            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false);
+            (0,_geminiApi__WEBPACK_IMPORTED_MODULE_4__/* .findInconsistenciesDeepAnalysis */ .Nz)(processedData, isContinuation ? _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults : [], deepAnalysisDepth);
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .togglePanel */ .Pj)(false);
         }
         catch (err) {
             alert("Failed to read or parse the JSON file. Error: " + err.message);
@@ -5245,7 +5564,7 @@ function handleFileImportAndAnalyze(event) {
 function handleRestoreSession() {
     if (_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.session.hasSavedResults) {
         // 1) Build Finder UI for restored results
-        (0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
+        (0,_display__WEBPACK_IMPORTED_MODULE_6__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
         // 2) Immediately sync Apply/Copy mode on the actual rendered Finder buttons
         //    This ensures restored sessions respect the current external integration state.
         updateApplyCopyButtonsMode();
@@ -5296,7 +5615,7 @@ function handleStatusClick() {
     const indicator = document.getElementById("wtr-if-status-indicator");
     if (indicator.classList.contains("complete") || indicator.classList.contains("error")) {
         // Show panel
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(true);
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .togglePanel */ .Pj)(true);
         // Activate Finder tab
         const finderTabBtn = document.querySelector('.wtr-if-tab-btn[data-tab="finder"]');
         if (finderTabBtn) {
@@ -5304,10 +5623,10 @@ function handleStatusClick() {
         }
         // Re-render results (if any) into Finder tab
         if (Array.isArray(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults) && _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults.length > 0) {
-            (0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
+            (0,_display__WEBPACK_IMPORTED_MODULE_6__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
         }
         // Ensure status indicator is hidden after navigation
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateStatusIndicator */ .LI)("hidden");
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateStatusIndicator */ .LI)("hidden");
         // IMPORTANT:
         // Run after Finder DOM is present so button modes match current detection state.
         updateApplyCopyButtonsMode();
@@ -5334,7 +5653,8 @@ function handleStatusClick() {
 function updateApplyCopyButtonsMode() {
     let externalAvailable = false;
     try {
-        externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)();
+        const availability = getApplyTargetAvailability();
+        externalAvailable = availability.canApplyUserscript || availability.canApplyWebsite;
     }
     catch (err) {
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("WTR Lab Term Replacer detection failed in updateApplyCopyButtonsMode; falling back to safe copy mode.", err);
@@ -5394,14 +5714,15 @@ function updateApplyCopyButtonsMode() {
  *     - Copies variations or suggestion text to clipboard instead.
  *     - Buttons represent "Copy Selected"/"Copy All" semantics.
  */
-function handleApplyClick(event) {
+async function handleApplyClick(event) {
     const button = event.currentTarget;
     const action = button.dataset.action || "";
     const replacement = button.dataset.suggestion || "";
     let variationsToApply = [];
     let externalAvailable = false;
     try {
-        externalAvailable = (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .isWTRLabTermReplacerLoaded */ .mT)();
+        const availability = getApplyTargetAvailability();
+        externalAvailable = availability.canApplyUserscript || availability.canApplyWebsite;
     }
     catch {
         // If detection explodes for any reason, treat as not available for safety.
@@ -5549,9 +5870,23 @@ function handleApplyClick(event) {
         // Unknown action; do nothing for safety.
         return;
     }
-    // Apply actions must only operate when the external replacer is available.
-    if (!externalAvailable) {
-        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Apply action attempted while external replacer is not available; ignoring.", { action, uniqueVariations });
+    // Resolve target-specific availability
+    const availability = getApplyTargetAvailability();
+    const target = availability.target;
+    const isUserscriptAvailable = availability.isUserscriptAvailable;
+    const isWebsiteAvailable = availability.isWebsiteAvailable;
+    const isWebsitePageAvailable = availability.isWebsitePageAvailable;
+    const canApplyUserscript = availability.canApplyUserscript;
+    const canApplyWebsite = availability.canApplyWebsite;
+    if (!canApplyUserscript && !canApplyWebsite) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Apply action attempted but chosen target is unavailable; ignoring.", {
+            action,
+            applyTarget: target,
+            isUserscriptAvailable,
+            isWebsiteAvailable,
+            isWebsitePageAvailable,
+            uniqueVariations,
+        });
         return;
     }
     if (!finalReplacement) {
@@ -5584,21 +5919,119 @@ function handleApplyClick(event) {
         isRegex = false;
         (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`);
     }
-    const customEvent = new CustomEvent("wtr:addTerm", {
-        detail: {
-            original: originalTerm,
-            replacement: finalReplacement,
-            isRegex: isRegex,
-        },
-    });
-    window.dispatchEvent(customEvent);
     const originalText = button.textContent;
-    button.classList.add("sent");
-    button.textContent = "Applied!";
+    button.disabled = true;
+    button.textContent = "Applying...";
+    button.classList.remove("sent");
+    safeSetStyle(button, "backgroundColor", "");
+    let userscriptApplied = false;
+    let websiteSavedCount = 0;
+    let websiteFailedCount = 0;
+    const failures = [];
+    if ((target === "both" || target === "userscript") && !canApplyUserscript) {
+        failures.push("userscript target unavailable");
+    }
+    if ((target === "both" || target === "website") && !canApplyWebsite) {
+        failures.push(isWebsitePageAvailable ? "website API unavailable" : "website page context unavailable");
+    }
+    try {
+        // Apply to external userscript when requested and available.
+        if (canApplyUserscript) {
+            try {
+                const customEvent = new CustomEvent("wtr:addTerm", {
+                    detail: {
+                        original: originalTerm,
+                        replacement: finalReplacement,
+                        isRegex: isRegex,
+                    },
+                });
+                window.dispatchEvent(customEvent);
+                userscriptApplied = true;
+                (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Dispatched term to WTR Lab Term Replacer userscript.", {
+                    original: originalTerm,
+                    replacement: finalReplacement,
+                });
+            }
+            catch (error) {
+                failures.push("userscript dispatch failed");
+                (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Failed to dispatch term to WTR Lab Term Replacer userscript.", error);
+            }
+        }
+        // Apply to website built-in term replacer when requested and available.
+        if (canApplyWebsite) {
+            const pageContext = availability.pageContext;
+            const chineseSources = pageContext
+                ? await resolveChineseSourcesForVariations(uniqueVariations, pageContext)
+                : [];
+            if (chineseSources.length === 0) {
+                websiteFailedCount++;
+                failures.push("website source could not be resolved");
+                (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Could not resolve Chinese source for website term save; skipping.", {
+                    uniqueVariations,
+                    finalReplacement,
+                });
+            }
+            else {
+                for (const chineseSource of chineseSources) {
+                    const saved = await (0,_websiteTermApi__WEBPACK_IMPORTED_MODULE_3__/* .saveWebsiteTerm */ .lZ)({
+                        from: chineseSource,
+                        to: finalReplacement,
+                        caseSensitive: false,
+                        filter: [pageContext.rawId],
+                        source: pageContext.rawId,
+                        sourceId: `id.raw.${pageContext.rawId}`,
+                        sourceHash: chineseSource,
+                        lang: pageContext.language,
+                    });
+                    if (saved) {
+                        websiteSavedCount++;
+                        addSourceLookup(chineseSource, chineseSource);
+                        for (const variation of uniqueVariations) {
+                            addSourceLookup(variation, chineseSource);
+                        }
+                        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)(`Saved term to website built-in replacer: "${chineseSource}" → "${finalReplacement}"`);
+                    }
+                    else {
+                        websiteFailedCount++;
+                        failures.push(`website save failed for ${chineseSource}`);
+                    }
+                }
+            }
+        }
+    }
+    catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+        (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Unexpected apply failure.", error);
+    }
+    const appliedCount = (userscriptApplied ? 1 : 0) + websiteSavedCount;
+    const failedCount = failures.length;
+    const wasFullyApplied = appliedCount > 0 && failedCount === 0;
+    const wasPartiallyApplied = appliedCount > 0 && failedCount > 0;
+    if (wasFullyApplied) {
+        button.classList.add("sent");
+        button.textContent = websiteSavedCount > 1 ? `Applied ${websiteSavedCount} Website Terms!` : "Applied!";
+    }
+    else if (wasPartiallyApplied) {
+        button.classList.add("sent");
+        button.textContent = "Partially Applied";
+    }
+    else {
+        button.textContent = "Apply Failed";
+        safeSetStyle(button, "backgroundColor", "#dc3545");
+    }
+    (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .log */ .Rm)("Apply action completed.", {
+        applyTarget: target,
+        userscriptApplied,
+        websiteSavedCount,
+        websiteFailedCount,
+        failures,
+    });
     setTimeout(() => {
+        button.disabled = false;
         button.classList.remove("sent");
         button.textContent = originalText;
-    }, 2000);
+        safeSetStyle(button, "backgroundColor", "");
+    }, wasFullyApplied ? 2000 : 3000);
 }
 function handleCopyVariationClick(event) {
     const button = event.currentTarget;
@@ -5691,17 +6124,21 @@ function importConfiguration() {
                 }
                 (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
                 // Refresh UI
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .renderApiKeysUI */ .jH)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .renderApiKeysUI */ .jH)();
                 document.getElementById("wtr-if-provider-type").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerType;
                 document.getElementById("wtr-if-provider-base-url").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerBaseUrl;
                 document.getElementById("wtr-if-provider-chat-path").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerChatCompletionsPath;
                 document.getElementById("wtr-if-provider-models-path").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath;
                 document.getElementById("wtr-if-provider-use-manual-paths").checked = Boolean(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerUseManualPaths);
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)();
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .syncProviderConfigUI */ .Nh)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .populateModelSelector */ .rT)();
                 // Update form fields
                 document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
                     _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync;
+                const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync");
+                if (websiteSyncCheckbox) {
+                    websiteSyncCheckbox.checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useWebsiteTermReplacerSync;
+                }
                 document.getElementById("wtr-if-use-json").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useJson;
                 document.getElementById("wtr-if-use-official-wtr-glossary").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useOfficialWtrGlossary;
                 document.getElementById("wtr-if-chapter-source").value = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource || "page";
@@ -5710,10 +6147,10 @@ function importConfiguration() {
                 document.getElementById("wtr-if-wtr-api-next").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiNextChapters ?? 2);
                 document.getElementById("wtr-if-wtr-api-start").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiStartChapter || "");
                 document.getElementById("wtr-if-wtr-api-end").value = String(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiEndChapter || "");
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateChapterSourceUI */ .ku)();
                 document.getElementById("wtr-if-logging-enabled").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled;
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateDebugLoggingUI */ .o_)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
                 document.getElementById("wtr-if-auto-restore").checked = _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults;
                 const statusEl = document.getElementById("wtr-if-status");
                 statusEl.textContent = "Configuration imported successfully";
@@ -5768,7 +6205,7 @@ async function handleCopyDebugReport() {
 }
 function handleClearDebugLogs() {
     (0,_utils__WEBPACK_IMPORTED_MODULE_2__/* .clearDebugLogs */ .o_)();
-    (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
+    (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateDebugLoggingUI */ .o_)();
     setConfigStatus("Debug logs cleared.");
 }
 function addEventListeners() {
@@ -5776,13 +6213,13 @@ function addEventListeners() {
     if (!panel) {
         return;
     }
-    panel.querySelector(".wtr-if-close-btn").addEventListener("click", () => (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .togglePanel */ .Pj)(false));
+    panel.querySelector(".wtr-if-close-btn").addEventListener("click", () => (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .togglePanel */ .Pj)(false));
     panel.querySelector("#wtr-if-save-config-btn").addEventListener("click", () => {
         handleSaveConfig();
     });
     panel.querySelector("#wtr-if-find-btn").addEventListener("click", handleFindInconsistencies);
     panel.querySelector("#wtr-if-continue-btn").addEventListener("click", handleContinueAnalysis);
-    panel.querySelector("#wtr-if-refresh-models-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_4__/* .fetchAndCacheModels */ .mc);
+    panel.querySelector("#wtr-if-refresh-models-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_5__/* .fetchAndCacheModels */ .mc);
     panel.querySelector("#wtr-if-file-input").addEventListener("change", handleFileImportAndAnalyze);
     panel.querySelector("#wtr-if-export-config-btn").addEventListener("click", exportConfiguration);
     panel.querySelector("#wtr-if-import-config-btn").addEventListener("click", importConfiguration);
@@ -5792,7 +6229,7 @@ function addEventListeners() {
     panel.querySelector("#wtr-if-clear-session-btn")?.addEventListener("click", handleClearSession);
     const filterSelect = panel.querySelector("#wtr-if-filter-select");
     filterSelect.addEventListener("change", () => {
-        (0,_display__WEBPACK_IMPORTED_MODULE_5__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
+        (0,_display__WEBPACK_IMPORTED_MODULE_6__/* .displayResults */ .H)(_state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.runtime.cumulativeResults);
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.activeFilter = filterSelect.value;
         (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
         // Ensure Apply/Copy button modes are synchronized after filter change and result re-render
@@ -5801,12 +6238,12 @@ function addEventListeners() {
     document.getElementById("wtr-if-status-indicator").addEventListener("click", handleStatusClick);
     panel.querySelector("#wtr-if-chapter-source").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.chapterSource = e.target.value;
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateChapterSourceUI */ .ku)();
         (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
     });
     panel.querySelector("#wtr-if-wtr-api-range-mode").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.wtrApiRangeMode = e.target.value;
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateChapterSourceUI */ .ku)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateChapterSourceUI */ .ku)();
         (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
     });
     panel.querySelectorAll("#wtr-if-wtr-api-previous, #wtr-if-wtr-api-next, #wtr-if-wtr-api-start, #wtr-if-wtr-api-end").forEach((input) => {
@@ -5824,12 +6261,12 @@ function addEventListeners() {
     });
     panel.querySelector("#wtr-if-logging-enabled").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.loggingEnabled = e.target.checked;
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateDebugLoggingUI */ .o_)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateDebugLoggingUI */ .o_)();
         (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
     });
     panel.querySelector("#wtr-if-provider-use-manual-paths").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerUseManualPaths = e.target.checked;
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .syncProviderConfigUI */ .Nh)();
     });
     panel.querySelector("#wtr-if-auto-restore").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.preferences.autoRestoreResults = e.target.checked;
@@ -5848,8 +6285,8 @@ function addEventListeners() {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerModelsPath = defaults.modelsPath;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.providerUseManualPaths = false;
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.model = "";
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .syncProviderConfigUI */ .Nh)();
-        (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .populateModelSelector */ .rT)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .syncProviderConfigUI */ .Nh)();
+        (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .populateModelSelector */ .rT)();
     });
     panel.querySelector("#wtr-if-deep-analysis-depth").addEventListener("change", (e) => {
         _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.deepAnalysisDepth = parseInt(e.target.value) || 1;
@@ -5870,12 +6307,12 @@ function addEventListeners() {
             }
             // When switching to config tab, re-evaluate WTR Lab Term Replacer state
             if (targetTab === "config") {
-                (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
+                (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
             }
         });
     });
-    panel.querySelector("#wtr-if-add-key-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_4__/* .addApiKeyRow */ .$1);
-    panel.querySelector("#wtr-if-toggle-keys-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_4__/* .toggleApiKeyVisibility */ .ah);
+    panel.querySelector("#wtr-if-add-key-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_5__/* .addApiKeyRow */ .$1);
+    panel.querySelector("#wtr-if-toggle-keys-btn").addEventListener("click", _panel__WEBPACK_IMPORTED_MODULE_5__/* .toggleApiKeyVisibility */ .ah);
     panel.querySelector("#wtr-if-api-keys-container").addEventListener("click", (e) => {
         if (e.target.classList.contains("wtr-if-remove-key-btn")) {
             if (panel.querySelectorAll(".wtr-if-key-row").length > 1) {
@@ -5891,7 +6328,29 @@ function addEventListeners() {
         liveSyncCheckbox.addEventListener("change", (e) => {
             _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useLiveTermReplacerSync = e.target.checked;
             (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
-            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
+        });
+    }
+    const websiteSyncCheckbox = panel.querySelector("#wtr-if-use-website-term-replacer-sync");
+    if (websiteSyncCheckbox) {
+        websiteSyncCheckbox.addEventListener("change", (e) => {
+            _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.useWebsiteTermReplacerSync = e.target.checked;
+            (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
+        });
+    }
+    const applyTargetSelect = panel.querySelector("#wtr-if-apply-target");
+    if (applyTargetSelect) {
+        applyTargetSelect.addEventListener("change", (e) => {
+            const value = e.target.value;
+            if (["both", "userscript", "website"].includes(value)) {
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.applyTarget = value;
+            }
+            else {
+                _state__WEBPACK_IMPORTED_MODULE_0__/* .appState */ .XJ.config.applyTarget = "both";
+            }
+            (0,_state__WEBPACK_IMPORTED_MODULE_0__/* .saveConfig */ .ql)();
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
         });
     }
     // Delayed-load handling: re-check external userscript presence shortly after init.
@@ -5899,7 +6358,7 @@ function addEventListeners() {
     // is not yet present, so it does not create stale wiring.
     setTimeout(() => {
         try {
-            (0,_panel__WEBPACK_IMPORTED_MODULE_4__/* .updateTermReplacerIntegrationUI */ .cB)();
+            (0,_panel__WEBPACK_IMPORTED_MODULE_5__/* .updateTermReplacerIntegrationUI */ .cB)();
             updateApplyCopyButtonsMode();
         }
         catch (err) {
@@ -5920,6 +6379,8 @@ function addEventListeners() {
 /* harmony export */   Pj: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.Pj),
 /* harmony export */   RD: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.RD),
 /* harmony export */   bp: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.bp),
+/* harmony export */   cB: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.cB),
+/* harmony export */   j1: () => (/* reexport safe */ _events__WEBPACK_IMPORTED_MODULE_2__.updateApplyCopyButtonsMode),
 /* harmony export */   rz: () => (/* reexport safe */ _panel__WEBPACK_IMPORTED_MODULE_0__.rz)
 /* harmony export */ });
 /* harmony import */ var _panel__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(675);
@@ -5965,6 +6426,8 @@ var geminiApi = __webpack_require__(598);
 var providerConfig = __webpack_require__(980);
 // EXTERNAL MODULE: ./src/modules/utils.ts
 var utils = __webpack_require__(158);
+// EXTERNAL MODULE: ./src/modules/websiteTermApi.ts
+var websiteTermApi = __webpack_require__(726);
 // EXTERNAL MODULE: ./src/modules/userscriptApi.ts
 var userscriptApi = __webpack_require__(799);
 ;// ./src/version.ts
@@ -5974,7 +6437,7 @@ const VERSION_INFO = {
     SEMANTIC: "5.7.0",
     DISPLAY: "v5.7.0",
     BUILD_ENV: "production",
-    BUILD_DATE: "2026-06-01",
+    BUILD_DATE: "2026-06-02",
     GREASYFORK: "5.7.0",
     NPM: "5.7.0",
     BADGE: "5.7.0",
@@ -5991,6 +6454,7 @@ var events = __webpack_require__(753);
 ;// ./src/modules/ui/panel.ts
 /* unused harmony import specifier */ var log;
 // src/modules/ui/panel.ts
+
 
 
 
@@ -6227,6 +6691,12 @@ function createUI() {
                                     Use Live Term Replacer Terms Automatically During Analysis
                                 </label>
                             </div>
+                            <div class="wtr-if-form-group" id="wtr-if-use-website-term-replacer-sync-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-website-term-replacer-sync">
+                                    Use Website Built-in Term Replacer Terms During Analysis
+                                </label>
+                            </div>
                             <div class="wtr-if-form-group" id="wtr-if-use-json-container">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-json">
@@ -6253,6 +6723,15 @@ function createUI() {
                                     </div>
                                     <small id="wtr-if-debug-log-hint" class="wtr-if-hint">No debug logs captured yet.</small>
                                 </div>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-apply-target">Apply Findings To</label>
+                                <select id="wtr-if-apply-target">
+                                    <option value="both">Both userscript &amp; website</option>
+                                    <option value="userscript">WTR Lab Term Replacer (userscript) only</option>
+                                    <option value="website">Website built-in replacer only</option>
+                                </select>
+                                <small class="wtr-if-hint">When you click Apply Selected / Apply All, send terms to the chosen destination. Copy mode is unaffected.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <div class="wtr-if-hint">
@@ -6609,14 +7088,35 @@ function updateDebugLoggingUI() {
 function updateTermReplacerIntegrationUI() {
     try {
         const isExternalReplacerAvailable = (0,utils/* isWTRLabTermReplacerLoaded */.mT)();
+        const isWebsiteAvailable = Boolean(state/* appState */.XJ.runtime.websiteReplacerAvailable);
         const liveSyncContainer = document.getElementById("wtr-if-use-live-term-replacer-sync-container");
         const liveSyncCheckbox = document.getElementById("wtr-if-use-live-term-replacer-sync");
+        const websiteSyncContainer = document.getElementById("wtr-if-use-website-term-replacer-sync-container");
+        const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync");
         const useJsonContainer = document.getElementById("wtr-if-use-json-container");
         const useJsonCheckbox = document.getElementById("wtr-if-use-json");
+        const applyTargetSelect = document.getElementById("wtr-if-apply-target");
         const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint");
         if (!liveSyncContainer || !liveSyncCheckbox || !useJsonContainer || !useJsonCheckbox || !modeHint) {
             return;
         }
+        // Website sync checkbox is always visible (independent of external userscript)
+        if (websiteSyncContainer && websiteSyncCheckbox) {
+            websiteSyncContainer.style.display = "";
+            websiteSyncCheckbox.disabled = false;
+            websiteSyncCheckbox.checked = Boolean(state/* appState */.XJ.config.useWebsiteTermReplacerSync);
+        }
+        // Sync apply target  (clamp to allowed set)
+        if (applyTargetSelect) {
+            applyTargetSelect.value = ["both", "userscript", "website"].includes(state/* appState */.XJ.config.applyTarget)
+                ? state/* appState */.XJ.config.applyTarget
+                : "both";
+        }
+        const targetLabel = state/* appState */.XJ.config.applyTarget === "userscript"
+            ? "userscript only"
+            : state/* appState */.XJ.config.applyTarget === "website"
+                ? "website only"
+                : "both";
         if (isExternalReplacerAvailable) {
             liveSyncContainer.style.display = "";
             liveSyncCheckbox.disabled = false;
@@ -6624,8 +7124,8 @@ function updateTermReplacerIntegrationUI() {
             useJsonContainer.style.display = "";
             useJsonCheckbox.disabled = false;
             modeHint.textContent = state/* appState */.XJ.config.useLiveTermReplacerSync
-                ? "Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Enable JSON mode only if you want to import a backup file instead."
-                : "Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on.";
+                ? `Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Apply target set to "${targetLabel}". Enable JSON mode only if you want to import a backup file instead.`
+                : `Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on. Apply target set to "${targetLabel}".`;
         }
         else {
             liveSyncContainer.style.display = "none";
@@ -6634,8 +7134,14 @@ function updateTermReplacerIntegrationUI() {
             if (state/* appState */.XJ.config.useJson) {
                 state/* appState */.XJ.config.useJson = false;
             }
-            modeHint.textContent =
-                "External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration.";
+            if (isWebsiteAvailable) {
+                modeHint.textContent =
+                    `Website built-in Term Replacer detected. Finder can read your saved website terms and apply findings directly to the website. Apply target set to "${targetLabel}".`;
+            }
+            else {
+                modeHint.textContent =
+                    "External WTR Lab Term Replacer userscript not detected and website built-in replacer is unavailable. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration.";
+            }
         }
     }
     catch (e) {
@@ -6660,6 +7166,16 @@ async function togglePanel(show = null) {
         document.getElementById("wtr-if-provider-use-manual-paths").checked = Boolean(state/* appState */.XJ.config.providerUseManualPaths);
         syncProviderConfigUI();
         document.getElementById("wtr-if-use-live-term-replacer-sync").checked = state/* appState */.XJ.config.useLiveTermReplacerSync;
+        const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync");
+        if (websiteSyncCheckbox) {
+            websiteSyncCheckbox.checked = state/* appState */.XJ.config.useWebsiteTermReplacerSync;
+        }
+        const applyTargetSelect = document.getElementById("wtr-if-apply-target");
+        if (applyTargetSelect) {
+            applyTargetSelect.value = ["both", "userscript", "website"].includes(state/* appState */.XJ.config.applyTarget)
+                ? state/* appState */.XJ.config.applyTarget
+                : "both";
+        }
         document.getElementById("wtr-if-use-json").checked = state/* appState */.XJ.config.useJson;
         document.getElementById("wtr-if-use-official-wtr-glossary").checked = state/* appState */.XJ.config.useOfficialWtrGlossary;
         document.getElementById("wtr-if-chapter-source").value = state/* appState */.XJ.config.chapterSource || "page";
@@ -6688,6 +7204,14 @@ async function togglePanel(show = null) {
         // Restore filter
         document.getElementById("wtr-if-filter-select").value = state/* appState */.XJ.config.activeFilter;
         await populateModelSelector();
+        // Refresh website API availability before deciding Apply/Copy mode.
+        try {
+            state/* appState */.XJ.runtime.websiteReplacerAvailable = await (0,websiteTermApi/* isWebsiteTermReplacerAvailable */.ds)();
+        }
+        catch (error) {
+            state/* appState */.XJ.runtime.websiteReplacerAvailable = false;
+            (0,utils/* log */.Rm)("Website built-in Term Replacer availability check failed while opening panel.", error);
+        }
         // Apply dynamic UI based on WTR Lab Term Replacer detection
         updateTermReplacerIntegrationUI();
         // Check for session results and show restore option if available
@@ -8238,6 +8762,170 @@ function requestTermsFromWTRLabTermReplacer(novelSlug, options = {}) {
 
 /***/ },
 
+/***/ 726
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ds: () => (/* binding */ isWebsiteTermReplacerAvailable),
+/* harmony export */   gL: () => (/* binding */ fetchWebsiteTermConfig),
+/* harmony export */   lZ: () => (/* binding */ saveWebsiteTerm),
+/* harmony export */   uA: () => (/* binding */ normalizeWebsiteTerms)
+/* harmony export */ });
+/* harmony import */ var _userscriptApi__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(799);
+/* harmony import */ var _utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(158);
+
+
+// --- Constants ---
+const WEBSITE_TERM_CONFIG_PATH = "/api/v2/user/config";
+const WEBSITE_TERM_SAVE_PATH = "/api/v2/user/config/term";
+// --- Private ---
+function getWebsiteUrl(path) {
+    return `${window.location.origin}${path}`;
+}
+function buildWebsiteApiHeaders(hasBody) {
+    return {
+        Accept: "application/json",
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    };
+}
+function parseWebsiteApiResponse(meta) {
+    let data = {};
+    try {
+        data = JSON.parse(meta.responseText || "{}");
+    }
+    catch (error) {
+        throw new Error(`Website Term API returned invalid JSON (${meta.status} ${meta.statusText || "unknown status"}).`);
+    }
+    if (meta.status >= 400 || data?.success === false) {
+        throw new Error(data?.message || data?.error || meta.statusText || `HTTP ${meta.status}`);
+    }
+    return data;
+}
+async function fetchWebsiteApiRequest(config) {
+    const response = await fetch(config.url, {
+        method: config.method,
+        headers: buildWebsiteApiHeaders(Boolean(config.data)),
+        body: config.data,
+        credentials: "include",
+        cache: "no-store",
+    });
+    const responseText = await response.text();
+    return parseWebsiteApiResponse({
+        status: response.status,
+        statusText: response.statusText,
+        responseText,
+    });
+}
+function gmWebsiteApiRequest(config) {
+    return new Promise((resolve, reject) => {
+        (0,_userscriptApi__WEBPACK_IMPORTED_MODULE_0__/* .gmXmlhttpRequest */ .hb)({
+            method: config.method,
+            url: config.url,
+            headers: buildWebsiteApiHeaders(Boolean(config.data)),
+            data: config.data,
+            onload: (response) => {
+                try {
+                    resolve(parseWebsiteApiResponse({
+                        status: response.status,
+                        statusText: response.statusText,
+                        responseText: response.responseText,
+                    }));
+                }
+                catch (error) {
+                    reject(error);
+                }
+            },
+            onerror: () => reject(new Error("Website Term API userscript request failed.")),
+        });
+    });
+}
+async function websiteApiRequest(config) {
+    try {
+        return await fetchWebsiteApiRequest(config);
+    }
+    catch (fetchError) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Website Term API browser fetch failed; trying userscript request fallback.", fetchError);
+        return gmWebsiteApiRequest(config);
+    }
+}
+function normalizeRawIdFilter(value) {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const ids = value
+        .map((item) => (typeof item === "number" ? item : Number.parseInt(String(item), 10)))
+        .filter((item) => Number.isFinite(item));
+    return ids.length > 0 ? ids : undefined;
+}
+// --- Public ---
+async function fetchWebsiteTermConfig() {
+    try {
+        const data = await websiteApiRequest({ method: "GET", url: getWebsiteUrl(WEBSITE_TERM_CONFIG_PATH) });
+        if (!data || data.success !== true) {
+            return null;
+        }
+        return data;
+    }
+    catch (error) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Website Term Replacer config fetch failed.", error);
+        return null;
+    }
+}
+function normalizeWebsiteTerms(terms) {
+    if (!Array.isArray(terms)) {
+        return [];
+    }
+    return terms
+        .filter((entry) => {
+        return (Array.isArray(entry) &&
+            entry.length >= 3 &&
+            typeof entry[1] === "string" &&
+            entry[1].trim() !== "" &&
+            typeof entry[2] === "string" &&
+            entry[2].trim() !== "");
+    })
+        .map((entry) => ({
+        original: entry[2].trim(),
+        replacement: entry[1].trim(),
+        caseSensitive: Boolean(entry[3]),
+        wholeWord: false,
+        isRegex: false,
+        filter: normalizeRawIdFilter(entry[4]),
+        source: typeof entry[5] === "number" ? entry[5] : undefined,
+        sourceId: typeof entry[6] === "string" ? entry[6] : undefined,
+        sourceHash: typeof entry[7] === "string" ? entry[7] : entry[2].trim(),
+    }));
+}
+async function saveWebsiteTerm(params) {
+    try {
+        const body = JSON.stringify({
+            term: {
+                from: params.from,
+                to: params.to,
+                case: Boolean(params.caseSensitive),
+                filter: Array.isArray(params.filter) ? params.filter : [params.source],
+                source: params.source,
+                source_id: params.sourceId,
+                source_hash: params.sourceHash,
+            },
+            lang: params.lang,
+        });
+        await websiteApiRequest({ method: "POST", url: getWebsiteUrl(WEBSITE_TERM_SAVE_PATH), data: body });
+        return true;
+    }
+    catch (error) {
+        (0,_utils__WEBPACK_IMPORTED_MODULE_1__/* .log */ .Rm)("Website Term Replacer save failed.", error);
+        return false;
+    }
+}
+async function isWebsiteTermReplacerAvailable() {
+    const config = await fetchWebsiteTermConfig();
+    return config !== null && config.success === true;
+}
+
+
+/***/ },
+
 /***/ 41
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -8822,6 +9510,8 @@ var ui = __webpack_require__(782);
 var utils = __webpack_require__(158);
 // EXTERNAL MODULE: ./src/modules/userscriptApi.ts
 var userscriptApi = __webpack_require__(799);
+// EXTERNAL MODULE: ./src/modules/websiteTermApi.ts
+var websiteTermApi = __webpack_require__(726);
 ;// ./src/index.ts
 // src/index.ts
 // Import styles - Webpack will handle injection
@@ -8829,6 +9519,7 @@ var userscriptApi = __webpack_require__(799);
 // Import version information (fallback for build time)
 // import { VERSION } from "./version";
 // Import core modules
+
 
 
 
@@ -8842,6 +9533,21 @@ async function src_main() {
         (0,ui/* injectControlButton */.rz)();
         (0,ui/* initializeCollisionAvoidance */.bp)();
         (0,userscriptApi/* gmRegisterMenuCommand */.es)("Term Inconsistency Finder", () => (0,ui/* togglePanel */.Pj)(true));
+        // Background check for website built-in term replacer availability
+        (0,websiteTermApi/* isWebsiteTermReplacerAvailable */.ds)()
+            .then((available) => {
+            state/* appState */.XJ.runtime.websiteReplacerAvailable = available;
+            (0,utils/* log */.Rm)(`Website built-in Term Replacer availability: ${available}`);
+            // Sync labels and configuration hint now that availability is known.
+            (0,ui/* updateApplyCopyButtonsMode */.j1)();
+            (0,ui/* updateTermReplacerIntegrationUI */.cB)();
+        })
+            .catch((error) => {
+            state/* appState */.XJ.runtime.websiteReplacerAvailable = false;
+            (0,utils/* log */.Rm)("Website built-in Term Replacer availability probe failed.", error);
+            (0,ui/* updateApplyCopyButtonsMode */.j1)();
+            (0,ui/* updateTermReplacerIntegrationUI */.cB)();
+        });
         (0,utils/* log */.Rm)("WTR Term Inconsistency Finder initialized successfully.");
     }
     catch (error) {

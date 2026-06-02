@@ -16,7 +16,7 @@ export const VERSION_INFO: RuntimeVersionInfo = {
 	SEMANTIC: "5.7.0",
 	DISPLAY: "v5.7.0",
 	BUILD_ENV: "production",
-	BUILD_DATE: "2026-06-01",
+	BUILD_DATE: "2026-06-02",
 	GREASYFORK: "5.7.0",
 	NPM: "5.7.0",
 	BADGE: "5.7.0",
