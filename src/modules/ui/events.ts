@@ -12,6 +12,11 @@ import {
 	getDebugLogReport,
 	clearDebugLogs,
 } from "../utils"
+import {
+	fetchWebsiteTermConfig,
+	normalizeWebsiteTerms,
+	saveWebsiteTerm,
+} from "../websiteTermApi"
 import { findInconsistenciesDeepAnalysis } from "../geminiApi"
 import {
 	fetchAndCacheModels,
@@ -33,6 +38,293 @@ import {
 	fetchWtrChapter,
 	getWtrPageContext,
 } from "../wtrLabApi"
+
+function normalizeTermLookupKey(value: unknown): string {
+	if (typeof value !== "string") {
+		return ""
+	}
+	return value
+		.trim()
+		.toLowerCase()
+		.replace(/[“”]/g, '"')
+		.replace(/[‘’]/g, "'")
+		.replace(/^[\s'"`]+|[\s'"`]+$/g, "")
+		.replace(/\s+/g, " ")
+}
+
+function containsCjk(value: string): boolean {
+	return /[\u3400-\u9fff]/.test(value)
+}
+
+function getSourceLookupIndex(): Map<string, string> {
+	if (!(appState.runtime.websiteTermSourceIndex instanceof Map)) {
+		appState.runtime.websiteTermSourceIndex = new Map()
+	}
+	return appState.runtime.websiteTermSourceIndex
+}
+
+function addSourceLookup(phrase: unknown, source: unknown) {
+	const phraseKey = normalizeTermLookupKey(phrase)
+	const sourceValue = typeof source === "string" ? source.trim() : ""
+	if (phraseKey && sourceValue) {
+		getSourceLookupIndex().set(phraseKey, sourceValue)
+	}
+}
+
+function rememberChapterGlossarySources(chapterData) {
+	for (const chapter of Array.isArray(chapterData) ? chapterData : []) {
+		if (!Array.isArray(chapter?.glossaryTerms)) {
+			continue
+		}
+		for (const term of chapter.glossaryTerms) {
+			addSourceLookup(term?.term, term?.source)
+			addSourceLookup(term?.source, term?.source)
+		}
+	}
+}
+
+function addResolvedSource(sources: Map<string, string>, source: unknown) {
+	const sourceValue = typeof source === "string" ? source.trim() : ""
+	const sourceKey = normalizeTermLookupKey(sourceValue)
+	if (sourceKey && sourceValue) {
+		sources.set(sourceKey, sourceValue)
+	}
+}
+
+function groupCandidateMatchesVariations(group: any, variationKeys: Set<string>): boolean {
+	if (!group || typeof group !== "object") {
+		return false
+	}
+	const candidates: string[] = []
+	if (typeof group.canonical === "string") {
+		candidates.push(group.canonical)
+	}
+	if (Array.isArray(group.aliases)) {
+		for (const alias of group.aliases) {
+			if (typeof alias === "string") {
+				candidates.push(alias)
+			}
+		}
+	}
+	return candidates.some((candidate) => variationKeys.has(normalizeTermLookupKey(candidate)))
+}
+
+function addSourcesFromGroups(groups: any[], variationKeys: Set<string>, sources: Map<string, string>) {
+	for (const group of Array.isArray(groups) ? groups : []) {
+		if (groupCandidateMatchesVariations(group, variationKeys)) {
+			addResolvedSource(sources, group.source)
+		}
+	}
+}
+
+function addSourcesFromCorrections(corrections: any[], variationKeys: Set<string>, sources: Map<string, string>) {
+	for (const correction of Array.isArray(corrections) ? corrections : []) {
+		if (variationKeys.has(normalizeTermLookupKey(correction?.corrected))) {
+			addResolvedSource(sources, correction?.source)
+		}
+	}
+}
+
+function getWebsiteTermGlossaryContext() {
+	return appState.runtime.officialGlossaryContext || appState.runtime.websiteTermGlossaryContext || null
+}
+
+function termsNeedWebsiteGlossaryMapping(terms): boolean {
+	return (Array.isArray(terms) ? terms : []).some((term) => {
+		return (
+			(typeof term?.sourceHash === "string" && term.sourceHash.trim() !== "") ||
+			(typeof term?.original === "string" && containsCjk(term.original))
+		)
+	})
+}
+
+async function ensureWebsiteTermGlossaryContext(pageContext, terms) {
+	if (!pageContext || !termsNeedWebsiteGlossaryMapping(terms) || getWebsiteTermGlossaryContext()) {
+		return
+	}
+	appState.runtime.websiteTermGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+}
+
+async function getOfficialGlossaryContextForApply(pageContext) {
+	const existingContext = getWebsiteTermGlossaryContext()
+	if (existingContext) {
+		return existingContext
+	}
+	if (!pageContext) {
+		return null
+	}
+	appState.runtime.websiteTermGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+	return appState.runtime.websiteTermGlossaryContext
+}
+
+/**
+ * Resolve original Chinese source text for English finding variations.
+ * The website API requires the Chinese `from/source_hash` value, so this uses
+ * chapter glossary metadata first and falls back to the official glossary API.
+ */
+async function resolveChineseSourcesForVariations(variations: string[], pageContext): Promise<string[]> {
+	const variationKeys = new Set(variations.map(normalizeTermLookupKey).filter(Boolean))
+	const sources = new Map<string, string>()
+	if (variationKeys.size === 0) {
+		return []
+	}
+
+	for (const variation of variations) {
+		if (typeof variation === "string" && containsCjk(variation)) {
+			addResolvedSource(sources, variation)
+		}
+	}
+
+	const sourceIndex = getSourceLookupIndex()
+	for (const variationKey of variationKeys) {
+		addResolvedSource(sources, sourceIndex.get(variationKey))
+	}
+
+	const glossary = await getOfficialGlossaryContextForApply(pageContext)
+	if (glossary) {
+		addSourcesFromGroups(glossary.canonicalTerms, variationKeys, sources)
+		addSourcesFromGroups(glossary.aliasGroups, variationKeys, sources)
+		addSourcesFromGroups(glossary.replacements, variationKeys, sources)
+		addSourcesFromCorrections(glossary.corrections, variationKeys, sources)
+	}
+
+	return Array.from(sources.values())
+}
+
+function getOfficialAliasesForSource(source: string): string[] {
+	const glossary = getWebsiteTermGlossaryContext()
+	const sourceKey = normalizeTermLookupKey(source)
+	if (!glossary || !sourceKey) {
+		return []
+	}
+
+	const aliases = new Set<string>()
+	const collectFromGroups = (groups: any[]) => {
+		for (const group of Array.isArray(groups) ? groups : []) {
+			if (normalizeTermLookupKey(group?.source) !== sourceKey) {
+				continue
+			}
+			if (typeof group.canonical === "string") {
+				aliases.add(group.canonical.trim())
+			}
+			if (Array.isArray(group.aliases)) {
+				for (const alias of group.aliases) {
+					if (typeof alias === "string" && alias.trim()) {
+						aliases.add(alias.trim())
+					}
+				}
+			}
+		}
+	}
+
+	collectFromGroups(glossary.canonicalTerms)
+	collectFromGroups(glossary.aliasGroups)
+	collectFromGroups(glossary.replacements)
+	for (const correction of Array.isArray(glossary.corrections) ? glossary.corrections : []) {
+		if (normalizeTermLookupKey(correction?.source) === sourceKey && typeof correction?.corrected === "string") {
+			aliases.add(correction.corrected.trim())
+		}
+	}
+
+	return Array.from(aliases).filter(Boolean)
+}
+
+function getChapterAliasesForSource(source: string, chapterData): string[] {
+	const sourceKey = normalizeTermLookupKey(source)
+	const aliases = new Set<string>()
+	if (!sourceKey) {
+		return []
+	}
+
+	for (const chapter of Array.isArray(chapterData) ? chapterData : []) {
+		if (!Array.isArray(chapter?.glossaryTerms)) {
+			continue
+		}
+		for (const term of chapter.glossaryTerms) {
+			if (normalizeTermLookupKey(term?.source) === sourceKey && typeof term?.term === "string") {
+				aliases.add(term.term.trim())
+			}
+		}
+	}
+
+	return Array.from(aliases).filter(Boolean)
+}
+
+function expandWebsiteTermsForAnalysis(terms, chapterData) {
+	if (!Array.isArray(terms) || terms.length === 0) {
+		return terms
+	}
+
+	rememberChapterGlossarySources(chapterData)
+	const expandedTerms = [...terms]
+	const seen = new Set(
+		expandedTerms.map(
+			(term) => `${term.caseSensitive ? "cs" : "ci"}|${normalizeTermLookupKey(term.original)}|${term.replacement}`,
+		),
+	)
+	let addedCount = 0
+
+	for (const term of terms) {
+		const source =
+			typeof term.sourceHash === "string" && term.sourceHash.trim()
+				? term.sourceHash.trim()
+				: typeof term.original === "string" && containsCjk(term.original)
+					? term.original.trim()
+					: ""
+		if (!source) {
+			continue
+		}
+
+		const aliases = [...getChapterAliasesForSource(source, chapterData), ...getOfficialAliasesForSource(source)]
+		for (const alias of aliases) {
+			const aliasKey = normalizeTermLookupKey(alias)
+			if (!aliasKey || aliasKey === normalizeTermLookupKey(term.original)) {
+				continue
+			}
+			const key = `${term.caseSensitive ? "cs" : "ci"}|${aliasKey}|${term.replacement}`
+			if (seen.has(key)) {
+				continue
+			}
+			seen.add(key)
+			expandedTerms.push({
+				...term,
+				original: alias,
+				caseSensitive: false,
+			})
+			addedCount++
+		}
+	}
+
+	if (addedCount > 0) {
+		log(`Expanded website term replacements with ${addedCount} glossary alias${addedCount === 1 ? "" : "es"}.`)
+	}
+	return expandedTerms
+}
+
+function getConfiguredApplyTarget(): "both" | "userscript" | "website" {
+	return ["both", "userscript", "website"].includes(appState.config.applyTarget)
+		? appState.config.applyTarget
+		: "both"
+}
+
+function getApplyTargetAvailability() {
+	const target = getConfiguredApplyTarget()
+	const pageContext = getWtrPageContext()
+	const isUserscriptAvailable = isWTRLabTermReplacerLoaded()
+	const isWebsiteAvailable = Boolean(appState.runtime.websiteReplacerAvailable)
+	const wantsUserscript = target === "both" || target === "userscript"
+	const wantsWebsite = target === "both" || target === "website"
+
+	return {
+		target,
+		pageContext,
+		isUserscriptAvailable,
+		isWebsiteAvailable,
+		isWebsitePageAvailable: Boolean(pageContext),
+		canApplyUserscript: wantsUserscript && isUserscriptAvailable,
+		canApplyWebsite: wantsWebsite && Boolean(pageContext) && isWebsiteAvailable,
+	}
+}
 
 function summarizeChapterCollection(chapterData) {
 	return (Array.isArray(chapterData) ? chapterData : []).map((chapter) => ({
@@ -75,11 +367,14 @@ function logUnresolvedPlaceholderAudit(stage, chapterData) {
 
 async function collectChapterDataForAnalysis(liveTerms) {
 	appState.runtime.officialGlossaryContext = null
+	appState.runtime.websiteTermGlossaryContext = null
+	appState.runtime.websiteTermSourceIndex = new Map()
 	const pageContext = getWtrPageContext()
 
 	if (appState.config.useOfficialWtrGlossary && pageContext) {
 		updateStatusIndicator("running", "Loading WTR glossary context...")
 		appState.runtime.officialGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+		appState.runtime.websiteTermGlossaryContext = appState.runtime.officialGlossaryContext
 	}
 
 	if (appState.config.chapterSource === "wtr-api" && pageContext) {
@@ -102,7 +397,9 @@ async function collectChapterDataForAnalysis(liveTerms) {
 			summarizeChapterCollection(fetchedChapters),
 		)
 		logUnresolvedPlaceholderAudit("WTR API fetch", fetchedChapters)
-		const processedChapters = applyTermReplacements(fetchedChapters, liveTerms)
+		await ensureWebsiteTermGlossaryContext(pageContext, liveTerms)
+		const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, fetchedChapters)
+		const processedChapters = applyTermReplacements(fetchedChapters, termsForAnalysis)
 		logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters)
 		return processedChapters
 	}
@@ -114,7 +411,9 @@ async function collectChapterDataForAnalysis(liveTerms) {
 	const chapterData = crawlChapterData()
 	log("Collected loaded page chapters for analysis.", summarizeChapterCollection(chapterData))
 	logUnresolvedPlaceholderAudit("Loaded page crawl", chapterData)
-	const processedChapters = applyTermReplacements(chapterData, liveTerms)
+	await ensureWebsiteTermGlossaryContext(pageContext, liveTerms)
+	const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, chapterData)
+	const processedChapters = applyTermReplacements(chapterData, termsForAnalysis)
 	logUnresolvedPlaceholderAudit("Term replacement preprocessing", processedChapters)
 	return processedChapters
 }
@@ -186,6 +485,46 @@ async function startAnalysis(isContinuation = false) {
 			}
 		}
 
+		// Also fetch terms from the website's built-in term replacer
+		if (appState.config.useWebsiteTermReplacerSync) {
+			const pageContext = getWtrPageContext()
+			if (pageContext) {
+				const websiteConfig = await fetchWebsiteTermConfig()
+				appState.runtime.websiteReplacerAvailable = Boolean(websiteConfig?.success)
+				updateTermReplacerIntegrationUI()
+				updateApplyCopyButtonsMode()
+				if (websiteConfig?.config?.terms) {
+					let websiteTerms = normalizeWebsiteTerms(websiteConfig.config.terms)
+					// Filter to terms relevant for the current novel when possible
+					if (websiteTerms.length > 0) {
+						const beforeFilter = websiteTerms.length
+						websiteTerms = websiteTerms.filter((term) => {
+							if (!term.filter || term.filter.length === 0) return true
+							return term.filter.includes(pageContext.rawId)
+						})
+						log(
+							`Loaded ${websiteTerms.length}/${beforeFilter} website built-in term replacer terms for raw_id ${pageContext.rawId}.`,
+						)
+					}
+					// Merge with external userscript terms, deduplicating by original+replacement
+					const termMap = new Map<string, any>()
+					for (const term of liveTerms) {
+						const key = `${term.caseSensitive ? "cs:" : "ci:"}${term.original}→${term.replacement}`
+						termMap.set(key, term)
+					}
+					for (const term of websiteTerms) {
+						const key = `${term.caseSensitive ? "cs:" : "ci:"}${term.original}→${term.replacement}`
+						if (!termMap.has(key)) {
+							termMap.set(key, term)
+						}
+					}
+					liveTerms = Array.from(termMap.values())
+				} else {
+					log("Website built-in term replacer config was unavailable; continuing without website terms.")
+				}
+			}
+		}
+
 		let processedData
 		try {
 			processedData = await collectChapterDataForAnalysis(liveTerms)
@@ -204,7 +543,9 @@ async function startAnalysis(isContinuation = false) {
 				}, 4500)
 			}
 			const chapterData = crawlChapterData()
-			processedData = applyTermReplacements(chapterData, liveTerms)
+			await ensureWebsiteTermGlossaryContext(getWtrPageContext(), liveTerms)
+			const termsForAnalysis = expandWebsiteTermsForAnalysis(liveTerms, chapterData)
+			processedData = applyTermReplacements(chapterData, termsForAnalysis)
 		}
 
 		if (!processedData.length) {
@@ -257,6 +598,9 @@ export async function handleSaveConfig() {
 	appState.config.providerUseManualPaths = providerSettings.useManualPaths
 	appState.config.model = document.getElementById("wtr-if-model").value
 	appState.config.useLiveTermReplacerSync = document.getElementById("wtr-if-use-live-term-replacer-sync").checked
+	appState.config.useWebsiteTermReplacerSync = document.getElementById("wtr-if-use-website-term-replacer-sync").checked
+	const applyTarget = document.getElementById("wtr-if-apply-target").value
+	appState.config.applyTarget = ["both", "userscript", "website"].includes(applyTarget) ? applyTarget : "both"
 	appState.config.useJson = document.getElementById("wtr-if-use-json").checked
 	appState.config.chapterSource = document.getElementById("wtr-if-chapter-source").value
 	appState.config.wtrApiRangeMode = document.getElementById("wtr-if-wtr-api-range-mode").value
@@ -319,12 +663,17 @@ export function handleFileImportAndAnalyze(event) {
 			// --- End Validation ---
 
 			appState.runtime.officialGlossaryContext = null
+			appState.runtime.websiteTermGlossaryContext = null
+			appState.runtime.websiteTermSourceIndex = new Map()
 			const pageContext = getWtrPageContext()
 			if (appState.config.useOfficialWtrGlossary && pageContext) {
 				appState.runtime.officialGlossaryContext = await fetchOfficialWtrGlossaryContext(pageContext.rawId)
+				appState.runtime.websiteTermGlossaryContext = appState.runtime.officialGlossaryContext
 			}
 			const chapterData = crawlChapterData()
-			const processedData = applyTermReplacements(chapterData, terms || [])
+			await ensureWebsiteTermGlossaryContext(pageContext, terms || [])
+			const termsForAnalysis = expandWebsiteTermsForAnalysis(terms || [], chapterData)
+			const processedData = applyTermReplacements(chapterData, termsForAnalysis)
 			const deepAnalysisDepth = Math.max(1, parseInt(appState.config.deepAnalysisDepth) || 1)
 			findInconsistenciesDeepAnalysis(
 				processedData,
@@ -448,7 +797,8 @@ export function updateApplyCopyButtonsMode() {
 	let externalAvailable = false
 
 	try {
-		externalAvailable = isWTRLabTermReplacerLoaded()
+		const availability = getApplyTargetAvailability()
+		externalAvailable = availability.canApplyUserscript || availability.canApplyWebsite
 	} catch (err) {
 		log(
 			"WTR Lab Term Replacer detection failed in updateApplyCopyButtonsMode; falling back to safe copy mode.",
@@ -515,7 +865,7 @@ export function updateApplyCopyButtonsMode() {
  *     - Copies variations or suggestion text to clipboard instead.
  *     - Buttons represent "Copy Selected"/"Copy All" semantics.
  */
-export function handleApplyClick(event) {
+export async function handleApplyClick(event) {
 	const button = event.currentTarget
 	const action = button.dataset.action || ""
 	const replacement = button.dataset.suggestion || ""
@@ -523,7 +873,8 @@ export function handleApplyClick(event) {
 
 	let externalAvailable = false
 	try {
-		externalAvailable = isWTRLabTermReplacerLoaded()
+		const availability = getApplyTargetAvailability()
+		externalAvailable = availability.canApplyUserscript || availability.canApplyWebsite
 	} catch {
 		// If detection explodes for any reason, treat as not available for safety.
 		externalAvailable = false
@@ -680,9 +1031,24 @@ export function handleApplyClick(event) {
 		return
 	}
 
-	// Apply actions must only operate when the external replacer is available.
-	if (!externalAvailable) {
-		log("Apply action attempted while external replacer is not available; ignoring.", { action, uniqueVariations })
+	// Resolve target-specific availability
+	const availability = getApplyTargetAvailability()
+	const target = availability.target
+	const isUserscriptAvailable = availability.isUserscriptAvailable
+	const isWebsiteAvailable = availability.isWebsiteAvailable
+	const isWebsitePageAvailable = availability.isWebsitePageAvailable
+	const canApplyUserscript = availability.canApplyUserscript
+	const canApplyWebsite = availability.canApplyWebsite
+
+	if (!canApplyUserscript && !canApplyWebsite) {
+		log("Apply action attempted but chosen target is unavailable; ignoring.", {
+			action,
+			applyTarget: target,
+			isUserscriptAvailable,
+			isWebsiteAvailable,
+			isWebsitePageAvailable,
+			uniqueVariations,
+		})
 		return
 	}
 
@@ -719,22 +1085,122 @@ export function handleApplyClick(event) {
 		log(`Applying suggestion "${finalReplacement}" via simple replacement for: "${originalTerm}"`)
 	}
 
-	const customEvent = new CustomEvent("wtr:addTerm", {
-		detail: {
-			original: originalTerm,
-			replacement: finalReplacement,
-			isRegex: isRegex,
-		},
-	})
-	window.dispatchEvent(customEvent)
-
 	const originalText = button.textContent
-	button.classList.add("sent")
-	button.textContent = "Applied!"
+	button.disabled = true
+	button.textContent = "Applying..."
+	button.classList.remove("sent")
+	safeSetStyle(button, "backgroundColor", "")
+
+	let userscriptApplied = false
+	let websiteSavedCount = 0
+	let websiteFailedCount = 0
+	const failures: string[] = []
+
+	if ((target === "both" || target === "userscript") && !canApplyUserscript) {
+		failures.push("userscript target unavailable")
+	}
+	if ((target === "both" || target === "website") && !canApplyWebsite) {
+		failures.push(isWebsitePageAvailable ? "website API unavailable" : "website page context unavailable")
+	}
+
+	try {
+		// Apply to external userscript when requested and available.
+		if (canApplyUserscript) {
+			try {
+				const customEvent = new CustomEvent("wtr:addTerm", {
+					detail: {
+						original: originalTerm,
+						replacement: finalReplacement,
+						isRegex: isRegex,
+					},
+				})
+				window.dispatchEvent(customEvent)
+				userscriptApplied = true
+				log("Dispatched term to WTR Lab Term Replacer userscript.", {
+					original: originalTerm,
+					replacement: finalReplacement,
+				})
+			} catch (error) {
+				failures.push("userscript dispatch failed")
+				log("Failed to dispatch term to WTR Lab Term Replacer userscript.", error)
+			}
+		}
+
+		// Apply to website built-in term replacer when requested and available.
+		if (canApplyWebsite) {
+			const pageContext = availability.pageContext
+			const chineseSources = pageContext
+				? await resolveChineseSourcesForVariations(uniqueVariations, pageContext)
+				: []
+
+			if (chineseSources.length === 0) {
+				websiteFailedCount++
+				failures.push("website source could not be resolved")
+				log("Could not resolve Chinese source for website term save; skipping.", {
+					uniqueVariations,
+					finalReplacement,
+				})
+			} else {
+				for (const chineseSource of chineseSources) {
+					const saved = await saveWebsiteTerm({
+						from: chineseSource,
+						to: finalReplacement,
+						caseSensitive: false,
+						filter: [pageContext.rawId],
+						source: pageContext.rawId,
+						sourceId: `id.raw.${pageContext.rawId}`,
+						sourceHash: chineseSource,
+						lang: pageContext.language,
+					})
+					if (saved) {
+						websiteSavedCount++
+						addSourceLookup(chineseSource, chineseSource)
+						for (const variation of uniqueVariations) {
+							addSourceLookup(variation, chineseSource)
+						}
+						log(`Saved term to website built-in replacer: "${chineseSource}" → "${finalReplacement}"`)
+					} else {
+						websiteFailedCount++
+						failures.push(`website save failed for ${chineseSource}`)
+					}
+				}
+			}
+		}
+	} catch (error) {
+		failures.push(error instanceof Error ? error.message : String(error))
+		log("Unexpected apply failure.", error)
+	}
+
+	const appliedCount = (userscriptApplied ? 1 : 0) + websiteSavedCount
+	const failedCount = failures.length
+	const wasFullyApplied = appliedCount > 0 && failedCount === 0
+	const wasPartiallyApplied = appliedCount > 0 && failedCount > 0
+
+	if (wasFullyApplied) {
+		button.classList.add("sent")
+		button.textContent = websiteSavedCount > 1 ? `Applied ${websiteSavedCount} Website Terms!` : "Applied!"
+	} else if (wasPartiallyApplied) {
+		button.classList.add("sent")
+		button.textContent = "Partially Applied"
+	} else {
+		button.textContent = "Apply Failed"
+		safeSetStyle(button, "backgroundColor", "#dc3545")
+	}
+
+	log("Apply action completed.", {
+		applyTarget: target,
+		userscriptApplied,
+		websiteSavedCount,
+		websiteFailedCount,
+		failures,
+	})
+
 	setTimeout(() => {
+		button.disabled = false
 		button.classList.remove("sent")
 		button.textContent = originalText
-	}, 2000)
+		safeSetStyle(button, "backgroundColor", "")
+	}, wasFullyApplied ? 2000 : 3000)
 }
 
 export function handleCopyVariationClick(event) {
@@ -853,6 +1319,10 @@ function importConfiguration() {
 				// Update form fields
 				document.getElementById("wtr-if-use-live-term-replacer-sync").checked =
 					appState.config.useLiveTermReplacerSync
+				const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync")
+				if (websiteSyncCheckbox) {
+					websiteSyncCheckbox.checked = appState.config.useWebsiteTermReplacerSync
+				}
 				document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 				document.getElementById("wtr-if-use-official-wtr-glossary").checked = appState.config.useOfficialWtrGlossary
 				document.getElementById("wtr-if-chapter-source").value = appState.config.chapterSource || "page"
@@ -1064,6 +1534,29 @@ export function addEventListeners() {
 	if (liveSyncCheckbox) {
 		liveSyncCheckbox.addEventListener("change", (e) => {
 			appState.config.useLiveTermReplacerSync = e.target.checked
+			saveConfig()
+			updateTermReplacerIntegrationUI()
+		})
+	}
+
+	const websiteSyncCheckbox = panel.querySelector("#wtr-if-use-website-term-replacer-sync")
+	if (websiteSyncCheckbox) {
+		websiteSyncCheckbox.addEventListener("change", (e) => {
+			appState.config.useWebsiteTermReplacerSync = e.target.checked
+			saveConfig()
+			updateTermReplacerIntegrationUI()
+		})
+	}
+
+	const applyTargetSelect = panel.querySelector("#wtr-if-apply-target")
+	if (applyTargetSelect) {
+		applyTargetSelect.addEventListener("change", (e) => {
+			const value = e.target.value
+			if (["both", "userscript", "website"].includes(value)) {
+				appState.config.applyTarget = value
+			} else {
+				appState.config.applyTarget = "both"
+			}
 			saveConfig()
 			updateTermReplacerIntegrationUI()
 		})

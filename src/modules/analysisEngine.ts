@@ -7,7 +7,7 @@
 import { appState, saveSessionResults, getNextAvailableKey, updateKeyState } from "./state"
 
 // Import from ui module
-import { displayResults, updateStatusIndicator } from "./ui"
+import { displayResults, updateStatusIndicator, updateApplyCopyButtonsMode } from "./ui"
 
 // Import from utils module
 import {
@@ -1069,6 +1069,7 @@ export function findInconsistencies(chapterData, existingResults = [], retryCoun
 				continueBtn.disabled = false
 			}
 			displayResults(appState.runtime.cumulativeResults)
+			updateApplyCopyButtonsMode()
 		},
 		onerror: function (error) {
 			console.error("Inconsistency Finder: Network error:", error)
@@ -1100,6 +1101,7 @@ export function findInconsistenciesDeepAnalysis(chapterData, existingResults = [
 		updateStatusIndicator("complete", statusMessage)
 		document.getElementById("wtr-if-continue-btn").disabled = false
 		displayResults(appState.runtime.cumulativeResults)
+		updateApplyCopyButtonsMode()
 		return
 	}
 
@@ -1420,6 +1422,7 @@ function findInconsistenciesIteration(chapterData, existingResults, targetDepth,
 						continueBtn.disabled = false
 					}
 					displayResults(appState.runtime.cumulativeResults)
+					updateApplyCopyButtonsMode()
 				}
 			},
 			onerror: function (error) {

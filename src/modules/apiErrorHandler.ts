@@ -5,8 +5,7 @@
 
 import { appState } from "./state"
 import { RETRIABLE_STATUSES } from "./retryLogic"
-import { updateStatusIndicator } from "./ui"
-import { displayResults } from "./ui"
+import { updateStatusIndicator, displayResults, updateApplyCopyButtonsMode } from "./ui"
 import { log } from "./utils"
 
 /**
@@ -26,6 +25,7 @@ export function handleApiError(errorMessage) {
 
 	updateStatusIndicator("error", "Error!")
 	displayResults(appState.runtime.cumulativeResults)
+	updateApplyCopyButtonsMode()
 }
 
 /**

@@ -27,6 +27,8 @@ export const appState: any = {
 		model: "",
 		useJson: false,
 		useLiveTermReplacerSync: true,
+		useWebsiteTermReplacerSync: true,
+		applyTarget: "both", // "both" | "userscript" | "website"
 		chapterSource: "page",
 		wtrApiRangeMode: "nearby",
 		wtrApiPreviousChapters: 2,
@@ -48,6 +50,9 @@ export const appState: any = {
 		failedKeys: new Set(), // Track keys that have failed due to quota exhaustion
 		providerModelMetadata: {},
 		officialGlossaryContext: null,
+		websiteTermGlossaryContext: null,
+		websiteReplacerAvailable: false,
+		websiteTermSourceIndex: new Map(),
 		currentIteration: 1,
 		totalIterations: 1,
 		persistedKeyStates: {},
@@ -174,6 +179,12 @@ export async function loadConfig() {
 	}
 	if (typeof savedConfig.useOfficialWtrGlossary !== "boolean") {
 		savedConfig.useOfficialWtrGlossary = true
+	}
+	if (typeof savedConfig.useWebsiteTermReplacerSync !== "boolean") {
+		savedConfig.useWebsiteTermReplacerSync = true
+	}
+	if (!["both", "userscript", "website"].includes(savedConfig.applyTarget)) {
+		savedConfig.applyTarget = "both"
 	}
 	// Load preferences from saved config if they exist
 	if (savedConfig.preferences) {

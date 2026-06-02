@@ -12,6 +12,7 @@ import {
 	type ModelCatalogMetadata,
 } from "../providerConfig"
 import { escapeHtml, log, isWTRLabTermReplacerLoaded, getDebugLogCount } from "../utils"
+import { isWebsiteTermReplacerAvailable } from "../websiteTermApi"
 import { gmGetValue, gmSetValue, gmXmlhttpRequest } from "../userscriptApi"
 import { VERSION_INFO } from "../../version"
 import { addEventListeners, handleRestoreSession } from "./events"
@@ -250,6 +251,12 @@ export function createUI() {
                                     Use Live Term Replacer Terms Automatically During Analysis
                                 </label>
                             </div>
+                            <div class="wtr-if-form-group" id="wtr-if-use-website-term-replacer-sync-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="wtr-if-use-website-term-replacer-sync">
+                                    Use Website Built-in Term Replacer Terms During Analysis
+                                </label>
+                            </div>
                             <div class="wtr-if-form-group" id="wtr-if-use-json-container">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="wtr-if-use-json">
@@ -276,6 +283,15 @@ export function createUI() {
                                     </div>
                                     <small id="wtr-if-debug-log-hint" class="wtr-if-hint">No debug logs captured yet.</small>
                                 </div>
+                            </div>
+                            <div class="wtr-if-form-group">
+                                <label for="wtr-if-apply-target">Apply Findings To</label>
+                                <select id="wtr-if-apply-target">
+                                    <option value="both">Both userscript &amp; website</option>
+                                    <option value="userscript">WTR Lab Term Replacer (userscript) only</option>
+                                    <option value="website">Website built-in replacer only</option>
+                                </select>
+                                <small class="wtr-if-hint">When you click Apply Selected / Apply All, send terms to the chosen destination. Copy mode is unaffected.</small>
                             </div>
                             <div class="wtr-if-form-group">
                                 <div class="wtr-if-hint">
@@ -664,15 +680,40 @@ export function updateDebugLoggingUI() {
 export function updateTermReplacerIntegrationUI() {
 	try {
 		const isExternalReplacerAvailable = isWTRLabTermReplacerLoaded()
+		const isWebsiteAvailable = Boolean(appState.runtime.websiteReplacerAvailable)
 		const liveSyncContainer = document.getElementById("wtr-if-use-live-term-replacer-sync-container")
 		const liveSyncCheckbox = document.getElementById("wtr-if-use-live-term-replacer-sync")
+		const websiteSyncContainer = document.getElementById("wtr-if-use-website-term-replacer-sync-container")
+		const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync")
 		const useJsonContainer = document.getElementById("wtr-if-use-json-container")
 		const useJsonCheckbox = document.getElementById("wtr-if-use-json")
+		const applyTargetSelect = document.getElementById("wtr-if-apply-target") as HTMLSelectElement | null
 		const modeHint = document.getElementById("wtr-if-term-replacer-mode-hint")
 
 		if (!liveSyncContainer || !liveSyncCheckbox || !useJsonContainer || !useJsonCheckbox || !modeHint) {
 			return
 		}
+
+		// Website sync checkbox is always visible (independent of external userscript)
+		if (websiteSyncContainer && websiteSyncCheckbox) {
+			websiteSyncContainer.style.display = ""
+			websiteSyncCheckbox.disabled = false
+			websiteSyncCheckbox.checked = Boolean(appState.config.useWebsiteTermReplacerSync)
+		}
+
+		// Sync apply target  (clamp to allowed set)
+		if (applyTargetSelect) {
+			applyTargetSelect.value = ["both", "userscript", "website"].includes(appState.config.applyTarget)
+				? appState.config.applyTarget
+				: "both"
+		}
+
+		const targetLabel =
+			appState.config.applyTarget === "userscript"
+				? "userscript only"
+				: appState.config.applyTarget === "website"
+					? "website only"
+					: "both"
 
 		if (isExternalReplacerAvailable) {
 			liveSyncContainer.style.display = ""
@@ -682,8 +723,8 @@ export function updateTermReplacerIntegrationUI() {
 			useJsonCheckbox.disabled = false
 
 			modeHint.textContent = appState.config.useLiveTermReplacerSync
-				? "Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Enable JSON mode only if you want to import a backup file instead."
-				: "Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on."
+				? `Detected WTR Lab Term Replacer userscript. Finder will automatically use its live term list during analysis. Apply target set to "${targetLabel}". Enable JSON mode only if you want to import a backup file instead.`
+				: `Detected WTR Lab Term Replacer userscript, but automatic live-term sync is disabled. Finder will ignore Term Replacer terms during analysis unless you enable JSON mode or turn live sync back on. Apply target set to "${targetLabel}".`
 		} else {
 			liveSyncContainer.style.display = "none"
 			useJsonContainer.style.display = "none"
@@ -691,8 +732,14 @@ export function updateTermReplacerIntegrationUI() {
 			if (appState.config.useJson) {
 				appState.config.useJson = false
 			}
-			modeHint.textContent =
-				"External WTR Lab Term Replacer userscript not detected. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
+
+			if (isWebsiteAvailable) {
+				modeHint.textContent =
+					`Website built-in Term Replacer detected. Finder can read your saved website terms and apply findings directly to the website. Apply target set to "${targetLabel}".`
+			} else {
+				modeHint.textContent =
+					"External WTR Lab Term Replacer userscript not detected and website built-in replacer is unavailable. Using built-in term inconsistency finder behavior only. Install the external userscript if you want tight integration."
+			}
 		}
 	} catch (e) {
 		log("WTR Lab Term Replacer UI integration update failed; continuing in safe mode.", e)
@@ -719,6 +766,16 @@ export async function togglePanel(show = null) {
 		)
 		syncProviderConfigUI()
 		document.getElementById("wtr-if-use-live-term-replacer-sync").checked = appState.config.useLiveTermReplacerSync
+		const websiteSyncCheckbox = document.getElementById("wtr-if-use-website-term-replacer-sync")
+		if (websiteSyncCheckbox) {
+			websiteSyncCheckbox.checked = appState.config.useWebsiteTermReplacerSync
+		}
+		const applyTargetSelect = document.getElementById("wtr-if-apply-target") as HTMLSelectElement | null
+		if (applyTargetSelect) {
+			applyTargetSelect.value = ["both", "userscript", "website"].includes(appState.config.applyTarget)
+				? appState.config.applyTarget
+				: "both"
+		}
 		document.getElementById("wtr-if-use-json").checked = appState.config.useJson
 		document.getElementById("wtr-if-use-official-wtr-glossary").checked = appState.config.useOfficialWtrGlossary
 		document.getElementById("wtr-if-chapter-source").value = appState.config.chapterSource || "page"
@@ -750,6 +807,14 @@ export async function togglePanel(show = null) {
 		document.getElementById("wtr-if-filter-select").value = appState.config.activeFilter
 
 		await populateModelSelector()
+
+		// Refresh website API availability before deciding Apply/Copy mode.
+		try {
+			appState.runtime.websiteReplacerAvailable = await isWebsiteTermReplacerAvailable()
+		} catch (error) {
+			appState.runtime.websiteReplacerAvailable = false
+			log("Website built-in Term Replacer availability check failed while opening panel.", error)
+		}
 
 		// Apply dynamic UI based on WTR Lab Term Replacer detection
 		updateTermReplacerIntegrationUI()
